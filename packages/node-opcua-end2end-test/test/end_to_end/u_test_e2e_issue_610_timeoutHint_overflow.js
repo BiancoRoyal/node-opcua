@@ -11,12 +11,12 @@ module.exports = function (test) {
 
         it("using a  large value for requestedPublishingInterval should not cause node-opcua to crash", function(done) {
 
-            const client = new OPCUAClient({});
+            const client = OPCUAClient.create({});
             const endpointUrl = test.endpointUrl;
 
             perform_operation_on_client_session(client, endpointUrl, function (session, inner_done) {
 
-                const subscription = new ClientSubscription(session, {
+                const subscription = ClientSubscription.create(session, {
                     maxNotificationsPerPublish:   10,
                     requestedLifetimeCount:       10 * 60 * 10,
                     requestedMaxKeepAliveCount:   10,
@@ -31,7 +31,7 @@ module.exports = function (test) {
                 subscription.once("started",function() {
                     subscription.terminate(inner_done);
                 });
-                
+
             }, done);
         });
     });

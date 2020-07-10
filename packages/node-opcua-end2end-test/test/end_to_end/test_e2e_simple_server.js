@@ -6,9 +6,8 @@ const opcua = require("node-opcua");
 const OPCUAServer = opcua.OPCUAServer;
 const OPCUAClient = opcua.OPCUAClient;
 
-const get_fully_qualified_domain_name = opcua.get_fully_qualified_domain_name;
-
-const empty_nodeset_filename = opcua.empty_nodeset_filename;
+const getFullyQualifiedDomainName = require("node-opcua-hostname").getFullyQualifiedDomainName;
+const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
 
 const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
 
@@ -19,18 +18,22 @@ describe("Testing a simple server from Server side", function () {
 
         const server = new OPCUAServer({port: 6789, nodeset_filename: empty_nodeset_filename});
 
-        server.endpoints.length.should.be.greaterThan(0);
+        server.start(()=>{
 
-        const endPoint = server.endpoints[0];
+            server.endpoints.length.should.be.greaterThan(0);
 
-        const e = opcua.parseEndpointUrl(endPoint.endpointDescriptions()[0].endpointUrl);
+            const endPoint = server.endpoints[0];
 
-        const expected_hostname = get_fully_qualified_domain_name();
-        e.hostname.should.be.match(new RegExp(expected_hostname));
+            const e = opcua.parseEndpointUrl(endPoint.endpointDescriptions()[0].endpointUrl);
 
-        e.port.should.eql(6789);
+            const expected_hostname = getFullyQualifiedDomainName();
+            e.hostname.toLowerCase().should.be.match(new RegExp(expected_hostname.toLowerCase()));
 
-        server.shutdown(done);
+            e.port.should.eql("6789");
+
+            server.shutdown(done);
+
+        });
 
     });
     it("OPCUAServer#getChannels", function (done) {
@@ -47,7 +50,7 @@ describe("Testing a simple server from Server side", function () {
             const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
 
             const options = {};
-            const client = new OPCUAClient(options);
+            const client = OPCUAClient.create(options);
             perform_operation_on_client_session(client, endpointUrl, function (session, inner_done) {
                 server.getChannels().length.should.equal(1);
                 //xx console.log("xxxxx nb Channels ",server.getChannels().length);

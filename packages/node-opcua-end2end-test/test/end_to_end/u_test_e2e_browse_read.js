@@ -41,7 +41,7 @@ module.exports = function (test) {
         beforeEach(function (done) {
              endpointUrl = test.endpointUrl;
             temperatureVariableId = test.server.temperatureVariableId;
-            client = new opcua.OPCUAClient(options);
+            client = opcua.OPCUAClient.create(options);
 
             client.connect(endpointUrl, function (err) {
                 if (err) {
@@ -68,12 +68,12 @@ module.exports = function (test) {
             });
 
         });
-        
+
         it("T8-1 - should browse RootFolder", function (done) {
 
             g_session.browse("RootFolder", function (err, browseResult) {
                 if (!err) {
-                    browseResult._schema.name.should.equal("BrowseResult");
+                    browseResult.schema.name.should.equal("BrowseResult");
                 }
 
                 // xx console.log(browseResult.toString());//.length.should.eql(4);
@@ -89,7 +89,7 @@ module.exports = function (test) {
             });
 
         });
-        
+
         it("T8-2 - browse should return BadReferenceTypeIdInvalid if referenceTypeId is invalid", function (done) {
 
             const bad_referenceid_node = "ns=3;i=3500";
@@ -99,7 +99,7 @@ module.exports = function (test) {
                 browseDirection: BrowseDirection.Forward
             };
             g_session.browse(nodeToBrowse, function (err, browseResult/*, diagnosticInfos*/) {
-                browseResult._schema.name.should.equal("BrowseResult");
+                browseResult.schema.name.should.equal("BrowseResult");
                 browseResult.statusCode.should.eql(StatusCodes.BadReferenceTypeIdInvalid);
                 done(err);
             });
@@ -110,7 +110,7 @@ module.exports = function (test) {
             g_session.readVariableValue(["RootFolder"], function (err, dataValues/*, diagnosticInfos*/) {
                 if (!err) {
                     dataValues.length.should.equal(1);
-                    dataValues[0]._schema.name.should.equal("DataValue");
+                    dataValues[0].schema.name.should.equal("DataValue");
                 }
                 done(err);
             });
@@ -118,10 +118,10 @@ module.exports = function (test) {
 
         it("T8-11 - #ReadRequest : server should return BadNothingToDo when nodesToRead is empty", function (done) {
 
-            const request = new opcua.read_service.ReadRequest({
+            const request = new opcua.ReadRequest({
                 nodesToRead: [], //<< EMPTY
                 maxAge: 0,
-                timestampsToReturn: opcua.read_service.TimestampsToReturn.Both
+                timestampsToReturn: opcua.TimestampsToReturn.Both
             });
 
             g_session.performMessageTransaction(request, function (err /*, response */) {
@@ -134,12 +134,12 @@ module.exports = function (test) {
 
         it("T8-12 - #ReadRequest : server should return BadTimestampsToReturnInvalid when timestampsToReturn is Invalid", function (done) {
 
-            const request = new opcua.read_service.ReadRequest({
+            const request = new opcua.ReadRequest({
                 nodesToRead: [
                     {nodeId: opcua.coerceNodeId("ns=0;i=2456")}
                 ],
                 maxAge: 0,
-                timestampsToReturn: opcua.read_service.TimestampsToReturn.Invalid
+                timestampsToReturn: opcua.TimestampsToReturn.Invalid
             });
 
             g_session.performMessageTransaction(request, function (err/*, response*/) {
@@ -174,7 +174,7 @@ module.exports = function (test) {
         it("T8-14a - #readVariableValue should return a appropriate status code if nodeid to read doesn't exists", function (done) {
 
             g_session.readVariableValue("ns=1;s=this_node_id_does_not_exist", function (err, dataValue) {
-                should(err).eql(null);
+                should.not.exist(err);
                 dataValue.statusCode.should.eql(StatusCodes.BadNodeIdUnknown);
                 done();
             });
@@ -182,7 +182,7 @@ module.exports = function (test) {
         it("T8-14b - #readVariableValue should return a appropriate status code if nodeid to read doesn't exists", function (done) {
 
             g_session.readVariableValue(["ns=1;s=this_node_id_does_not_exist"], function (err, dataValues) {
-                should(err).eql(null);
+                should.not.exist(err);
                 dataValues[0].statusCode.should.eql(StatusCodes.BadNodeIdUnknown);
                 done();
             });
@@ -206,9 +206,9 @@ module.exports = function (test) {
         it("T8-15b - #read :should return BadNothingToDo if nodesToRead is empty", function (done) {
 
             // CTT : Attribute ERR-011.js
-            const readRequest = new opcua.read_service.ReadRequest({
+            const readRequest = new opcua.ReadRequest({
                 maxAge: 0,
-                timestampsToReturn: opcua.read_service.TimestampsToReturn.Both,
+                timestampsToReturn: opcua.TimestampsToReturn.Both,
                 nodesToRead: []
             });
 
@@ -227,9 +227,9 @@ module.exports = function (test) {
         it("T8-15c - #read :should return BadNothingToDo if nodesToRead is null", function (done) {
 
             // CTT : Attribute ERR-011.js
-            const readRequest = new opcua.read_service.ReadRequest({
+            const readRequest = new opcua.ReadRequest({
                 maxAge: 0,
-                timestampsToReturn: opcua.read_service.TimestampsToReturn.Both,
+                timestampsToReturn: opcua.TimestampsToReturn.Both,
                 nodesToRead: null
             });
 
@@ -272,8 +272,8 @@ module.exports = function (test) {
 
                 if (!err) {
                     dataValues.length.should.equal(1);
-                    dataValues[0]._schema.name.should.equal("DataValue");
-                    dataValues[0].value._schema.name.should.equal("Variant");
+                    dataValues[0].schema.name.should.equal("DataValue");
+                    dataValues[0].value.schema.name.should.equal("Variant");
                 }
 
                 done(err);
@@ -308,7 +308,7 @@ module.exports = function (test) {
             g_session.browse(nodesToBrowse, function (err, browseResults/*,diagnosticInfos*/) {
                 if (!err) {
                     browseResults.length.should.equal(1);
-                    browseResults[0]._schema.name.should.equal("BrowseResult");
+                    browseResults[0].schema.name.should.equal("BrowseResult");
 
                     //xx console.log(util.inspect(browseResults[0].references,{colors:true,depth:10}));
 

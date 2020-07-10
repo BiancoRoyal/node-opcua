@@ -2,23 +2,24 @@
 const assert = require("node-opcua-assert").assert;
 
 const StatusCodes = require("node-opcua-status-code").StatusCodes;
-
 const read_service = require("node-opcua-service-read");
+const filter_service = require("node-opcua-service-filter");
+const AttributeIds = require("node-opcua-data-model").AttributeIds;
+const NumericRange = require("node-opcua-numeric-range").NumericRange;
 
 const subscription_service = require("..");
 
-const filter_service = require("node-opcua-service-filter");
 
 const makeNodeId = require("node-opcua-nodeid").makeNodeId;
 const makeBuffer = require("node-opcua-buffer-utils").makeBuffer;
 
-const verify_multi_chunk_message = require("node-opcua-secure-channel/test_helpers/verify_message_chunk").verify_multi_chunk_message;
+const verify_multi_chunk_message = require("node-opcua-secure-channel/dist/test_helpers").verify_multi_chunk_message;
+const encode_decode_round_trip_test = require("node-opcua-packet-analyzer/dist/test_helpers").encode_decode_round_trip_test;
 
 const makebuffer_from_trace = require("node-opcua-debug").makebuffer_from_trace;
 const redirectToFile = require("node-opcua-debug").redirectToFile;
 
 describe("testing subscription objects", function () {
-    const encode_decode_round_trip_test = require("node-opcua-packet-analyzer/test_helpers/encode_decode_round_trip_test").encode_decode_round_trip_test;
 
     it("should encode and decode a CreateSubscriptionRequest", function (done) {
         const request = new subscription_service.CreateSubscriptionRequest({
@@ -112,8 +113,6 @@ describe("testing subscription objects", function () {
 
     it("should encode and decode a MonitoringParameters with EventFilter filter", function (done) {
 
-        const AttributeIds = require("node-opcua-data-model").AttributeIds;
-        const NumericRange = require("node-opcua-numeric-range").NumericRange;
         const obj = new subscription_service.MonitoringParameters({
             samplingInterval: 10,
             discardOldest: true,
@@ -121,7 +120,7 @@ describe("testing subscription objects", function () {
             filter: new filter_service.EventFilter({
                 selectClauses: [// SimpleAttributeOperand
                     {
-                        typeId: "i=123", // NodeId
+                        typeDefinitionId: "i=123", // NodeId
 
                         browsePath: [    // QualifiedName
                             {namespaceIndex: 1, name: "A"}, {namespaceIndex: 1, name: "B"}, {
@@ -248,6 +247,34 @@ describe("testing subscription objects", function () {
         encode_decode_round_trip_test(obj);
         done();
     });
+    it("should encode and decode a PublishResponse with Error", function (done) {
+        const obj = new subscription_service.PublishResponse({
+            results: [
+                StatusCodes.BadNoSubscription
+            ],
+        });
+
+        // by default
+        obj.subscriptionId.should.eql(0xFFFFFFFF);
+
+        encode_decode_round_trip_test(obj);
+        done();
+
+    });
+
+    it("should encode and decode a MonitoringParametes", function (done) {
+        const obj = new subscription_service.MonitoringParameters({
+
+        });
+        // by default
+        obj.clientHandle.should.eql(0xFFFFFFFF);
+        encode_decode_round_trip_test(obj);
+        done();
+
+    });
+
+
+
 
     it("should encode and decode a RepublishRequest", function (done) {
         const obj = new subscription_service.RepublishRequest({

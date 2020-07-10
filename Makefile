@@ -1,11 +1,24 @@
 
-test-cov: istanbul coveralls codeclimate
+test-cov: istanbul coveralls 
 
 istanbul:
-	istanbul cover -x "tmp/**" packages/run_all_mocha_tests.js
+	npx nyc@14 --report none --source-map \
+			--include="packages/node-opcua-*/dist/**/*.js"  \
+			--exclude="packages/node-opcua-*/test/**/*.js"  \
+			--exclude-after-remap=false \
+			--exclude="_generated_opcua_types.ts" \
+			--exclude="packages/node-opcua-types/**/*.*" \
+			--exclude="packages/node-opcua-utils/**/*.*" \
+			--cwd=. node -max_old_space_size=4096 packages/run_all_mocha_tests.js 
+
 
 coveralls: istanbul
-	cat ./coverage/lcov.info | node ./node_modules/coveralls/bin/coveralls.js --exclude tmp
+	npx nyc@14 report --source-map \
+			--include="packages/node-opcua-*/dist/**/*.js"  \
+			--exclude-after-remap=false \
+			--cwd=. \
+			--reporter=text-lcov \
+		 | npx coveralls --exclude tmp
 
 # note a CODECLIMATE_REPO_TOKEN must be specified as an environment variable.
 codeclimate: istanbul
@@ -19,7 +32,8 @@ LP_WIN= "..\\node_modules\\.bin\\literate-programming.cmd"
 
 examples:
 	( cd documentation ; $(LP) creating_a_server.md )
-	( cd documentation ; $(LP) creating_a_client.md )
+	( cd documentation ; $(LP) creating_a_cliIntent_typescript.md )
+	( cd documentation ; $(LP) creating_a_client_callback.md )
 	( cd documentation ; $(LP) create_a_weather_station.md )
 	( cd documentation ; $(LP) server_with_da_variables.md )
 	( cd documentation ; $(LP) server_with_method.md )
@@ -33,8 +47,8 @@ doc: examples
 	yuidoc 
 
 doc1:
-	node node_modules\yuidocjs\lib\cli.js
-# node node_modules\yuidocjs\lib\cli.js -t node_modules/yuidoc-bootstrap-theme -H node_modules/yuidoc-bootstrap-theme/helpers/helpers.js
+	npx yuidocjs
+# npx yuidocjs -t node_modules/yuidoc-bootstrap-theme -H node_modules/yuidoc-bootstrap-theme/helpers/helpers.js
 
 yuidoc:
 	npm install yuidocjs -g

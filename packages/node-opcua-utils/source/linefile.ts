@@ -1,26 +1,41 @@
+/**
+ * @module node-opcua-utils
+ */
 import { writeFileSync } from "fs";
+import * as os from "os";
 
 export class LineFile {
-    __line: string[];
+
+    private _line: string[];
 
     constructor() {
-        this.__line = [];
+        this._line = [];
         this.write("// --------- This code has been automatically generated !!! " + new Date().toISOString());
+        this.write("/**");
+        this.write(" * @module node-opcua-types");
+        this.write(" */");
     }
 
-    write(...arg: string[]): void {
+    public write(...arg: string[]): void {
         let str = "";
+
+        // tslint:disable:prefer-for-of
         for (let i = 0; i < arguments.length; i++) {
             str += arguments[i];
         }
-        this.__line.push(str);
+        this._line.push(str);
     }
 
-    toString(): string {
-        return this.__line.join("\n");
+    public toString(): string {
+        return this._line.join(os.EOL);
     }
 
-    save(filename: string): void {
+    public save(filename: string): void {
         writeFileSync(filename, this.toString(), "ascii");
+    }
+
+    public saveFormat(filename: string, formatter: (code: string) => string): void {
+        const code = formatter(this.toString());
+        writeFileSync(filename, code, "ascii");
     }
 }

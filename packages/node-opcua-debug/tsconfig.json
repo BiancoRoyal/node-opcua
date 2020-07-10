@@ -1,12 +1,23 @@
 {
+  "extends": "../tsconfig.json",
   "compilerOptions": {
-    "skipLibCheck": true,
-    "target": "es6",
-    "module": "commonjs",
-    "declaration": true,
-    "outDir": "./dist",
-    "sourceMap": true,
-    "sourceRoot": "./source",
-    "strict": true
-  }
+    "rootDir": "source",
+    "outDir": "dist",
+    "composite": true
+  },
+  "include": [
+    "source/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../node-opcua-assert"
+    },
+    {
+      "path": "../node-opcua-buffer-utils"
+    }
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

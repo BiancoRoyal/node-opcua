@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 "use strict";
+const chalk = require("chalk");
 const opcua = require("node-opcua");
 const _ = require("underscore");
 const path = require("path");
@@ -30,8 +31,7 @@ const Variant = opcua.Variant;
 const DataType = opcua.DataType;
 
 const makeApplicationUrn = opcua.makeApplicationUrn;
-const standard_nodeset_file = opcua.standard_nodeset_file;
-const get_fully_qualified_domain_name = opcua.get_fully_qualified_domain_name;
+const standard_nodeset_file = opcua.nodesets.standard_nodeset_file;
 
 const port = parseInt(argv.port) || 26543;
 
@@ -65,12 +65,12 @@ const server_options ={
 
     nodeset_filename: [
         standard_nodeset_file,
-        opcua.di_nodeset_filename,
-        opcua.adi_nodeset_filename
+        opcua.nodesets.di_nodeset_filename,
+        opcua.nodesets.adi_nodeset_filename
     ],
 
     serverInfo: {
-        applicationUri : makeApplicationUrn(get_fully_qualified_domain_name(),"NodeOPCUA-Server"),
+        applicationUri : makeApplicationUrn("%FQDN%","NodeOPCUA-Server"),
         productUri:      "NodeOPCUA-SimpleADIDemoServer",
         applicationName: {text: "applicationName"},
         gatewayServerUri: null,
@@ -96,7 +96,6 @@ server_options.alternateHostname = argv.alternateHostname;
 
 const server = new OPCUAServer(server_options);
 
-const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
 
 const hostname = require("os").hostname();
 
@@ -202,44 +201,47 @@ function dumpNode(node) {
         return tmp.substr(0,width);
     }
     return   _.map(node,function(value,key) {
-        return  "      " + w(key,30).green + "  : " + ((value === null)? null : value.toString());
+        return  "      " + w(key,30) + "  : " + ((value === null)? null : value.toString());
     }).join("\n");
 }
 
 
-console.log("  server PID          :".yellow, process.pid);
+console.log(chalk.yellow("  server PID          :"), process.pid);
 
 server.start(function (err) {
     if (err) {
         console.log(" Server failed to start ... exiting");
         process.exit(-3);
     }
-    console.log("  server on port      :".yellow, server.endpoints[0].port.toString().cyan);
-    console.log("  endpointUrl         :".yellow, endpointUrl.cyan);
 
-    console.log("  serverInfo          :".yellow);
+    const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+
+    console.log(chalk.yellow("  server on port      :"), server.endpoints[0].port.toString());
+    console.log(chalk.yellow("  endpointUrl         :"), endpointUrl);
+
+    console.log(chalk.yellow("  serverInfo          :"));
     console.log(dumpNode(server.serverInfo));
-    console.log("  buildInfo           :".yellow);
+    console.log(chalk.yellow("  buildInfo           :"));
     console.log(dumpNode(server.engine.buildInfo));
 
-    console.log("\n  server now waiting for connections. CTRL+C to stop".yellow);
+    console.log(chalk.yellow("\n  server now waiting for connections. CTRL+C to stop"));
 });
 
 server.on("create_session",function(session) {
 
     console.log(" SESSION CREATED");
-    console.log("    client application URI: ".cyan,session.clientDescription.applicationUri);
-    console.log("        client product URI: ".cyan,session.clientDescription.productUri);
-    console.log("   client application name: ".cyan,session.clientDescription.applicationName.toString());
-    console.log("   client application type: ".cyan,session.clientDescription.applicationType.toString());
-    console.log("              session name: ".cyan,session.sessionName ? session.sessionName.toString():"<null>" );
-    console.log("           session timeout: ".cyan,session.sessionTimeout);
-    console.log("                session id: ".cyan,session.sessionId);
+    console.log(chalk.cyan("    client application URI: "),session.clientDescription.applicationUri);
+    console.log(chalk.cyan("        client product URI: "),session.clientDescription.productUri);
+    console.log(chalk.cyan("   client application name: "),session.clientDescription.applicationName.toString());
+    console.log(chalk.cyan("   client application type: "),session.clientDescription.applicationType.toString());
+    console.log(chalk.cyan("              session name: "),session.sessionName ? session.sessionName.toString():"<null>" );
+    console.log(chalk.cyan("           session timeout: "),session.sessionTimeout);
+    console.log(chalk.cyan("                session id: "),session.sessionId);
 });
 
 server.on("session_closed",function(session,reason) {
     console.log(" SESSION CLOSED :",reason);
-    console.log("              session name: ".cyan,session.sessionName ? session.sessionName.toString():"<null>");
+    console.log(chalk.cyan("              session name: "),session.sessionName ? session.sessionName.toString():"<null>");
 });
 
 function w(s,w) {
@@ -250,9 +252,9 @@ function t(d) {
 }
 
 server.on("response", function (response) {
-    console.log(t(response.responseHeader.timeStamp),response.responseHeader.requestHandle,
-                response._schema.name.cyan," status = ",response.responseHeader.serviceResult.toString().cyan);
-    switch (response._schema.name) {
+    console.log(t(response.responseHeader.timestamp),response.responseHeader.requestHandle,
+                response.schema.name," status = ",response.responseHeader.serviceResult.toString());
+    switch (response.schema.name) {
         case "ModifySubscriptionResponse":
         case "CreateMonitoredItemsResponse":
         case "RepublishResponse":
@@ -268,9 +270,9 @@ function indent(str,nb) {
     return str.split("\n").map(function(s) { return spacer + s; }).join("\n");
 }
 server.on("request", function (request,channel) {
-    console.log(t(request.requestHeader.timeStamp),request.requestHeader.requestHandle,
-                request._schema.name.yellow, " ID =",channel.secureChannelId.toString().cyan);
-    switch (request._schema.name) {
+    console.log(t(request.requestHeader.timestamp),request.requestHeader.requestHandle,
+                request.schema.name, " ID =",channel.channelId.toString());
+    switch (request.schema.name) {
         case "ModifySubscriptionRequest":
         case "CreateMonitoredItemsRequest":
         case "RepublishRequest":
@@ -287,11 +289,11 @@ server.on("request", function (request,channel) {
 
 process.on("SIGINT", function() {
     // only work on linux apparently
-    console.log(" Received server interruption from user ".red.bold);
-    console.log(" shutting down ...".red.bold);
+    console.log(chalk.red.bold(" Received server interruption from user "));
+    console.log(chalk.red.bold(" shutting down ..."));
     server.shutdown(1000, function () {
-        console.log(" shutting down completed ".red.bold);
-        console.log(" done ".red.bold);
+        console.log(chalk.red.bold(" shutting down completed "));
+        console.log(chalk.red.bold(" done "));
         console.log("");
         process.exit(-1);
     });

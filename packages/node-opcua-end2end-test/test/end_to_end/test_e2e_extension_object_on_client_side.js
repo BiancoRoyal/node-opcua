@@ -5,8 +5,10 @@ const fs = require("fs");
 const should = require("should");
 const path = require("path");
 
-const start_simple_server = require("../../test_helpers/external_server_fixture").start_simple_server;
-const stop_simple_server = require("../../test_helpers/external_server_fixture").stop_simple_server;
+const { 
+    start_simple_server,
+    stop_simple_server 
+} = require("../../test_helpers/external_server_fixture");
 const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
 
 
@@ -45,7 +47,7 @@ describe("testing extension object with client residing on a different process t
     const os = require("os");
     it("should read the MyStructureDataType definition", function (done) {
 
-        const client = new OPCUAClient({
+        const client = OPCUAClient.create({
             endpoint_must_exist: false
         });
         const endpointUrl = "opc.tcp://localhost:23232";
@@ -59,7 +61,7 @@ describe("testing extension object with client residing on a different process t
                 function (callback) {
 
                     const nodesToRead = [
-                        new opcua.read_service.ReadValueId({nodeId: nodeId, attributeId: AttributeIds.Value})
+                        new opcua.ReadValueId({nodeId: nodeId, attributeId: AttributeIds.Value})
                     ];
 
                     session.read(nodesToRead, function (err, dataValues) {

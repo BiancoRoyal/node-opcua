@@ -10,10 +10,11 @@ const makeResultMask = opcua.makeResultMask;
 const UAProxyManager = require("node-opcua-client-proxy").UAProxyManager;
 const makeRefId = require("node-opcua-client-proxy").makeRefId;
 
-const dumpStateMachineToGraphViz = require("node-opcua-address-space/test_helpers/dump_statemachine").dumpStateMachineToGraphViz;
-const dumpStateMachineToPlantUML = require("node-opcua-address-space/test_helpers/dump_statemachine").dumpStateMachineToPlantUML;
+const dumpStateMachineToGraphViz = require("node-opcua-address-space").dumpStateMachineToGraphViz;
+const dumpStateMachineToPlantUML = require("node-opcua-address-space").dumpStateMachineToPlantUML;
 
 const redirectToFile = require("node-opcua-debug").redirectToFile;
+const promoteToStateMachine = require("node-opcua-address-space").promoteToStateMachine;
 
 const doDebug = false;
 
@@ -82,7 +83,7 @@ describe("ADI - Testing a server that exposes Analyser Devices", function () {
     });
 
     beforeEach(function (done) {
-        client = new OPCUAClient({});
+        client = OPCUAClient.create({});
         done();
     });
 
@@ -135,7 +136,7 @@ describe("ADI - Testing a server that exposes Analyser Devices", function () {
                 console.log(f(c));
             });
         }
-        //xx console.log("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz".yellow + objectType.browseName.toString());
+        //xx console.log(chalk.yellow("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz") + objectType.browseName.toString());
         let baseType = objectType.subtypeOfObj;
 
         if (doDebug) {
@@ -143,14 +144,14 @@ describe("ADI - Testing a server that exposes Analyser Devices", function () {
                 console.log(f(c));
             });
         }
-        //xx console.log("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz".yellow + baseType.browseName.toString());
+        //xx console.log(chalk.yellow("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz") + baseType.browseName.toString());
         baseType = baseType.subtypeOfObj;
         if (doDebug) {
             baseType.getComponents().forEach(function (c) {
                 console.log(f(c));
             });
         }
-        //xx console.log("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz".yellow + baseType.browseName.toString());
+        //xx console.log(chalk.yellow("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz") + baseType.browseName.toString());
 
     }
 
@@ -271,7 +272,7 @@ describe("ADI - Testing a server that exposes Analyser Devices", function () {
 
         const resultMask = makeResultMask("ReferenceType | IsForward | BrowseName | NodeClass | TypeDefinition");
 
-        const bd = new opcua.browse_service.BrowseDescription({
+        const bd = new opcua.BrowseDescription({
             nodeId: stateMachineType.nodeId,
             browseDirection: BrowseDirection.Forward,
             referenceTypeId: makeRefId("HasComponent"),
@@ -355,11 +356,11 @@ describe("ADI - Testing a server that exposes Analyser Devices", function () {
 
         subStateMachineType.browseName.name.toString().should.eql("AnalyserChannel_OperatingModeSubStateMachineType");
 
-        const UAStateMachine = require("node-opcua-address-space").UAStateMachine;
+        const StateMachine = require("node-opcua-address-space").StateMachine;
 
         const sm = subStateMachineType.instantiate({browseName: "MyStateMachine"});
 
-        UAStateMachine.promote(sm);
+        promoteToStateMachine(sm);
 
         redirectToFile("OperatingModeSubStateMachineType.graphviz", function () {
             dumpStateMachineToGraphViz(sm);
@@ -381,11 +382,11 @@ describe("ADI - Testing a server that exposes Analyser Devices", function () {
 
         subStateMachineType.browseName.name.toString().should.eql("AnalyserChannel_OperatingModeExecuteSubStateMachineType");
 
-        const UAStateMachine = require("node-opcua-address-space").UAStateMachine;
+        const StateMachine = require("node-opcua-address-space").StateMachine;
 
         const sm = subStateMachineType.instantiate({browseName: "MyStateMachine"});
 
-        UAStateMachine.promote(sm);
+        promoteToStateMachine(sm);
 
         redirectToFile("OperatingModeExecuteSubStateMachineType.graphviz", function () {
             dumpStateMachineToGraphViz(sm);

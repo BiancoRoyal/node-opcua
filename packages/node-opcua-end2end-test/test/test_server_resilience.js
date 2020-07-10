@@ -12,25 +12,11 @@ const ObjectIds = opcua.ObjectIds;
 
 const debugLog = require("node-opcua-debug").make_debugLog(__filename);
 
-const empty_nodeset_filename = opcua.empty_nodeset_filename;
+const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
 
-// a fake request type that is supposed to be correctly decoded on server side
-// but that is not supported by the server engine
 
-const ServerSideUnimplementedRequest_Schema = {
-    name: "ServerSideUnimplementedRequest",
-    id: ObjectIds.Annotation_Encoding_DefaultXml,
-    fields: [
-        {name: "requestHeader", fieldType: "RequestHeader"}
-    ]
-};
 
-const generator = require("node-opcua-generator");
-const path = require("path");
-const temporary_folder = path.join(__dirname, "..", "_test_generated");
-
-exports.ServerSideUnimplementedRequest_Schema = ServerSideUnimplementedRequest_Schema;
-const ServerSideUnimplementedRequest = generator.registerObject(ServerSideUnimplementedRequest_Schema, temporary_folder);
+const ServerSideUnimplementedRequest  =require("../test_helpers/unimplementedRequest").ServerSideUnimplementedRequest;
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 
@@ -44,19 +30,21 @@ describe("testing Server resilience to unsupported request", function () {
     before(function (done) {
 
         server = new OPCUAServer({port: 2000, nodeset_filename: empty_nodeset_filename});
-        // we will connect to first server end point
-        endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
-        debugLog("endpointUrl", endpointUrl);
-        opcua.is_valid_endpointUrl(endpointUrl).should.equal(true);
 
-        client = new OPCUAClient();
+        client = OPCUAClient.create();
 
         server.start(function () {
+
+            // we will connect to first server end point
+            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            debugLog("endpointUrl", endpointUrl);
+            opcua.is_valid_endpointUrl(endpointUrl).should.equal(true);
+
             setImmediate(function () {
                 client.connect(endpointUrl, function (err) {
-                    should(err).eql(null);
+                    should.not.exist(err);
                     client.createSession(function (err, session) {
-                        should(err).eql(null);
+                        should.not.exist(err);
                         g_session = session;
                         done();
                     });
@@ -100,9 +88,10 @@ describe("testing Server resilience with bad internet connection", function () {
     before(function (done) {
 
         server = new OPCUAServer({port: 2000, nodeset_filename: empty_nodeset_filename});
-
-        endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
-        server.start(done);
+        server.start((err) => {
+            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            done(err);
+        });
     });
 
     after(function (done) {
@@ -112,7 +101,7 @@ describe("testing Server resilience with bad internet connection", function () {
     it("server should discard session from abruptly disconnected client after the timeout has expired", function (done) {
 
         // ask for a very short session timeout
-        client = new OPCUAClient({requestedSessionTimeout: 200});
+        client = OPCUAClient.create({requestedSessionTimeout: 200});
 
         let the_session;
 

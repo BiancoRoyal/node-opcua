@@ -18,6 +18,7 @@ describe("DS5- testing OPCUA-Service Discovery Endpoint", function () {
     before(function (done) {
 
         server = build_server_with_temperature_device({port: port}, function (err) {
+            if(err) { return done(err); }
             endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
             temperatureVariableId = server.temperatureVariableId;
             done(err);
@@ -25,7 +26,7 @@ describe("DS5- testing OPCUA-Service Discovery Endpoint", function () {
     });
 
     beforeEach(function (done) {
-        client = new OPCUAClient();
+        client = OPCUAClient.create({});
         done();
     });
 
@@ -81,7 +82,9 @@ describe("DS5- testing OPCUA-Service Discovery Endpoint", function () {
         make_on_connected_client(function (client, callback) {
 
             client.findServers(function (err, servers) {
-                servers.length.should.eql(1);
+                if (!err) {
+                    servers.length.should.eql(1);
+                }
                 callback(err);
             });
         }, done);
@@ -109,8 +112,7 @@ describe("DS5- testing OPCUA-Service Discovery Endpoint", function () {
                 serverUris: ["invalid server uri"]
             };
 
-            client.findServers(filters,
-              function (err, servers) {
+            client.findServers(filters, function (err, servers) {
                   servers.length.should.eql(0);
                   callback(err);
               });
@@ -126,8 +128,7 @@ describe("DS5- testing OPCUA-Service Discovery Endpoint", function () {
                 serverUris: ["invalid server uri"]
             };
 
-            client.findServers(filters,
-              function (err, servers) {
+            client.findServers(filters, function (err, servers) {
                   servers.length.should.eql(0);
                   callback(err);
               });

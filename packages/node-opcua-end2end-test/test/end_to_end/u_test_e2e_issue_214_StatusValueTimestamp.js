@@ -27,10 +27,10 @@ module.exports = function(test) {
             const timerId = setInterval(function() {
                 const now = new Date();
                 const dataValue = new opcua.DataValue({
-                    sourceTimestamp: now,
-                    sourcePicoseconds: 0,
-                    serverTimestamp: now,
                     serverPicoseconds: 0,
+                    serverTimestamp: now,
+                    sourcePicoseconds: 0,
+                    sourceTimestamp: now,
                     statusCode: opcua.StatusCodes.Good
                 });
                 dataValue.value = variant;
@@ -39,7 +39,7 @@ module.exports = function(test) {
 
             let nbChanges = 0;
 
-            const client = new OPCUAClient();
+            const client = OPCUAClient.create();
             const endpointUrl = test.endpointUrl;
 
             perform_operation_on_subscription(
@@ -65,9 +65,9 @@ module.exports = function(test) {
                         inner_done();
                     }, 2000);
 
-                    const filter = new opcua.subscription_service.DataChangeFilter({
-                        trigger: opcua.subscription_service.DataChangeTrigger.StatusValueTimestamp,
-                        deadbandType: opcua.subscription_service.DeadbandType.Absolute,
+                    const filter = new opcua.DataChangeFilter({
+                        trigger: opcua.DataChangeTrigger.StatusValueTimestamp,
+                        deadbandType: opcua.DeadbandType.Absolute,
                         deadbandValue: 1.0
                     });
 
@@ -82,14 +82,11 @@ module.exports = function(test) {
                         filter: filter
                     };
                     // install monitored item
-                    const monitoredItem = the_subscription.monitor(
+                    const monitoredItem = opcua.ClientMonitoredItem.create(
+                        the_subscription,
                         itemToMonitor,
                         options,
-                        opcua.read_service.TimestampsToReturn.Both,
-                        function(err) {
-                            debugLog(" ERR =", err);
-                        }
-                    );
+                        opcua.TimestampsToReturn.Both);
 
                     monitoredItem.on("initialized", function() {
                         debugLog("monitoredItem initialized");
@@ -99,7 +96,7 @@ module.exports = function(test) {
                         nbChanges += 1;
                     });
                     monitoredItem.on("err", function(err_message) {
-                        debugLog(monitoredItem.itemToMonitor.nodeId.toString(), " ERROR".red, err_message);
+                        debugLog(monitoredItem.itemToMonitor.nodeId.toString(), chalk.red(" ERROR"), err_message);
                     });
                 },
                 function(err) {

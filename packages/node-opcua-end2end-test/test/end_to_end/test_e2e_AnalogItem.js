@@ -1,5 +1,5 @@
 "use strict";
-
+const chalk = require("chalk");
 const should = require("should");
 const async = require("async");
 const _ = require("underscore");
@@ -10,10 +10,9 @@ const StatusCodes = opcua.StatusCodes;
 const DataType = opcua.DataType;
 const AttributeIds = opcua.AttributeIds;
 const BrowseDirection = opcua.BrowseDirection;
-const client_utils = opcua.client_utils;
+const readUAAnalogItem = opcua.readUAAnalogItem;
 
 const debugLog = require("node-opcua-debug").make_debugLog(__filename);
-
 
 const port = 2000;
 
@@ -31,6 +30,7 @@ describe("testing AnalogItem on client side", function () {
     before(function (done) {
 
         server = build_server_with_temperature_device({port: port}, function (err) {
+            if(err) return done(err);
             endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
             temperatureVariableId = server.temperatureVariableId;
             done(err);
@@ -38,7 +38,7 @@ describe("testing AnalogItem on client side", function () {
     });
 
     beforeEach(function (done) {
-        client = new OPCUAClient();
+        client = OPCUAClient.create();
         async.series([
             function (callback) {
                 client.connect(endpointUrl, callback);
@@ -47,7 +47,7 @@ describe("testing AnalogItem on client side", function () {
                 debugLog(" createSession");
                 client.createSession(function (err, session) {
                     g_session = session;
-                    debugLog(" Error =".yellow.bold, err);
+                    debugLog(chalk.yellow.bold(" Error ="), err);
                     callback(err);
                 });
             }
@@ -81,7 +81,7 @@ describe("testing AnalogItem on client side", function () {
 
         const nodeId = "ns=1;s=TemperatureAnalogItem";
 
-        client_utils.readUAAnalogItem(g_session, nodeId, function (err, data) {
+        readUAAnalogItem(g_session, nodeId, function (err, data) {
 
             if (err) { return done(err); }
 
@@ -98,7 +98,7 @@ describe("testing AnalogItem on client side", function () {
     });
     it("readUAAnalogItem should return an error if not doesn't exist", function (done) {
         const nodeId = "ns=4;s=invalidnode";
-        client_utils.readUAAnalogItem(g_session, nodeId, function (err, data) {
+        readUAAnalogItem(g_session, nodeId, function (err, data) {
             should.exist(err);
             done();
         });
@@ -129,7 +129,6 @@ describe("testing AnalogItem on client side", function () {
             }
 
             let tmp = _.filter(result.references, function (e) {
-                //xx console.log("     ", e.nodeId.toString(), e.browseName.name.yellow);
                 return e.browseName.name === browseName;
             });
             tmp = tmp.map(function (e) {

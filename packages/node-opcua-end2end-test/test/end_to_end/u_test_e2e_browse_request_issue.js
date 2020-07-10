@@ -22,7 +22,7 @@ module.exports = function (test) {
 
             endpointUrl = test.endpointUrl;
 
-            client = new OPCUAClient();
+            client = OPCUAClient.create();
             client.connect(endpointUrl, function (err) {
                 if (err) {
                     done(err);
@@ -59,7 +59,7 @@ module.exports = function (test) {
             async.series([
 
                 function (callback) {
-                    const browseRequest1 = new opcua.browse_service.BrowseRequest({
+                    const browseRequest1 = new opcua.BrowseRequest({
                         view: null,
                         requestedMaxReferencesPerNode: 0,
                         nodesToBrowse: [nodeToBrowse]

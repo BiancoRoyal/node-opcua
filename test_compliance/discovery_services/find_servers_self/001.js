@@ -1,13 +1,14 @@
-var path = "../../../";
-var opcua = require(path);
+const path = "../../../";
+const chalk = require("chalk");
+const opcua = require(path);
 
-var ApplicationType = opcua.ApplicationType;
+const ApplicationType = opcua.ApplicationType;
 
-var should = require("should");
-var assert = require("node-opcua-assert").assert;
+const should = require("should");
+const assert = require("node-opcua-assert").assert;
 
 function addError( str) {
-    console.log("ERROR".red , str.cyan);
+    console.log(chalk.red("ERROR") , str);
 
 }
 /*
@@ -15,10 +16,10 @@ function addError( str) {
  All operations are expected to succeed */
 function checkFindServersValidParameter(servers)
 {
-    var succeeded = true;
-    for( var i=0; i<servers.length; i++)
+    let succeeded = true;
+    for( let i=0; i<servers.length; i++)
     {
-        var description = servers[i];
+        const description = servers[i];
 
         if (description.applicationName.text.length === 0)
         {
@@ -52,9 +53,9 @@ function describe_on_client(title,options,functor) {
 
     describe(title,function(){
 
-        var client = null;
+        let client = null;
         beforeEach(function(done){
-            client = new opcua.OPCUAClient();
+            client = opcua.OPCUAClient.create();
 
             client.connect(options.endpointUrl,function(err){
 
@@ -80,9 +81,10 @@ exports.register_test = function (options) {
 
         it("001 : Invoke FindServers with default parameters",function(done) {
 
-            options.client.findServers(function (err, servers) {
+            options.client.findServers(function (err, data) {
 
-                should(err).eql(null);
+                const { servers, endpoints } = data;
+                should.not.exist(err);
                 checkFindServersValidParameter(servers).should.eql(true);
                 servers.length.should.eql(1, "simple server expect 1");
                 done(err);
@@ -91,16 +93,15 @@ exports.register_test = function (options) {
 
         it("001 : Invoke FindServers with default parameters",function(done) {
 
-            options.client.findServers(function (err, servers) {
+            options.client.findServers(function (err, data) {
 
-                should(err).eql(null);
+                const { servers, endpoints } = data;
+
+                should.not.exist(err);
                 checkFindServersValidParameter(servers).should.eql(true);
                 servers.length.should.eql(1, "simple server expect 1");
                 done(err);
             });
         });
-
-
     });
-
 };

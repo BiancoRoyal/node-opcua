@@ -8,7 +8,7 @@ const OPCUAClient = opcua.OPCUAClient;
 const SecurityPolicy = opcua.SecurityPolicy;
 const MessageSecurityMode = opcua.MessageSecurityMode;
 
-const empty_nodeset_filename = opcua.empty_nodeset_filename;
+const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
 /*
 Discovery Endpoints shall not require any message security, but it may require transport layer
 security. In production systems, Administrators may disable discovery for security reasons and
@@ -46,13 +46,15 @@ describe("testing behavior of secure Server ( server that only accept SIGN or SI
                 SecurityPolicy.Basic256
             ],
             securityModes: [
-                MessageSecurityMode.SIGNANDENCRYPT
+                MessageSecurityMode.SignAndEncrypt
             ],
             disableDiscovery: false
         });
 
-        endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
-        server.start(done);
+        server.start((err)=> {
+            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            done(err);
+        });
     });
 
     after(function (done) {
@@ -62,7 +64,7 @@ describe("testing behavior of secure Server ( server that only accept SIGN or SI
     it("it should not be possible to create a session on a secure server using a unsecure channel", function (done) {
 
         // ask for a very short session timeout
-        client = new OPCUAClient({requestedSessionTimeout: 200});
+        client = OPCUAClient.create({requestedSessionTimeout: 200});
 
         let the_session;
 
@@ -83,17 +85,19 @@ describe("testing behavior of secure Server ( server that only accept SIGN or SI
             // create session
             function (callback) {
 
-                client._server_endpoints.length.should.eql(1);
+                client._serverEndpoints.length.should.eql(1);
 
                 // server has given us only its valid endpoint that the client will check before
                 // establishing a session. Let's inject a fake unsecure endpoint so we can
                 // skip the internal client test for invalid endpoint and get to the server
 
 
-                const unsecure_endpoint = new opcua.EndpointDescription(client._server_endpoints[0]);
-                unsecure_endpoint.securityMode = MessageSecurityMode.NONE;
-                unsecure_endpoint.securityPolicyUri = SecurityPolicy.None.value;
-                client._server_endpoints.push(unsecure_endpoint);
+                const unsecureEndpoint = new opcua.EndpointDescription(client._serverEndpoints[0]);
+                unsecureEndpoint.securityMode = MessageSecurityMode.None;
+                unsecureEndpoint.securityPolicyUri = SecurityPolicy.None;
+
+
+                client._serverEndpoints.push(unsecureEndpoint);
 
 
                 client.createSession(function (err, session) {
@@ -121,7 +125,7 @@ describe("testing behavior of secure Server ( server that only accept SIGN or SI
     it("it should be possible to get endpoint of a secure channel using a unsecure channel", function (done) {
 
         // ask for a very short session timeout
-        client = new OPCUAClient({requestedSessionTimeout: 200});
+        client = OPCUAClient.create({requestedSessionTimeout: 200});
 
         let the_session;
 
@@ -146,8 +150,8 @@ describe("testing behavior of secure Server ( server that only accept SIGN or SI
                     if (!err) {
                         //xx console.log(endpoints);
                         endpoints.length.should.eql(1);
-                        endpoints[0].securityMode.should.eql(MessageSecurityMode.SIGNANDENCRYPT);
-                        endpoints[0].securityPolicyUri.should.eql(SecurityPolicy.Basic256.value);
+                        endpoints[0].securityMode.should.eql(MessageSecurityMode.SignAndEncrypt);
+                        endpoints[0].securityPolicyUri.should.eql(SecurityPolicy.Basic256);
                     }
                     callback(err);
                 });

@@ -15,7 +15,7 @@ module.exports = function (test) {
     describe("SDS1 Testing SessionDiagnostics", function () {
 
         it("SDS1-A server should expose a ServerDiagnostic object", function (done) {
-            const client = new opcua.OPCUAClient({});
+            const client = opcua.OPCUAClient.create({});
 
             perform_operation_on_subscription(client, test.endpointUrl, function (session, subscription, callback) {
 
@@ -70,7 +70,7 @@ module.exports = function (test) {
 
         it("SDS1-B server should expose a SessionDiagnostics per Session", function (done) {
 
-            const client = new opcua.OPCUAClient({});
+            const client = opcua.OPCUAClient.create({});
 
             perform_operation_on_subscription(client, test.endpointUrl, function (session, subscription, callback) {
 
@@ -107,7 +107,7 @@ module.exports = function (test) {
                             if (err) {
                                 return callback(err);
                             }
-                            console.log(browseResult[0].toString());
+                            // console.log(browseResult[0].toString());
                             callback();
                         });
                     },
@@ -151,7 +151,7 @@ module.exports = function (test) {
                             if(err) { return callback(err); }
 
                             dataValue.statusCode.should.eql(opcua.StatusCodes.Good);
-                            dataValue.value.value.constructor.name.should.eql("SessionDiagnostics");
+                            dataValue.value.value.constructor.name.should.eql("SessionDiagnosticsDataType");
                             dataValue.value.value.totalRequestCount.totalCount.should.be.greaterThan(8);
 
                             callback();
@@ -184,7 +184,7 @@ module.exports = function (test) {
                             queueSize: 10
                         };
 
-                        monitoredItemGroup = subscription.monitorItems(itemsToMonitor, options);
+                        monitoredItemGroup = opcua.ClientMonitoredItemGroup.create(subscription,itemsToMonitor, options);
 
                         // subscription.on("item_added",function(monitoredItem){
                         monitoredItemGroup.on("initialized", function () {
@@ -269,7 +269,7 @@ module.exports = function (test) {
 
         it("SDS1-C server should expose a SessionDiagnostics in SessionDiagnosticsSummary.SessionDiagnosticsArray", function (done) {
 
-            const client = new opcua.OPCUAClient({});
+            const client = opcua.OPCUAClient.create({});
             perform_operation_on_subscription(client, test.endpointUrl, function (session, subscription, callback) {
 
                 //xx console.log("session nodeId = ",session.sessionId);
@@ -322,7 +322,7 @@ module.exports = function (test) {
                             if(err) { return callback(err); }
 
                             dataValue.statusCode.should.eql(opcua.StatusCodes.Good);
-                            dataValue.value.value.constructor.name.should.eql("SessionDiagnostics");
+                            dataValue.value.value.constructor.name.should.eql("SessionDiagnosticsDataType");
                             dataValue.value.value.totalRequestCount.totalCount.should.be.greaterThan(7);
 
                             callback();
@@ -339,7 +339,7 @@ module.exports = function (test) {
             const serverNodeId =opcua.resolveNodeId("Server");
             let sessionDiagnosticsNodeId;
             let nbSessionDiagnostics = -1;
-            const client = new opcua.OPCUAClient({});
+            const client = opcua.OPCUAClient.create({});
             perform_operation_on_subscription(client, test.endpointUrl, function (session, subscription, callback) {
                 async.series([
                     function get_sessionDiagnosticsArrayNodeId(callback) {
@@ -395,7 +395,7 @@ module.exports = function (test) {
                     });
                 },
                 function createSession(callback) {
-                    const client = new opcua.OPCUAClient({});
+                    const client = opcua.OPCUAClient.create({});
                     perform_operation_on_subscription(client, test.endpointUrl, function (session, subscription, callback) {
                         count_number_of_exposed_sessionDiagnostics(function(err,nbSessionDiagnostic) {
                             if (err) { return callback (err);}

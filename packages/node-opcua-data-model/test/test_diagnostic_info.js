@@ -2,7 +2,7 @@
 
 const should = require("should");
 
-const encode_decode_round_trip_test = require("node-opcua-packet-analyzer/test_helpers/encode_decode_round_trip_test").encode_decode_round_trip_test;
+const encode_decode_round_trip_test = require("node-opcua-packet-analyzer/dist/test_helpers").encode_decode_round_trip_test;
 
 const DiagnosticInfo = require("..").DiagnosticInfo;
 
@@ -39,7 +39,6 @@ describe("DiagnosticInfo", function () {
         const diag = new DiagnosticInfo({
             symbolicId: 120
         });
-
         encode_decode_round_trip_test(diag, function (buffer, id) {
             buffer.length.should.equal(5);
         });
@@ -52,7 +51,6 @@ describe("DiagnosticInfo", function () {
             symbolicId: 120,
             locale: 128
         });
-
         encode_decode_round_trip_test(diag, function (buffer, id) {
             buffer.length.should.equal(9);
         });
@@ -84,7 +82,7 @@ describe("DiagnosticInfo", function () {
         });
     });
 
-    it("should encode default DiagnosticInfo with an innerDiagnosticInfo  containing a 5 car string in 11-bytes", function () {
+    it("should encode DiagnosticInfo with an innerDiagnosticInfo  containing a 5 car string in 11-bytes", function () {
 
         const diag = new DiagnosticInfo({
             innerDiagnosticInfo: new DiagnosticInfo({additionalInfo: "Hello"})
@@ -118,10 +116,10 @@ describe("DiagnosticInfo", function () {
         });
 
     });
-    it("should encode DiagnosticInfo with NamespaceUri", function () {
+    it("should encode DiagnosticInfo with NamespaceURI", function () {
 
         const diag = new DiagnosticInfo({
-            namespaceUri: 1234
+            namespaceURI: 1234
         });
 
         encode_decode_round_trip_test(diag, function (buffer, id) {
@@ -129,12 +127,12 @@ describe("DiagnosticInfo", function () {
         });
 
     });
-    it("should encode DiagnosticInfo with NamespaceUri and LocalizedText and SymbolicId", function () {
+    it("should encode DiagnosticInfo with NamespaceURI and LocalizedText and SymbolicId", function () {
 
         const diag = new DiagnosticInfo({
             localizedText: 2345,
             symbolicId: 3456,
-            namespaceUri: 1234
+            namespaceURI: 1234
         });
 
         encode_decode_round_trip_test(diag, function (buffer, id) {

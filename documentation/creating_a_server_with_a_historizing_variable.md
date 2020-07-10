@@ -4,7 +4,9 @@
 In this tutorial, we are going to create a simple server that
 exposes the pressure of a vessel as an historizing variable.
 
-### The Server Script
+[sample_server_with_historizing_variable.js](#the-server-script "save:") script.
+
+### the server script
 
 Let's use a very basic server script :
 
@@ -12,32 +14,46 @@ Let's use a very basic server script :
 const opcua = require("node-opcua");
 const path = require("path");
 
-// Let's create an instance of OPCUAServer
-const server = new opcua.OPCUAServer({
-    port: 26543, // the port of the listening socket of the server
-    resourcePath: "UA/MyLittleServer", // this path will be added to the endpoint resource name
-    nodeset_filename: [
-        opcua.standard_nodeset_file,
-    ]
-});
 function construct_address_space(server) {
   const addressSpace = server.engine.addressSpace;
-  const namespace = addresSpace.getOwnNamespace();
+  const namespace = addressSpace.getOwnNamespace();
   _"create the vessel object"
   _"create historizing variable"
   _"adding historical configuration"
   _"simulating data"
 };
-function post_initialize() {
-    construct_address_space(server);
-    server.start(function() {
+
+(async () => {
+
+    try {
+        _"creating and starting the server"
+    } catch(err) {
+        console.log("Error = ", error);
+    }
+})();
+```
+
+### creating and starting the server
+
+```javascript
+        // Let's create an instance of OPCUAServer
+        const server = new opcua.OPCUAServer({
+            port: 26543, // the port of the listening socket of the server
+            resourcePath: "/UA/MyLittleServer", // this path will be added to the endpoint resource name
+            nodeset_filename: [
+                opcua.standard_nodeset_file,
+            ]
+        });
+
+        await server.initialize();
+
+        construct_address_space(server);
+
+        await server.start();
         console.log("Server is now listening ... ( press CTRL+C to stop)");
         console.log("port ", server.endpoints[0].port);
         const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
         console.log(" the primary server endpoint url is ", endpointUrl );
-    });
-}
-server.initialize(post_initialize);
 ```
 
 We add the code to create the variable inside the ```construct_address_space``` method.
@@ -73,7 +89,7 @@ const vesselPressure = namespace.addAnalogDataItem({
 
 ### adding historical configuration
 
-We now declare the vesselPressure variable to be a Historical datanode.
+We now declare the vesselPressure variable to be a Historical data node.
 
 ``` javascript
 addressSpace.installHistoricalDataNode(vesselPressure);
@@ -89,7 +105,7 @@ InstallHistoricalDataNode does a few things for us:
 To see the value change and create a fake history, we can simply install a timer
 to change the value on a regular basis.
 
-``` javascript
+```javascript
 // simulate pressure change
 let t = 0;
 setInterval(function() {
@@ -100,17 +116,15 @@ setInterval(function() {
 
 ```
 
-# exploring the results with UAExpert:
+### exploring the results with UAExpert:
 
 It is now time to launch your favorite OPCUA Client to check the results.
 
-The Vessel exposing the historising VesselPressure variable and its HA Configuration object:
+The Vessel exposing the historizing VesselPressure variable and its HA Configuration object:
 
 ![](images/image1.png)
 
 The History graph:
 ![](images/image2.png)
-
-[sample_server_with_historizing_variable.js](#the-server-script "save:") script.
 
 source code : [source.js](./sample_server_with_historizing_variable.js)

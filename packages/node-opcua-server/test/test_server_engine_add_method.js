@@ -1,13 +1,13 @@
 const _ = require("underscore");
 const should = require("should");
 
-const server_engine = require("../src/server_engine");
 
 const resolveNodeId = require("node-opcua-nodeid").resolveNodeId;
 const VariantArrayType = require("node-opcua-variant").VariantArrayType;
 const DataType = require("node-opcua-variant").DataType;
 const NodeId = require("node-opcua-nodeid").NodeId;
 const StatusCodes = require("node-opcua-status-code").StatusCodes;
+const NodeClass = require("node-opcua-data-model").NodeClass;
 
 let engine, FolderTypeId, BaseDataVariableTypeId, ref_Organizes_Id;
 
@@ -17,16 +17,19 @@ const SessionContext = require("node-opcua-address-space").SessionContext;
 
 const translate_service = require("node-opcua-service-translate-browse-path");
 
+const ServerEngine = require("..").ServerEngine;
+const mini_nodeset_filename = require("node-opcua-address-space").get_mini_nodeset_filename();
+
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("ServerEngine - addMethod", function () {
 
-    let addressSpace, namespace;
+    let addressSpace; let namespace;
     before(function (done) {
 
-        engine = new server_engine.ServerEngine();
+        engine = new ServerEngine();
 
-        engine.initialize({nodeset_filename: server_engine.mini_nodeset_filename}, function () {
+        engine.initialize({nodeset_filename: mini_nodeset_filename}, function () {
 
             addressSpace = engine.addressSpace;
             namespace = addressSpace.getOwnNamespace();
@@ -79,7 +82,7 @@ describe("ServerEngine - addMethod", function () {
             ]
         });
 
-        method.should.be.instanceOf(UAMethod);
+        method.nodeClass.should.eql(NodeClass.Method);
 
         method.nodeId.should.be.instanceOf(NodeId);
         const objectMethod = object.getMethodById(method.nodeId);

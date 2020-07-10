@@ -1,14 +1,14 @@
-
-const factories = require("node-opcua-factory");
-
-const SampleDerived_Schema = {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+/* tslint:disable:variable-name */
+const node_opcua_factory_1 = require("node-opcua-factory");
+exports.SampleDerived_Schema = {
     name: "SampleDerived",
     baseType: "SampleBase",
     documentation: "A FOOBAR Derived Object.",
-
-    id: factories.next_available_id(),
+    id: node_opcua_factory_1.next_available_id(),
     fields: [
-        {name: "otherName", fieldType: "String", documentation: "The name."}
+        { name: "otherName", fieldType: "String", documentation: "The name." }
     ]
 };
-exports.SampleDerived_Schema = SampleDerived_Schema;
+//# sourceMappingURL=SampleDerived_schema.js.map

@@ -2,35 +2,32 @@
 const should = require("should");
 const fs = require("fs");
 
-const OPCUAServer = require("../src/opcua_server").OPCUAServer;
-
-
 const NodeId = require("node-opcua-nodeid").NodeId;
 
-const mini_nodeset_filename =require("../src/server_engine").mini_nodeset_filename;
-fs.existsSync(mini_nodeset_filename).should.eql(true);
+const OPCUAServer = require("..").OPCUAServer;
 
+const mini_nodeset_filename = require("node-opcua-address-space").get_mini_nodeset_filename();
+
+fs.existsSync(mini_nodeset_filename).should.eql(true,
+  " expecting " + mini_nodeset_filename + " to exist");
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
-describe("OPCUAServer", function () {
-
-
+describe("OPCUAServer", () => {
     let server;
-
-    beforeEach(function (done) {
+    beforeEach((done) => {
         const options = {
             port: 2000,
             nodeset_filename: [mini_nodeset_filename]
         };
 
         server = new OPCUAServer(options);
-        server.start(function (err) {
+        server.start((err) => {
             done(err);
         });
     });
-    afterEach(function (done) {
+    afterEach( (done) => {
         if (server) {
-            server.shutdown(function () {
+            server.shutdown(() => {
                 server = null;
                 done();
             });
@@ -41,7 +38,7 @@ describe("OPCUAServer", function () {
         }
     });
 
-    it("should dismiss all existing session upon termination", function (done) {
+    it("should dismiss all existing sessions upon termination", (done) => {
 
         server.engine.currentSessionCount.should.equal(0);
 
@@ -63,8 +60,7 @@ describe("OPCUAServer", function () {
 
     });
 
-    it("server address space have a node matching session.nodeId", function (done) {
-
+    it("server address space have a node matching session.nodeId", (done) => {
 
         server.engine.currentSessionCount.should.equal(0);
 
@@ -82,7 +78,7 @@ describe("OPCUAServer", function () {
 
         const sessionNode = server.engine.addressSpace.findNode(session.nodeId);
 
-        should(!!sessionNode).eql(true," a session node must be found");
+        should(!!sessionNode).eql(true, " a session node must be found");
 
         sessionNode.nodeId.should.eql(session.nodeId);
 
@@ -92,11 +88,11 @@ describe("OPCUAServer", function () {
     });
 });
 
-describe("OPCUAServer-2",function() {
-
+describe("OPCUAServer-2", () => {
 
     let server;
-    before(function() {
+
+    before( (done) => {
 
         fs.existsSync(mini_nodeset_filename).should.eql(true);
 
@@ -105,34 +101,57 @@ describe("OPCUAServer-2",function() {
             nodeset_filename: [mini_nodeset_filename]
         };
         server = new OPCUAServer(options);
+        server.start(done);
     });
-    after(function (done) {
-        server.shutdown(function () {
+
+    after((done) => {
+        server.shutdown(()  => {
             server = null;
             done();
         });
     });
 
-    it("#rejectedSessionCount", function () {
+    it("#rejectedSessionCount", () => {
         server.rejectedSessionCount.should.eql(server.engine.rejectedSessionCount);
     });
 
-    it("#rejectedRequestsCount", function () {
+    it("#rejectedRequestsCount", () => {
         server.rejectedRequestsCount.should.eql(server.engine.rejectedRequestsCount);
     });
 
-    it("#sessionAbortCount", function () {
+    it("#sessionAbortCount", () => {
         server.sessionAbortCount.should.eql(server.engine.sessionAbortCount);
     });
 
-    it("#publishingIntervalCount", function () {
+    it("#publishingIntervalCount", () => {
         server.publishingIntervalCount.should.eql(server.engine.publishingIntervalCount);
     });
 
-    it("#buildInfo", function () {
+    it("#buildInfo", () => {
         server.buildInfo.should.eql(server.engine.buildInfo);
     });
 
 });
+describe("OPCUAServer-3", () => {
 
+    let server;
+    before((done)=>{
+
+        server = new OPCUAServer();
+        done();
+    });
+
+    it("checking IOPCUAServer properties before startup", () =>{
+        server.currentChannelCount.should.eql(0);
+        server.rejectedSessionCount.should.eql(0);
+        server.rejectedRequestsCount.should.eql(0);
+        server.currentSubscriptionCount.should.eql(0);
+        server.sessionAbortCount.should.eql(0);
+        server.publishingIntervalCount.should.eql(0);
+        server.currentSessionCount.should.eql(0);
+        server.isAuditing.should.eql(false);
+        should(server.getSession(NodeId.nullNodeId, true)).eql(null);
+
+    });
+});
 

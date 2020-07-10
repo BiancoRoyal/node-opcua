@@ -1,6 +1,6 @@
 /* global: require, describe, it, process*/
 "use strict";
-require("colors");
+const chalk = require("chalk");
 var crypto_utils = require("node-opcua-crypto");
 var fs = require("fs");
 var path = require("path");
@@ -38,13 +38,13 @@ function start_simple_server(options, callback) {
     }
     options = options || {};
 
-    var server_script = options.server_sourcefile || "./bin/simple_server.js";
+    const server_script = options.server_sourcefile || "./bin/simple_server.js";
 
     if (!fs.existsSync(server_script)) {
         throw new Error("start_simple_server : cannot find server script : "+ server_script);
 
     }
-    var port = options.port || "2223";
+    const port = options.port || "2222";
 
     delete options.server_sourcefile;
     delete options.port;
@@ -54,11 +54,14 @@ function start_simple_server(options, callback) {
     options.env = options.env || {};
     _.extend(options.env, process.env);
 
+    options.env.DEBUG = options.env.DEBUG2 || "";
+    options.env.NODEOPCUADEBUG = "";
+    
     //xx options.env.DEBUG = "ALL";
 
-    var server_exec = spawn("node", [server_script, "-p", port], options);
+    const server_exec = spawn("node", [server_script, "-p", port], options);
 
-    var serverCertificateFilename = constructFilename("certificates/server_cert_1024.pem");
+    const serverCertificateFilename = constructFilename("certificates/server_cert_2048.pem");
 
     console.log(" node ", server_script);
 
@@ -67,9 +70,8 @@ function start_simple_server(options, callback) {
         callback(new Error("Process has terminated unexpectedly with code=" + code + " signal=" + signal));
     }
 
-    var callback_called = false;
-
-    var pid_collected = 0;
+    let callback_called = false;
+    let pid_collected = 0;
 
     function detect_ready_message(data) {
         if (!callback_called) {
@@ -78,8 +80,8 @@ function start_simple_server(options, callback) {
                 // note : on windows , when using nodist, the process.id might not correspond to the
                 //        actual process id of our server. We collect here the real PID of our process
                 //        as output by the server on the console.
-                var m = data.match(/([0-9]+)$/);
-                pid_collected = parseInt(m[1]);
+                const m = data.match(/([0-9]+)$/);
+                pid_collected = parseInt(m[1], 10);
             }
             if (/server now waiting for connections./.test(data)) {
 
@@ -124,10 +126,10 @@ function start_simple_server(options, callback) {
     }
 
     server_exec.stdout.on("data", function (data) {
-        dumpData("stdout:  ".cyan, data.toString("utf8"));
+        dumpData(chalk.cyan("stdout:  "), data.toString("utf8"));
     });
     server_exec.stderr.on("data", function (data) {
-        dumpData("stderr: ".red, data.toString("utf8"));
+        dumpData(chalk.red("stderr: "), data.toString("utf8"));
     });
 
 }

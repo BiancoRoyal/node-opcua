@@ -19,7 +19,7 @@ module.exports = function (test) {
         let server, client, endpointUrl;
 
         beforeEach(function (done) {
-            client = new OPCUAClient();
+            client = OPCUAClient.create();
             endpointUrl = test.endpointUrl;
             server = test.server;
             done();
@@ -109,7 +109,7 @@ module.exports = function (test) {
                 });
                 session.translateBrowsePath(browsePath, function (err, browsePathResult) {
                     should.not.exist(err);
-                    browsePathResult._schema.name.should.equal("BrowsePathResult");
+                    browsePathResult.schema.name.should.equal("BrowsePathResult");
                     browsePathResult.statusCode.should.eql(StatusCodes.BadNothingToDo);
                     //xx console.log(browsePathResult.toString())
                     browsePathResult.statusCode.should.eql(StatusCodes.BadNothingToDo);

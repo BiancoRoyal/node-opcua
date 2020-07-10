@@ -1,32 +1,35 @@
 {
- "name": "node-opcua-buffer-utils",
- "version": "0.7.2",
- "description": "pure nodejs OPCUA SDK - module -buffer-utils",
- "main": "dist/buffer_utils.js",
- "types": "dist/buffer_utils.d.ts",
- "scripts": {
-  "build": "tsc",
-  "test": "mocha test"
- },
- "author": "Etienne Rossignon",
- "license": "MIT",
- "dependencies": {
-  "node-opcua-assert": "^0.7.0"
- },
- "devDependencies": {
-  "node-opcua-benchmarker": "^0.7.2"
- },
- "repository": {
-  "type": "git",
-  "url": "git://github.com/node-opcua/node-opcua.git"
- },
- "keywords": [
-  "OPCUA",
-  "opcua",
-  "m2m",
-  "iot",
-  "opc ua",
-  "internet of things"
- ],
- "homepage": "http://node-opcua.github.io/"
+    "name": "node-opcua-buffer-utils",
+    "version": "2.6.1",
+    "description": "pure nodejs OPCUA SDK - module -buffer-utils",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc -b",
+        "test": "mocha test",
+        "clean": "node -e \"require('rimraf').sync('dist');\"",
+        "lint": "tslint source/**/*.ts"
+    },
+    "author": "Etienne Rossignon",
+    "license": "MIT",
+    "dependencies": {
+        "node-opcua-assert": "^2.6.1"
+    },
+    "devDependencies": {
+        "node-opcua-benchmarker": "^2.6.1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/node-opcua/node-opcua.git"
+    },
+    "keywords": [
+        "OPCUA",
+        "opcua",
+        "m2m",
+        "iot",
+        "opc ua",
+        "internet of things"
+    ],
+    "homepage": "http://node-opcua.github.io/",
+    "gitHead": "e4d73afdfcccb3491423149d9b9785888f4ebb3c"
 }

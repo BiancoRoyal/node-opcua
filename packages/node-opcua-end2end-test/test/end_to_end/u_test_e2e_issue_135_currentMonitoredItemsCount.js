@@ -41,7 +41,7 @@ module.exports = function (test) {
                 }
             });
 
-            const client1 = new OPCUAClient();
+            const client1 = OPCUAClient.create();
             const endpointUrl = test.endpointUrl;
 
             let the_session;
@@ -68,7 +68,7 @@ module.exports = function (test) {
 
                 function (callback) {
 
-                    const subscription = new ClientSubscription(the_session, {
+                    const subscription = ClientSubscription.create(the_session, {
                         requestedPublishingInterval:  150,
                         requestedLifetimeCount:       10 * 60 * 10,
                         requestedMaxKeepAliveCount:   10,
@@ -88,7 +88,7 @@ module.exports = function (test) {
                     ];
 
                     nodesToMonitor.forEach(function(nodeId) {
-                        const monitoredItem = subscription.monitor(
+                        const monitoredItem = opcua.ClientMonitoredItem.create(subscription,
                             {nodeId: nodeId, attributeId: AttributeIds.Value},
                             {
                                 samplingInterval: refreshRate/2, // sampling twice as fast as variable refresh rate
@@ -139,7 +139,7 @@ module.exports = function (test) {
                                 return callback(err);
                             }
 
-                            //xx console.log("-----------------------------------------------".bgWhite.red,err);
+                            //xx console.log(chalk.bgWhite.red("-----------------------------------------------"),err);
                             //xx console.log("results = ",results);
 
                             dataValues.length.should.eql(3);
@@ -152,7 +152,7 @@ module.exports = function (test) {
                             currentSubcriptionsCount.should.eql(1, "expecting one subscription ");
                             currentMonitoredItemsCount.should.eql(2);
 
-                            dataValues[2].value.value.constructor.name.should.eql("SessionDiagnostics");
+                            dataValues[2].value.value.constructor.name.should.eql("SessionDiagnosticsDataType");
                             dataValues[2].value.value.sessionName.toString().should.eql("Session1");
 
                             debugLog("diagnostic = ", dataValues[2].value.toString());

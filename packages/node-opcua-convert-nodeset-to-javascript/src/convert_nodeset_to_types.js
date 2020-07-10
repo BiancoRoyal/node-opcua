@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 "use strict";
 
 const assert = require("node-opcua-assert").assert;
@@ -6,19 +7,27 @@ const _ = require("underscore");
 const path = require("path");
 const fs = require("fs");
 
-const resolveNodeId = require("node-opcua-nodeid").resolveNodeId;
-const AddressSpace = require("node-opcua-address-space").AddressSpace;
-const UADataType = require("node-opcua-address-space").UADataType;
+const { 
+    resolveNodeId
+ }= require("node-opcua-nodeid");
+const {
+    AddressSpace 
+ } = require("node-opcua-address-space");
 
-const normalize_require_file = require("node-opcua-utils").normalize_require_file;
-const LineFile = require("node-opcua-utils").LineFile;
-const lowerFirstLetter = require("node-opcua-utils").lowerFirstLetter;
-
-const hasConstructor = require("node-opcua-factory").hasConstructor;
-const getConstructor = require("node-opcua-factory").getConstructor;
-const hasEnumeration = require("node-opcua-factory").hasEnumeration;
-const getEnumeration = require("node-opcua-factory").getEnumeration;
-
+const {
+    normalize_require_file,
+    LineFile 
+} = require("node-opcua-utils");
+const {
+    lowerFirstLetter 
+}= require("node-opcua-utils");
+const { 
+    hasConstructor, 
+    getConstructor,
+    hasEnumeration,
+    getEnumeration 
+}= require("node-opcua-factory");
+const { NodeClass } = require("node-opcua-data-model"); 
 const crypto = require("crypto");
 
 function hashNamespace(namespaceUri) {
@@ -116,7 +125,7 @@ const QualifiedName = require("node-opcua-data-model").QualifiedName;
  */
 function makeEnumeration(dataType, bForce) {
     assert(dataType);
-    assert(dataType.hasOwnProperty("browseName"));
+    assert(dataType.browseName);
     assert(dataType.browseName instanceof QualifiedName);
     assert(_.isArray(dataType.definition));
 
@@ -205,17 +214,14 @@ function generateFileCode(namespace, schema, schema_folder) {
     f.save(filename);
 }
 
-function makeStructure(dataType, bForce, schema_folder) {
+function makeStructure(dataType/*: UADataType*/, bForce/*: boolean*/, schema_folder/*: string*/) {
     assert(fs.existsSync(schema_folder), " schema_folder must exist");
-
     bForce = !!bForce;
 
-    assert(dataType instanceof UADataType);
+    assert(dataType.nodeClass === NodeClass.DataType);
 
     const addressSpace = dataType.addressSpace;
-    assert(addressSpace.constructor.name === "AddressSpace");
-    assert(addressSpace instanceof AddressSpace);
-
+  
     const namespaceUri = addressSpace.getNamespaceUri(dataType.nodeId.namespace);
 
     // istanbul ignore next
@@ -230,7 +236,7 @@ function makeStructure(dataType, bForce, schema_folder) {
     // if binaryEncodingNodeId is in the standard factory => no need to overwrite
 
     if (!bForce && (hasConstructor(dataType.binaryEncodingNodeId) || dataType.binaryEncodingNodeId.namespace === 0)) {
-        //xx console.log("Skipping standard constructor".bgYellow ," for dataType" ,dataType.browseName.toString());
+        //xx console.log(chalk.bgYellow("Skipping standard constructor") ," for dataType" ,dataType.browseName.toString());
         return getConstructor(dataType.binaryEncodingNodeId);
     }
 
@@ -243,8 +249,6 @@ function makeStructure(dataType, bForce, schema_folder) {
     const filename = getSchemaSourceFile(namespaceUri, schema.name, "");
 
     const relative_filename = normalize_require_file(__dirname, filename);
-
-    //xx console.log("xxxxxxxxxxxxxxxxxx => ".green,schema.name,filename.cyan,relative_filename.yellow);
 
     const constructor = require(relative_filename)[schema.name];
     assert(_.isFunction(constructor), "expecting a constructor here");
@@ -372,7 +376,6 @@ function registerDataType(addressSpace, dataTypeName, schema_folder, bForce) {
  * @param addressSpace {AddressSpace}
  */
 const createExtensionObjectDefinition = function(addressSpace) {
-    assert(addressSpace instanceof AddressSpace);
     const force = true;
     // nodeset.ApplicationDescription = nodeset.ApplicationDescription || registerDataType(addressSpace, "ApplicationDescription",force);
     nodeset.ServerState = nodeset.ServerState || registerDataTypeEnum(addressSpace, "ServerState", force);

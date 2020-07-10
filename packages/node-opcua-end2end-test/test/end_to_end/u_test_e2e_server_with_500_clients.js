@@ -3,6 +3,7 @@
 
 const async = require("async");
 const should = require("should");
+const chalk = require("chalk");
 
 const opcua = require("node-opcua");
 
@@ -47,7 +48,7 @@ module.exports = function (test) {
         };
 
 
-        const client1 = new OPCUAClient(options);
+        const client1 = OPCUAClient.create(options);
         const endpointUrl = test.endpointUrl;
 
         client1.on("send_request",function(req) {
@@ -57,15 +58,15 @@ module.exports = function (test) {
             if(doDebug) { console.log(data.index," << ",res.constructor.name,res.responseHeader.serviceResult.toString()); }
         });
         client1.on("start_reconnection", function () {
-            if(doDebug) { console.log("start_reconnection".bgWhite.yellow,data.index); }
+            if(doDebug) { console.log(chalk.bgWhite.yellow("start_reconnection"),data.index); }
         });
         client1.on("backoff", function (number, delay) {
-            if(doDebug) { console.log("backoff".bgWhite.yellow,data.index,number,delay);}
+            if(doDebug) { console.log(chalk.bgWhite.yellow("backoff"),data.index,number,delay);}
         });
 
         should.exist(first_client);
 
-        client1._server_endpoints = first_client._server_endpoints;
+        client1._serverEndpoints = first_client._serverEndpoints;
         client1.knowsServerEndpoint.should.eql(true);
 
 
@@ -79,9 +80,9 @@ module.exports = function (test) {
                 const t = getTick();
                 func(function(err) {
                     if (err) {
-                        if(doDebug) { console.log("   ",msg.red, err.message,r(getTick()-t));}
+                        if(doDebug) { console.log("   ", chalk.red(msg), err.message,r(getTick()-t));}
                     } else {
-                        if(doDebug) { console.log("   ",msg.green, r(getTick()-t));}
+                        if(doDebug) { console.log("   ", chalk.green(msg), r(getTick()-t));}
 
                     }
                     return callback(err);
@@ -137,7 +138,7 @@ module.exports = function (test) {
     describe("AZAZ Testing " + MAXCONNECTIONS + " clients", function () {
 
         before(function(done){
-            first_client= new opcua.OPCUAClient();
+            first_client= opcua.OPCUAClient.create();
             const endpointUrl = test.endpointUrl;
             first_client.connect(endpointUrl, done);
 
@@ -159,10 +160,10 @@ module.exports = function (test) {
                 q.push({index: i});
             }
 
-            q.drain = function () {
+            q.drain(() => {
                 //xx console.log("done");
                 done();
-            };
+            })  ;
         });
 
     });

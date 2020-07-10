@@ -1,13 +1,13 @@
 "use strict";
 
-var async = require("async");
-var should = require("should");
-var _ = require("underscore");
+const async = require("async");
+const should = require("should");
+const _ = require("underscore");
+const { promisify, callbackify } = require("util");
+const opcua = require("node-opcua");
 
-var opcua = require("node-opcua");
-var ClientSubscription = opcua.ClientSubscription;
-var resolveNodeId = opcua.resolveNodeId;
-var AttributeIds = opcua.AttributeIds;
+const { ClientSubscription, resolveNodeId, AttributeIds } = opcua;
+
 /**
  * @method perform_operation_on_client_session
  *
@@ -29,7 +29,7 @@ var AttributeIds = opcua.AttributeIds;
  * @param [done_func.err]  {Error} an optional error to pass if the function has failed
  */
 function perform_operation_on_client_session(client, endpointUrl, func, done_func) {
-    return client.withSession(endpointUrl,func,done_func);
+    return client.withSession(endpointUrl, func, done_func);
 }
 exports.perform_operation_on_client_session = perform_operation_on_client_session;
 
@@ -58,40 +58,40 @@ exports.perform_operation_on_client_session = perform_operation_on_client_sessio
 // callback function(session, subscriptionId,done)
 function perform_operation_on_subscription(client, endpointUrl, do_func, done_func) {
 
-    perform_operation_on_client_session(client, endpointUrl, function (session, done) {
+    perform_operation_on_client_session(client, endpointUrl, function(session, done) {
 
-        var do_func_err =null;
+        var do_func_err = null;
         var subscription;
         async.series([
 
-            function (callback) {
-                subscription = new ClientSubscription(session, {
+            function(callback) {
+                subscription = ClientSubscription.create(session, {
                     requestedPublishingInterval: 100,
-                    requestedLifetimeCount:     6000,
-                    requestedMaxKeepAliveCount:  100,
-                    maxNotificationsPerPublish:    4,
+                    requestedLifetimeCount: 6000,
+                    requestedMaxKeepAliveCount: 100,
+                    maxNotificationsPerPublish: 4,
                     publishingEnabled: true,
                     priority: 6
                 });
-                subscription.on("started", function () {
+                subscription.on("started", function() {
                     callback();
                 });
             },
 
-            function (callback) {
-               try {
-                   do_func(session, subscription, function(err) {
-                       do_func_err = err;
-                       callback(null);
-                   });
-               }
-               catch(err) {
-                   do_func_err = err;
-                   callback(null);
-               }
+            function(callback) {
+                try {
+                    do_func(session, subscription, function(err) {
+                        do_func_err = err;
+                        callback(null);
+                    });
+                }
+                catch (err) {
+                    do_func_err = err;
+                    callback(null);
+                }
             },
 
-            function (callback) {
+            function(callback) {
                 subscription.on("terminated", function() {
                     //
                 });
@@ -103,7 +103,7 @@ function perform_operation_on_subscription(client, endpointUrl, do_func, done_fu
                     callback();
                 });
             }
-        ], function (err) {
+        ], function(err) {
             if (do_func_err) {
                 err = do_func_err;
             }
@@ -115,44 +115,62 @@ function perform_operation_on_subscription(client, endpointUrl, do_func, done_fu
 
 exports.perform_operation_on_subscription = perform_operation_on_subscription;
 
+async function perform_operation_on_subscription_async(
+    client, endpointUrl, inner_func /*async  (session, subscription) => */) {
 
-function perform_operation_on_raw_subscription(client,endpointUrl,f,done) {
+    let ret = undefined;
 
-    var result = {
+    function f(callback1) {
+        perform_operation_on_subscription(client, endpointUrl, (session, subscription, callback) => {
+            callbackify(inner_func)(session, subscription, (err, retValue) => {
+                ret = retValue;
+                callback(err);
+            });
+        }, callback1);
+    }
+    await promisify(f)();
+
+    return ret;
+}
+exports.perform_operation_on_subscription_async = perform_operation_on_subscription_async;
+
+function perform_operation_on_raw_subscription(client, endpointUrl, f, done) {
+
+    const result = {
         id: null
     };
-    perform_operation_on_client_session(client, endpointUrl, function (session, inner_callback) {
+    perform_operation_on_client_session(client, endpointUrl, function(session, inner_callback) {
 
         async.series([
             function(callback) {
 
                 session.createSubscription({
                     requestedPublishingInterval: 100, // Duration
-                    requestedLifetimeCount:      600,  // Counter
-                    requestedMaxKeepAliveCount:  100, // Counter
-                    maxNotificationsPerPublish:   10, // Counter
-                    publishingEnabled:          true,   // Boolean
-                    priority:                     14 // Byte
-                }, function (err, response) {
+                    requestedLifetimeCount: 600,  // Counter
+                    requestedMaxKeepAliveCount: 100, // Counter
+                    maxNotificationsPerPublish: 10, // Counter
+                    publishingEnabled: true,   // Boolean
+                    priority: 14 // Byte
+                }, function(err, response) {
 
                     if (!err) {
-                        result.subscriptionId=response.subscriptionId;
-                        f(session,result,function(err){
+                        result.subscriptionId = response.subscriptionId;
+                        f(session, result, function(err) {
                             callback(err);
                         })
-                    } else{
+                    } else {
                         callback();
                     }
                 });
 
             },
-            function (callback) {
+            function(callback) {
                 session.deleteSubscriptions({
                     subscriptionIds: [result.subscriptionId]
-                },callback);
+                }, callback);
             }
-        ],inner_callback)
-    },done);
+        ], inner_callback)
+    }, done);
 }
 exports.perform_operation_on_raw_subscription = perform_operation_on_raw_subscription;
 
@@ -162,34 +180,34 @@ function perform_operation_on_monitoredItem(client, endpointUrl, monitoredItemId
 
     var itemToMonitor;
     if (typeof monitoredItemId === "string") {
-        itemToMonitor ={
+        itemToMonitor = {
             nodeId: resolveNodeId(monitoredItemId),
             attributeId: AttributeIds.Value
         };
     } else {
         itemToMonitor = monitoredItemId;
     }
-    perform_operation_on_subscription(client, endpointUrl, function (session, subscription, inner_done) {
+    perform_operation_on_subscription(client, endpointUrl, function(session, subscription, inner_done) {
 
-        var monitoredItem;
+        let monitoredItem;
         async.series([
-            function (callback) {
+            function(callback) {
 
-                monitoredItem = subscription.monitor(itemToMonitor, {
+                monitoredItem = opcua.ClientMonitoredItem.create(subscription, itemToMonitor, {
                     samplingInterval: 1000,
                     discardOldest: true,
                     queueSize: 1
                 });
 
-                monitoredItem.on("initialized", function () {
+                monitoredItem.on("initialized", function() {
                     callback();
                 });
             },
-            function (callback) {
+            function(callback) {
                 func(session, subscription, monitoredItem, callback);
             },
-            function (callback) {
-                monitoredItem.terminate(function () {
+            function(callback) {
+                monitoredItem.terminate(function() {
                     callback();
                 });
             }

@@ -5,6 +5,7 @@ const async = require("async");
 const _ = require("underscore");
 const os = require("os");
 const opcua = require("node-opcua");
+const RegisterServerManager = require("node-opcua-server").RegisterServerManager;
 
 const debugLog = require("node-opcua-debug").make_debugLog(__filename);
 const doDebug = require("node-opcua-debug").checkDebugFlag(__filename);
@@ -30,9 +31,9 @@ describe("NodeRed -  testing frequent server restart within same process", funct
     function startDiscoveryServer(callback) {
         // note : only one discovery server shall be run per machine
         discoveryServer = new opcua.OPCUADiscoveryServer({port: discoveryServerPort});
-        discoveryServerEndpointUrl = discoveryServer._get_endpoints()[0].endpointUrl;
         discoveryServer.start(function (err) {
             debugLog(" Discovery server listening on ", discoveryServerEndpointUrl);
+            discoveryServerEndpointUrl = discoveryServer._get_endpoints()[0].endpointUrl;
             callback(err);
         });
     }
@@ -107,7 +108,7 @@ describe("NodeRed -  testing frequent server restart within same process", funct
             if (doDebug) {
                 debugLog(" creating client");
             }
-            let client = new opcua.OPCUAClient();
+            let client = opcua.OPCUAClient.create();
             client.connect(endpointUrl, function (err) {
                 if (err) return callback(err);
                 client.createSession(function (err, session) {
@@ -115,7 +116,7 @@ describe("NodeRed -  testing frequent server restart within same process", funct
                     client.session = session;
                     clients.push(client);
 
-                    client.subscription = new opcua.ClientSubscription(session, {
+                    client.subscription = opcua.ClientSubscription.create(session, {
                         requestedPublishingInterval: 1000,
                         requestedLifetimeCount: 100,
                         requestedMaxKeepAliveCount: 20,
@@ -132,7 +133,7 @@ describe("NodeRed -  testing frequent server restart within same process", funct
                     }).on("terminated", function () {
                     });
 
-                    client.monitoredItem = client.subscription.monitor({
+                    client.monitoredItem = opcua.ClientMonitoredItem.create(client.subscription,{
                             nodeId: opcua.resolveNodeId("ns=0;i=2258"),
                             attributeId: opcua.AttributeIds.Value
                         },
@@ -141,7 +142,7 @@ describe("NodeRed -  testing frequent server restart within same process", funct
                             discardOldest: true,
                             queueSize: 10
                         },
-                        opcua.read_service.TimestampsToReturn.Both
+                        opcua.TimestampsToReturn.Both
                     );
                     client.monitoredItem.on("changed", function (dataValue) {
                         if (doDebug) {
@@ -233,7 +234,7 @@ describe("NodeRed -  testing frequent server restart within same process", funct
 
     it("T0c- should cancel a client that is attempting a connection on an existing server", function (done) {
 
-        let client = new opcua.OPCUAClient();
+        let client = opcua.OPCUAClient.create();
         const endpoint = discoveryServerEndpointUrl;
         async.series([
             function create_client_do_not_wait(callback) {
@@ -297,7 +298,6 @@ describe("NodeRed -  testing frequent server restart within same process", funct
 
     it("T0g- registration manager as a standalone object", function (done) {
 
-        const RegisterServerManager = require("node-opcua-server/src/register_server_manager").RegisterServerManager;
         const registrationManager = new RegisterServerManager(
             {
                 timeout: 1000,
@@ -321,7 +321,6 @@ describe("NodeRed -  testing frequent server restart within same process", funct
     });
     it("T0h- registration manager as a standalone object", function (done) {
 
-        const RegisterServerManager = require("node-opcua-server/src/register_server_manager").RegisterServerManager;
         const registrationManager = new RegisterServerManager(
             {
                 timeout: 1000,

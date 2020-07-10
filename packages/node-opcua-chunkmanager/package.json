@@ -1,34 +1,46 @@
 {
- "name": "node-opcua-chunkmanager",
- "version": "0.7.2",
- "description": "pure nodejs OPCUA SDK - module -chunkmanager",
- "main": "index.js",
- "scripts": {
-  "test": "exit 0 "
- },
- "dependencies": {
-  "node-opcua-assert": "^0.7.0",
-  "node-opcua-binary-stream": "^0.7.2",
-  "node-opcua-buffer-utils": "^0.7.2",
-  "underscore": "^1.9.1"
- },
- "devDependencies": {
-  "node-opcua-debug": "^0.7.2",
-  "should": "13.2.3"
- },
- "author": "Etienne Rossignon",
- "license": "MIT",
- "repository": {
-  "type": "git",
-  "url": "git://github.com/node-opcua/node-opcua.git"
- },
- "keywords": [
-  "OPCUA",
-  "opcua",
-  "m2m",
-  "iot",
-  "opc ua",
-  "internet of things"
- ],
- "homepage": "http://node-opcua.github.io/"
+    "name": "node-opcua-chunkmanager",
+    "version": "2.7.0",
+    "description": "pure nodejs OPCUA SDK - module -chunkmanager",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc -b",
+        "test": "exit 0 ",
+        "clean": "node -e \"require('rimraf').sync('dist');\"",
+        "lint": "tslint source/**/*.ts"
+    },
+    "dependencies": {
+        "chalk": "^4.0.0",
+        "node-opcua-assert": "^2.6.1",
+        "node-opcua-basic-types": "^2.7.0",
+        "node-opcua-binary-stream": "^2.6.1",
+        "node-opcua-buffer-utils": "^2.6.1",
+        "node-opcua-factory": "^2.7.0",
+        "node-opcua-packet-assembler": "^2.6.1",
+        "underscore": "^1.10.2"
+    },
+    "devDependencies": {
+        "@types/node": "^14.0.1",
+        "@types/underscore": "^1.10.0",
+        "node-opcua-debug": "^2.6.1",
+        "should": "^13.2.3",
+        "source-map-support": "^0.5.19"
+    },
+    "author": "Etienne Rossignon",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/node-opcua/node-opcua.git"
+    },
+    "keywords": [
+        "OPCUA",
+        "opcua",
+        "m2m",
+        "iot",
+        "opc ua",
+        "internet of things"
+    ],
+    "homepage": "http://node-opcua.github.io/",
+    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c"
 }

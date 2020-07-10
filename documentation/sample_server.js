@@ -4,7 +4,7 @@ const opcua = require("node-opcua");
 // Let's create an instance of OPCUAServer
 const server = new opcua.OPCUAServer({
     port: 4334, // the port of the listening socket of the server
-    resourcePath: "UA/MyLittleServer", // this path will be added to the endpoint resource name
+    resourcePath: "/UA/MyLittleServer", // this path will be added to the endpoint resource name
      buildInfo : {
         productName: "MySampleServer1",
         buildNumber: "7658",
@@ -18,14 +18,14 @@ function post_initialize() {
     
         const addressSpace = server.engine.addressSpace;
         const namespace = addressSpace.getOwnNamespace();
-        
+    
         // declare a new object
         const device = namespace.addObject({
             organizedBy: addressSpace.rootFolder.objects,
             browseName: "MyDevice"
         });
-        
-        // add some variables 
+    
+        // add some variables
         // add a variable named MyVariable1 to the newly created folder "MyDevice"
         let variable1 = 1;
         
@@ -47,15 +47,15 @@ function post_initialize() {
         let variable2 = 10.0;
         
         namespace.addVariable({
-            
+        
             componentOf: device,
-            
+        
             nodeId: "ns=1;b=1020FFAA", // some opaque NodeId in namespace 4
-            
+        
             browseName: "MyVariable2",
-            
+        
             dataType: "Double",    
-            
+        
             value: {
                 get: function () {
                     return new opcua.Variant({dataType: opcua.DataType.Double, value: variable2 });
@@ -77,9 +77,9 @@ function post_initialize() {
             return percentageMemUsed;
         }
         namespace.addVariable({
-            
+        
             componentOf: device,
-            
+        
             nodeId: "s=free_memory", // a string nodeID
             browseName: "FreeMemory",
             dataType: "Double",    

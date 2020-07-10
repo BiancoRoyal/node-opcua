@@ -32,6 +32,9 @@ describe("testing client Proxy", function () {
 
         server = build_server_with_temperature_device({port: port}, function (err) {
 
+            if (err) {
+                return done(err);
+            }
             endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
             temperatureVariableId = server.temperatureVariableId;
 
@@ -42,7 +45,7 @@ describe("testing client Proxy", function () {
     });
 
     beforeEach(function (done) {
-        client = new OPCUAClient();
+        client = OPCUAClient.create();
         done();
     });
 
@@ -230,23 +233,19 @@ describe("testing client Proxy", function () {
 
                             hvac = data;
 
-                            //xx console.log("Target temperature nodeId =",hvac.targetTemperature.nodeId.toString());
-                            //xx console.log("Inside temperature nodeId =",hvac.interiorTemperature.nodeId.toString());
-                            //xx console.log("hvac.setTargetTemperature = ",hvac.setTargetTemperature);
                             hvac.setTargetTemperature.inputArguments[0].name.should.eql("targetTemperature");
-                            hvac.setTargetTemperature.inputArguments[0].dataType.value.should.eql(DataType.Double.value);
+                            hvac.setTargetTemperature.inputArguments[0].dataType.value.should.eql(DataType.Double);
                             hvac.setTargetTemperature.inputArguments[0].valueRank.should.eql(-1);
                             hvac.setTargetTemperature.outputArguments.length.should.eql(0);
-
 
 
 //                          console.log("Interior temperature",hvac.interiorTemperature.dataValue);
 
                             hvac.interiorTemperature.on("value_changed",function(value){
-                              //  console.log("  EVENT: interiorTemperature has changed to ".yellow,value.value.toString());
+                               console.log(chalk.yellow("  EVENT: interiorTemperature has changed to "),value.value.toString());
                             });
                             hvac.targetTemperature.on("value_changed",function(value){
-                                //xx console.log("  EVENT: targetTemperature has changed to ".cyan,value.value.toString());
+                                console.log(chalk.cyan("  EVENT: targetTemperature has changed to "),value.value.toString());
                             });
 
 
@@ -258,7 +257,7 @@ describe("testing client Proxy", function () {
                 function (callback) {
 
                     hvac.interiorTemperature.readValue(function (err, value) {
-                        //xx console.log(" reading Interior temperature, got = ...", value.toString());
+                        console.log(" reading Interior temperature, got = ...", value.toString());
                         callback(err);
                     });
                 },

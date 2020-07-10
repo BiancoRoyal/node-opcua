@@ -1,0 +1,6 @@
+out/
+test/
+test_to_fix/
+certificates/
+tsconfig.json
+tsconfig.tsbuildinfo

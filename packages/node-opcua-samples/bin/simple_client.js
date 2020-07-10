@@ -1,208 +1,168 @@
 #!/usr/bin/env node
-"use strict";
-
+// PLEASE use simple_client_ts.ts , simple_client_ts presents a more modern approach...*
 const fs = require("fs");
+const path = require("path");
 const treeify = require("treeify");
 const _ = require("underscore");
-const colors = require("colors");
+const chalk = require("chalk");
 const Table = require("easy-table");
-const async = require("async");
-const assert = require("node-opcua-assert").assert;
-const path = require("path");
-
-const opcua = require("node-opcua");
-const VariableIds = opcua.VariableIds;
-const BrowseDirection = opcua.BrowseDirection;
-const crypto_utils = opcua.crypto_utils;
-
+const util = require("util");
+const {
+    ApplicationType,
+    assert,
+    AttributeIds,
+    BrowseDirection,
+    callConditionRefresh,
+    ClientMonitoredItem,
+    coerceMessageSecurityMode,
+    coerceNodeId,
+    coerceSecurityPolicy,
+    constructEventFilter,
+    dumpEvent,
+    hexDump,
+    makeExpandedNodeId,
+    makeNodeId,
+    MessageSecurityMode,
+    NodeClassMask,
+    NodeCrawler,
+    NodeId,
+    ObjectTypeIds,
+    OPCUAClient,
+    resolveNodeId,
+    SecurityPolicy,
+    VariableIds,
+    ObjectIds,
+} = require("node-opcua");
+const { toPem } = require("node-opcua-crypto");
 
 //node bin/simple_client.js --endpoint  opc.tcp://localhost:53530/OPCUA/SimulationServer --node "ns=5;s=Sinusoid1"
 const yargs = require("yargs/yargs");
-
 const argv = yargs(process.argv)
     .wrap(132)
-    //.usage("Usage: $0 -d --endpoint <endpointUrl> [--securityMode (NONE|SIGNANDENCRYPT|SIGN)] [--securityPolicy (None|Basic256|Basic128Rsa15)] --node <node_id_to_monitor> --crawl")
+    // .usage("Usage: $0 -d --endpoint <endpointUrl> [--securityMode (None|SignAndEncrypt|Sign)] [--securityPolicy (None|Basic256|Basic128Rsa15)] --node <node_id_to_monitor> --crawl")
 
-    .demand("endpoint")
-    .string("endpoint")
-    .describe("endpoint", "the end point to connect to ")
-
-    .string("securityMode")
-    .describe("securityMode", "the security mode")
-
-    .string("securityPolicy")
-    .describe("securityPolicy", "the policy mode")
-
-    .string("userName")
-    .describe("userName", "specify the user name of a UserNameIdentityToken ")
-
-    .string("password")
-    .describe("password", "specify the password of a UserNameIdentityToken")
-
-    .string("node")
-    .describe("node","the nodeId of the value to monitor")
-
-    .string("timeout")
-    .describe("timeout"," the timeout of the session in second =>  (-1 for infinity)")
-
-    .string("debug")
-    .describe("debug"," display more verbose information")
-
-    .string("history")
-    .describe("history","make an historical read")
-
-    .alias("e", "endpoint")
-    .alias("s", "securityMode")
-    .alias("P", "securityPolicy")
-    .alias("u", "userName")
-    .alias("p", "password")
-    .alias("n", "node")
-    .alias("t", "timeout")
-
-    .alias("d", "debug")
-    .alias("h", "history")
-    .example("simple_client  --endpoint opc.tcp://localhost:49230 -P=Basic256 -s=SIGN")
-    .example("simple_client  -e opc.tcp://localhost:49230 -P=Basic256 -s=SIGN -u JoeDoe -p P@338@rd ")
-    .example("simple_client  --endpoint opc.tcp://localhost:49230  -n=\"ns=0;i=2258\"")
-
+    .option("endpoint", {
+        alias: "e",
+        demandOption: true,
+        describe: "the end point to connect to "
+    })
+    .option("securityMode", {
+        alias: "s",
+        default: "None",
+        describe: "the security mode (  None Sign SignAndEncrypt )"
+    })
+    .option("securityPolicy", {
+        alias: "P",
+        default: "None",
+        describe: "the policy mode : (" + Object.keys(SecurityPolicy).join(" - ") + ")"
+    })
+    .option("userName", {
+        alias: "u",
+        describe: "specify the user name of a UserNameIdentityToken"
+    })
+    .option("password", {
+        alias: "p",
+        describe: "specify the password of a UserNameIdentityToken"
+    })
+    .option("node", {
+        alias: "n",
+        describe: "the nodeId of the value to monitor"
+    })
+    .option("timeout", {
+        alias: "t",
+        describe: " the timeout of the session in second =>  (-1 for infinity)"
+    })
+    .option("debug", {
+        alias: "d",
+        boolean: true,
+        describe: " display more verbose information"
+    })
+    .option("history", {
+        alias: "h",
+        describe: "make an historical read"
+    })
+    .option("crawl", {
+        alias: "c",
+        describe: "crawl"
+    })
+    .option("discovery", {
+        alias: "D",
+        describe: "specify the endpoint uri of discovery server (by default same as server endpoint uri)"
+    })
+    .example("simple_client  --endpoint opc.tcp://localhost:49230 -P=Basic256Rsa256 -s=Sign", "")
+    .example("simple_client  -e opc.tcp://localhost:49230 -P=Basic256Sha256 -s=Sign -u JoeDoe -p P@338@rd ", "")
+    .example("simple_client  --endpoint opc.tcp://localhost:49230  -n=\"ns=0;i=2258\"", "")
     .argv;
 
-
-const securityMode = opcua.MessageSecurityMode.get(argv.securityMode || "NONE");
-if (!securityMode) {
-    throw new Error("Invalid Security mode , should be " + opcua.MessageSecurityMode.enums.join(" "));
+const securityMode = coerceMessageSecurityMode(argv.securityMode);
+if (securityMode === MessageSecurityMode.Invalid) {
+    throw new Error("Invalid Security mode");
 }
 
-const securityPolicy = opcua.SecurityPolicy.get(argv.securityPolicy || "None");
-if (!securityPolicy) {
-    throw new Error("Invalid securityPolicy , should be " + opcua.SecurityPolicy.enums.join(" "));
+const securityPolicy = coerceSecurityPolicy(argv.securityPolicy);
+if (securityPolicy === SecurityPolicy.Invalid) {
+    throw new Error("Invalid securityPolicy");
 }
 
-//xx argv.securityMode   = argv.securityMode || "SIGNANDENCRYPT";
-//xx argv.securityPolicy = argv.securityPolicy || "Basic128Rsa15";
-const timeout = parseInt(argv.timeout) * 1000 || 20000;
+const timeout = argv.timeout * 1000 || 20000;
 
-const monitored_node = argv.node || "ns=1;s=PumpSpeed"; //"ns=1;s=Temperature";
+const monitored_node = coerceNodeId(argv.node ||
+    makeNodeId(VariableIds.Server_ServerStatus_CurrentTime));
 
-console.log("securityMode        = ".cyan, securityMode.toString());
-console.log("securityPolicy      = ".cyan, securityPolicy.toString());
-console.log("timeout             = ".cyan, timeout ? timeout : " Infinity " );
+console.log(chalk.cyan("securityMode        = "), securityMode.toString());
+console.log(chalk.cyan("securityPolicy      = "), securityPolicy.toString());
+console.log(chalk.cyan("timeout             = "), timeout ? timeout : " Infinity ");
 console.log(" monitoring node id = ", monitored_node);
-let client = null;
 
 const endpointUrl = argv.endpoint;
 
-
 if (!endpointUrl) {
-    require("yargs").showHelp();
+    yargs.showHelp();
     process.exit(0);
 }
+const discoveryUrl = argv.discovery ? argv.discovery : endpointUrl;
 
-let the_session = null;
-let the_subscription = null;
-let serverCertificate = null;
-
-const AttributeIds = opcua.AttributeIds;
-const DataType = opcua.DataType;
-
-const NodeCrawler = opcua.NodeCrawler;
 const doCrawling = !!argv.crawl;
 const doHistory = !!argv.history;
 
-
-
-
-function getBrowseName(session,nodeId,callback) {
-    session.read({ nodeId: nodeId, attributeId: AttributeIds.BrowseName},function(err, dataValue) {
-        if (!err) {
-            if (dataValue.statusCode === opcua.StatusCodes.Good) {
-                assert(dataValue.statusCode === opcua.StatusCodes.Good);
-                const browseName = dataValue.value.value.name;
-                return callback(null,browseName);
-            }
-        }
-        callback(err,"<??>");
-    });
+function w(str, l) {
+    return (str + "                                      ").substr(0, l);
 }
 
-function w(str,l) {
-    return (str + "                                      ").substr(0,l);
-}
-
-
-
-function __dumpEvent(session,fields,eventFields,_callback) {
-
-    assert(_.isFunction(_callback));
-
-    console.log("-----------------------");
-
-    async.forEachOf(eventFields,function(variant,index,callback) {
-
-        assert(_.isFunction(callback));
-        if (variant.dataType === DataType.Null) {
-            return callback();
-        }
-        if (variant.dataType === DataType.NodeId)  {
-
-            getBrowseName(session,variant.value,function(err,name){
-
-                if (!err) {
-                    console.log(w(name,20),w(fields[index],15).yellow,
-                        w(variant.dataType.key,10).toString().cyan,name.cyan.bold,"(",w(variant.value,20),")");
-                }
-                callback();
-            });
-
-        } else {
-            setImmediate(function() {
-                console.log(w("",20),w(fields[index],15).yellow,
-                    w(variant.dataType.key,10).toString().cyan,variant.value);
-                callback();
-            });
-        }
-    },_callback);
-}
-
-const q = new async.queue(function(task,callback){
-    __dumpEvent(task.session,task.fields,task.eventFields,callback);
-});
-
-function dumpEvent(session,fields,eventFields,_callback) {
-
-    q.push({
-        session: session, fields:fields, eventFields: eventFields, _callback: _callback
-    });
-
-}
-
-function enumerateAllConditionTypes(the_session,callback) {
+async function enumerateAllConditionTypes(session) {
 
     const tree = {};
 
     const conditionEventTypes = {};
 
-    function findAllNodeOfType(tree,typeNodeId,browseName,callback) {
+    async function findAllNodeOfType(
+        tree1,
+        typeNodeId1,
+        browseName
+    ) {
 
         const browseDesc1 = {
-            nodeId: typeNodeId,
-            referenceTypeId: opcua.resolveNodeId("HasSubtype"),
+            nodeId: typeNodeId1,
+            referenceTypeId: resolveNodeId("HasSubtype"),
+
             browseDirection: BrowseDirection.Forward,
             includeSubtypes: true,
             resultMask: 63
 
         };
         const browseDesc2 = {
-            nodeId: typeNodeId,
-            referenceTypeId: opcua.resolveNodeId("HasTypeDefinition"),
+            nodeId: typeNodeId1,
+            referenceTypeId: resolveNodeId("HasTypeDefinition"),
+
             browseDirection: BrowseDirection.Inverse,
             includeSubtypes: true,
             resultMask: 63
 
         };
         const browseDesc3 = {
-            nodeId: typeNodeId,
-            referenceTypeId: opcua.resolveNodeId("HasTypeDefinition"),
+            nodeId: typeNodeId1,
+            referenceTypeId: resolveNodeId("HasTypeDefinition"),
+
             browseDirection: BrowseDirection.Forward,
             includeSubtypes: true,
             resultMask: 63
@@ -214,755 +174,641 @@ function enumerateAllConditionTypes(the_session,callback) {
             browseDesc2,
             browseDesc3
         ];
-        the_session.browse(nodesToBrowse,function(err,browseResults) {
+        const browseResults = await session.browse(nodesToBrowse);
 
-            //xx console.log(" exploring".yellow ,browseName.cyan, typeNodeId.toString());
-            tree[browseName] = {};
-            if (!err) {
-                browseResults[0].references = browseResults[0].references || [];
-                async.forEach(browseResults[0].references,function(el,_inner_callback) {
-                    conditionEventTypes[el.nodeId.toString()] = el.browseName.toString();
-                    findAllNodeOfType(tree[browseName],el.nodeId,el.browseName.toString(),_inner_callback);
-                }, callback);
-            } else {
-                callback(err);
-            }
-        });
+        tree1[browseName] = {};
+        browseResults[0].references = browseResults[0].references || [];
+        const promises = [];
+        for (const reference of browseResults[0].references) {
+            conditionEventTypes[reference.nodeId.toString()] = reference.browseName.toString();
+            promises.push(findAllNodeOfType(tree1[browseName], reference.nodeId, reference.browseName.toString()));
+        }
+        await Promise.all(promises);
     }
 
-    const  typeNodeId = opcua.resolveNodeId("ConditionType");
-    findAllNodeOfType(tree,typeNodeId,"ConditionType",function(err){
-        if (!err) {
-            return callback(null,conditionEventTypes,tree);
-        }
-        callback(err);
-    });
+    const typeNodeId = resolveNodeId("ConditionType");
+
+    await findAllNodeOfType(tree, typeNodeId, "ConditionType");
+
+    return tree;
 }
 
+async function enumerateAllAlarmAndConditionInstances(session) {
 
-function enumerateAllAlarmAndConditionInstances(the_session,callback) {
-
-    let conditions = {};
+    const conditions = {};
 
     const found = [];
 
     function isConditionEventType(nodeId) {
         return conditions.hasOwnProperty(nodeId.toString());
-        //x return derivedType.indexOf(nodeId.toString()) >=0;
     }
 
-    function exploreForObjectOfType(session,nodeId,callback) {
+    async function exploreForObjectOfType(session1, nodeId) {
 
+        async function worker(element) {
 
-        const q = async.queue(function worker(element,callback){
-
-            //xx console.log(" exploring elements,",element.nodeId.toString());
-            const browseDesc1 = {
+            const nodeToBrowse = {
                 nodeId: element.nodeId,
-                referenceTypeId: opcua.resolveNodeId("HierarchicalReferences"),
+                referenceTypeId: resolveNodeId("HierarchicalReferences"),
+
                 browseDirection: BrowseDirection.Forward,
                 includeSubtypes: true,
                 nodeClassMask: 0x1, // Objects
                 resultMask: 63
             };
 
-            const nodesToBrowse = [browseDesc1];
-            session.browse(nodesToBrowse,function(err,browseResults) {
-                if (err) {
-                    console.log("err =",err);
-                }
-                if (!err) {
-                    browseResults[0].references.forEach(function(ref) {
-                        if (isConditionEventType(ref.typeDefinition)) {
-                            //
-                            const alarm ={
-                                parent:       element.nodeId,
-                                browseName: ref.browseName,
-                                alarmNodeId : ref.nodeId,
-                                typeDefinition: ref.typeDefinition,
-                                typeDefinitionName: conditions[ref.typeDefinition.toString()]
-                            };
-                            found.push(alarm);
+            const browseResult = await session1.browse(nodeToBrowse);
 
-                        } else {
-                            q.push({nodeId: ref.nodeId});
-                        }
-                    });
-                }
-                callback(err);
-            });
+            for (const ref of browseResult.references) {
+                if (isConditionEventType(ref.typeDefinition)) {
+                    //
+                    const alarm = {
+                        parent: element.nodeId,
 
-        });
-        q.push({
-            nodeId: nodeId
-        });
-        q.drain = function( ) {
-            callback();
-        };
+                        alarmNodeId: ref.nodeId,
+                        browseName: ref.browseName,
+                        typeDefinition: ref.typeDefinition,
+                        typeDefinitionName: conditions[ref.typeDefinition.toString()]
+                    };
+                    found.push(alarm);
+
+                } else {
+                    await worker(ref.nodeId);
+                }
+            }
+        }
+
+        await worker(nodeId);
 
     }
-    enumerateAllConditionTypes(the_session,function(err,map){
-        conditions = map;
-        exploreForObjectOfType(the_session,opcua.resolveNodeId("RootFolder"),function(err) {
-            if (!err) {
-                return callback(null,found);
-            }
-            return callback(err);
-        });
-    });
 
+    await enumerateAllConditionTypes(session);
+
+    await exploreForObjectOfType(session, resolveNodeId("RootFolder"));
+
+    return Object.values(conditions);
 }
 
+async function _getAllEventTypes(session, baseNodeId, tree) {
 
-const makeNodeId = opcua.makeNodeId;
-const ObjectTypeIds = opcua.ObjectTypeIds;
+    const browseDesc1 = {
+        nodeId: baseNodeId,
+        referenceTypeId: resolveNodeId("HasSubtype"),
+
+        browseDirection: BrowseDirection.Forward,
+        includeSubtypes: true,
+        nodeClassMask: NodeClassMask.ObjectType, // Objects
+        resultMask: 63
+    };
+    const browseResult = await session.browse(browseDesc1);
+
+    // to do continuation points
+    for (const reference of browseResult.references) {
+        const subtree = { nodeId: reference.nodeId.toString() };
+        tree[reference.browseName.toString()] = subtree;
+        await _getAllEventTypes(session, reference.nodeId, subtree);
+    }
+}
 
 /**
- * @method getAllEventType
  * getAllEventType recursively
- * @param session
- * @param callback
  */
-function getAllEventTypes(session,callback)
-{
+async function getAllEventTypes(session) {
+
     const baseNodeId = makeNodeId(ObjectTypeIds.BaseEventType);
+    const result = {};
+    await _getAllEventTypes(session, baseNodeId, result);
+    return result;
+}
 
-    const q = new async.queue(function(task,callback) {
-
-        _getAllEventTypes(task.nodeId, task.tree, function (err, result) {
-            if(err){return callback(err);}
-            callback(null,result);
-        });
-
-    });
-    function _getAllEventTypes(baseNodeId,tree,callback) {
-
-        //xx console.log(" exploring elements,",element.nodeId.toString());
-        const browseDesc1 = {
-            nodeId: baseNodeId,
-            referenceTypeId: opcua.resolveNodeId("HasSubtype"),
-            browseDirection: BrowseDirection.Forward,
-            includeSubtypes: true,
-            nodeClassMask: opcua.NodeClassMask.ObjectType, // Objects
-            resultMask: 63
-        };
-        session.browse(browseDesc1, function(err,browseResult){
-            if (err) {
-                console.log(" ERROR = ", err);
-            } else {
-                // to do continuation points
-                browseResult.references.forEach(function (reference) {
-                    const subtree = {nodeId: reference.nodeId.toString()};
-                    tree[reference.browseName.toString()] = subtree;
-                    q.push({nodeId: reference.nodeId, tree: subtree});
-                });
-
-            }
-
-            callback();
-        });
+async function monitorAlarm(subscription) {
+    try {
+        await callConditionRefresh(subscription);
+    } catch (err) {
+        console.log(" monitorAlarm failed , may be your server doesn't support A&E", err.message);
     }
-    const result ={};
+}
 
-    q.push({nodeId: baseNodeId,tree: result});
+function getTick() {
+    return Date.now();
+}
 
-    q.drain = function( ) {
-        callback(null,result);
+let the_subscription;
+let the_session;
+let client;
+
+async function main() {
+
+    const optionsInitial = {
+
+        securityMode,
+        securityPolicy,
+
+        endpoint_must_exist: false,
+        keepSessionAlive: true,
+
+        connectionStrategy: {
+            initialDelay: 2000,
+            maxDelay: 10 * 1000,
+            maxRetry: 10
+        },
+
+        discoveryUrl
     };
 
-}
-const callConditionRefresh = opcua.callConditionRefresh;
+    client = OPCUAClient.create(optionsInitial);
 
-function monitorAlarm(subscription,alarmNodeId, callback) {
-
-    assert(_.isFunction(callback));
-
-    callConditionRefresh(subscription, function(/*err*/) {
-        callback();
+    client.on("backoff", (retry, delay) => {
+        console.log(chalk.bgWhite.yellow("backoff  attempt #"), retry, " retrying in ", delay / 1000.0, " seconds");
     });
-}
 
-async.series([
-    function (callback) {
+    console.log(" connecting to ", chalk.cyan.bold(endpointUrl));
+    console.log("    strategy", client.connectionStrategy);
 
-        const options = {
-            endpoint_must_exist: false,
-            keepSessionAlive: true,
-            connectionStrategy: {
-                maxRetry: 10,
-                initialDelay: 2000,
-                maxDelay: 10*1000
-            }
-        };
+    try {
+        await client.connect(endpointUrl);
+    } catch (err) {
+        console.log(chalk.red(" Cannot connect to ") + endpointUrl);
+        console.log(" Error = ", err.message);
+        return;
+    }
 
-        client = new opcua.OPCUAClient(options);
+    const endpoints = await client.getEndpoints();
 
-        console.log(" connecting to ", endpointUrl.cyan.bold);
-        console.log("    strategy", client.connectionStrategy);
+    if (argv.debug) {
+        fs.writeFileSync("tmp/endpoints.log", JSON.stringify(endpoints, null, " "));
+        console.log(treeify.asTree(endpoints, true));
+    }
 
-        client.connect(endpointUrl, callback);
+    const table = new Table();
 
-        client.on("backoff", function (number, delay) {
-            console.log("backoff  attempt #".bgWhite.yellow,number, " retrying in ",delay/1000.0," seconds");
-        });
+    let serverCertificate;
 
-    },
+    let i = 0;
+    for (const endpoint of endpoints) {
+        table.cell("endpoint", endpoint.endpointUrl + "");
+        table.cell("Application URI", endpoint.server.applicationUri);
+        table.cell("Product URI", endpoint.server.productUri);
+        table.cell("Application Name", endpoint.server.applicationName.text);
+        table.cell("Security Mode", MessageSecurityMode[endpoint.securityMode].toString());
+        table.cell("securityPolicyUri", endpoint.securityPolicyUri);
+        table.cell("Type", ApplicationType[endpoint.server.applicationType]);
+        table.cell("certificate", "..." /*endpoint.serverCertificate*/);
+        endpoint.server.discoveryUrls = endpoint.server.discoveryUrls || [];
+        table.cell("discoveryUrls", endpoint.server.discoveryUrls.join(" - "));
 
-    function (callback) {
+        serverCertificate = endpoint.serverCertificate;
 
+        const certificate_filename = path.join(__dirname, "../certificates/PKI/server_certificate" + i + ".pem");
 
-        client.getEndpoints(function (err, endpoints) {
+        if (serverCertificate) {
+            fs.writeFile(certificate_filename, toPem(serverCertificate, "CERTIFICATE"), () => {/**/
+            });
+        }
+        table.newRow();
+        i++;
+    }
+    console.log(table.toString());
 
-            if (argv.debug) {
-                fs.writeFile("tmp/endpoints.log", JSON.stringify(endpoints, null, " "));
-                console.log(treeify.asTree(endpoints, true));
-            }
-
-            const table = new Table();
-            if (!err) {
-                endpoints.forEach(function (endpoint, i) {
-                    table.cell("endpoint", endpoint.endpointUrl + "");
-                    table.cell("Application URI", endpoint.server.applicationUri);
-                    table.cell("Product URI", endpoint.server.productUri);
-                    table.cell("Application Name", endpoint.server.applicationName.text);
-                    table.cell("Security Mode", endpoint.securityMode.toString());
-                    table.cell("securityPolicyUri", endpoint.securityPolicyUri);
-                    table.cell("Type", endpoint.server.applicationType.key);
-                    table.cell("certificate", "..." /*endpoint.serverCertificate*/);
-                    endpoint.server.discoveryUrls = endpoint.server.discoveryUrls || [];
-                    table.cell("discoveryUrls",endpoint.server.discoveryUrls.join(" - "));
-
-                    serverCertificate = endpoint.serverCertificate;
-
-                    const certificate_filename = path.join(__dirname, "../certificates/PKI/server_certificate" + i + ".pem");
-
-                   if (serverCertificate) {
-                       fs.writeFile(certificate_filename, crypto_utils.toPem(serverCertificate, "CERTIFICATE"),function(){});
-                   }
-                    table.newRow();
-                });
-                console.log(table.toString());
-
-                endpoints.forEach(function (endpoint) {
-                    console.log("Identify Token for : Security Mode=", endpoint.securityMode.toString()," Policy=", endpoint.securityPolicyUri);
-                    const table2 = new Table();
-                    endpoint.userIdentityTokens.forEach(function (token) {
-                        table2.cell("policyId", token.policyId);
-                        table2.cell("tokenType", token.tokenType.toString());
-                        table2.cell("issuedTokenType", token.issuedTokenType);
-                        table2.cell("issuerEndpointUrl", token.issuerEndpointUrl);
-                        table2.cell("securityPolicyUri", token.securityPolicyUri);
-                        table2.newRow();
-                    });
-                    console.log(table2.toString());
-                });
-
-            }
-
-            callback(err);
-        });
-    },
-    //------------------------------------------
-    function (callback) {
-        client.disconnect(callback);
-    },
+    for (const endpoint of endpoints) {
+        console.log("Identify Token for : Security Mode=", endpoint.securityMode.toString(), " Policy=", endpoint.securityPolicyUri);
+        const table2 = new Table();
+        for (const token of endpoint.userIdentityTokens) {
+            table2.cell("policyId", token.policyId);
+            table2.cell("tokenType", token.tokenType.toString());
+            table2.cell("issuedTokenType", token.issuedTokenType);
+            table2.cell("issuerEndpointUrl", token.issuerEndpointUrl);
+            table2.cell("securityPolicyUri", token.securityPolicyUri);
+            table2.newRow();
+        }
+        console.log(table2.toString());
+    }
+    await client.disconnect();
 
     // reconnect using the correct end point URL now
-    function (callback) {
+    console.log(chalk.cyan("Server Certificate :"));
+    console.log(chalk.yellow(hexDump(serverCertificate)));
 
-        const hexDump = opcua.hexDump;
-        console.log("Server Certificate :".cyan);
-        console.log(hexDump(serverCertificate).yellow);
+    const options = {
+        securityMode,
+        securityPolicy,
+        serverCertificate,
 
-        const options = {
-            securityMode: securityMode,
-            securityPolicy: securityPolicy,
-            serverCertificate: serverCertificate,
+        defaultSecureTokenLifetime: 40000,
 
-            defaultSecureTokenLifetime: 40000,
+        endpoint_must_exist: false,
 
-            endpoint_must_exist:false,
+        connectionStrategy: {
+            initialDelay: 2000,
+            maxDelay: 10 * 1000,
+            maxRetry: 10
+        }
+    };
+    console.log("Options = ", options.securityMode.toString(), options.securityPolicy.toString());
 
-            connectionStrategy: {
-                maxRetry: 10,
-                initialDelay: 2000,
-                maxDelay: 10*1000
-            }
+    client = OPCUAClient.create(options);
+
+    console.log(" reconnecting to ", chalk.cyan.bold(endpointUrl));
+    await client.connect(endpointUrl);
+
+    let userIdentity; // anonymous
+    if (argv.userName && argv.password) {
+
+        userIdentity = {
+            password: argv.password,
+            userName: argv.userName
         };
-        console.log("Options = ", options.securityMode.toString(), options.securityPolicy.toString());
 
-        client = new opcua.OPCUAClient(options);
+    }
 
-        console.log(" reconnecting to ", endpointUrl.cyan.bold);
-        client.connect(endpointUrl, callback);
-    },
+    the_session = await client.createSession(userIdentity);
+    client.on("connection_reestablished", () => {
+        console.log(chalk.bgWhite.red(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!!"));
+    });
+    console.log(chalk.yellow(" session created"));
+    console.log(" sessionId : ", the_session.sessionId.toString());
 
-    //------------------------------------------
-    function (callback) {
+    client.on("backoff", (retry, delay) => {
+        console.log(chalk.bgWhite.yellow("backoff  attempt #"), retry, " retrying in ", delay / 1000.0, " seconds");
+    });
+    client.on("start_reconnection", () => {
+        console.log(chalk.bgWhite.red(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting Reconnection !!!!!!!!!!!!!!!!!!!"));
+    });
 
-        let userIdentity = null; // anonymous
-        if (argv.userName && argv.password) {
+    // -----------------------------------------------------------------------------------------------------------
+    //   NAMESPACE
+    //   display namespace array
+    // -----------------------------------------------------------------------------------------------------------
+    const server_NamespaceArray_Id = makeNodeId(VariableIds.Server_NamespaceArray); // ns=0;i=2006
 
-            userIdentity = {
-                userName: argv.userName,
-                password: argv.password
-            };
+    const dataValue = await the_session.readVariableValue(server_NamespaceArray_Id);
 
-        }
-        client.createSession(userIdentity, function (err, session) {
-            if (!err) {
-                the_session = session;
-                console.log(" session created".yellow);
-                console.log(" sessionId : ", session.sessionId.toString());
-            }
-            callback(err);
-        });
-    },
-    function set_event_handlers(callback) {
-        client.on("connection_reestablished",function() {
-            console.log(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!!".bgWhite.red);
-        });
-        client.on("backoff", function (number, delay) {
-            console.log("backoff  attempt #".bgWhite.yellow,number, " retrying in ",delay/1000.0," seconds");
-        });
-        client.on("start_reconnection", function () {
-            console.log(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting Reconnection !!!!!!!!!!!!!!!!!!!".bgWhite.red);
-        });
+    console.log(" --- NAMESPACE ARRAY ---");
+    const namespaceArray = dataValue.value.value;
+    for (const namespace of namespaceArray) {
+        console.log(" Namespace ", namespace.index, "  : ", namespace);
+    }
+    console.log(" -----------------------");
 
+    // -----------------------------------------------------------------------------------------------------------
+    //   enumerate all EVENT TYPES
+    // -----------------------------------------------------------------------------------------------------------
+    const result = getAllEventTypes(the_session);
+    console.log(chalk.cyan("---------------------------------------------------- All Event Types "));
+    console.log(treeify.asTree(result, true));
+    console.log(" -----------------------");
 
-        callback();
-    },
-    // ----------------------------------------
-    // display namespace array
-    function (callback) {
+    // -----------------------------------------------------------------------------------------------------------
+    //   Node Crawling
+    // -----------------------------------------------------------------------------------------------------------
+    let t1;
+    let t2;
 
-        const server_NamespaceArray_Id = opcua.makeNodeId(VariableIds.Server_NamespaceArray); // ns=0;i=2006
+    function print_stat() {
+        try {
 
-        the_session.readVariableValue(server_NamespaceArray_Id, function (err, dataValue) {
-
-            console.log(" --- NAMESPACE ARRAY ---");
-            if (!err) {
-                const namespaceArray = dataValue.value.value;
-                for (let i = 0; i < namespaceArray.length; i++) {
-                    console.log(" Namespace ", i, "  : ", namespaceArray[i]);
-                }
-            }
-            console.log(" -----------------------");
-            callback(err);
-        });
-    },
-
-    function (callback) {
-
-        getAllEventTypes(the_session,function(err,result){
-
-            console.log("--------------------------------------------------------------- All Event Types ".cyan);
-            console.log(treeify.asTree(result, true));
-
-            callback();
-        });
-    },
-
-    //------------------------------------------
-    function (callback) {
-
-        let t1,t2;
-        function print_stat() {
             t2 = Date.now();
-            const util = require("util");
-            const str = util.format("R= %d W= %d T=%d t= %d", client.bytesRead, client.bytesWritten, client.transactionsPerformed, (t2 - t1));
-            console.log(str.yellow.bold);
+            const str = util.format("R= %d W= %d T=%d t= %d",
+                client.bytesRead, client.bytesWritten, client.transactionsPerformed, (t2 - t1));
+            console.log(chalk.yellow.bold(str));
+        } catch (err) {
+            console.log("err =", err);
         }
+    }
 
-        if (doCrawling) {
-            assert(_.isObject(the_session));
-            const crawler = new NodeCrawler(the_session);
+    if (doCrawling) {
+        assert(_.isObject(the_session));
+        const crawler = new NodeCrawler(the_session);
 
-            let t = Date.now();
-            client.on("send_request", function () {
-                t1 = Date.now();
+        let t5 = Date.now();
+        client.on("send_request", () => {
+            t1 = Date.now();
+        });
+
+        client.on("receive_response", print_stat);
+
+        t5 = Date.now();
+        crawler.on("browsed", function(element) {
+            try {
+                console.log("->", (new Date()).getTime() - t, element.browseName.name, element.nodeId.toString());
+            } catch (err) {
+                console.log("err =", err);
+            }
+        });
+
+        const nodeId = resolveNodeId(ObjectIds.Server);
+        console.log("now crawling object folder ...please wait...");
+
+        const obj = await crawler.read(nodeId);
+
+        console.log(" Time        = ", (new Date()).getTime() - t5);
+        console.log(" read        = ", crawler.readCounter);
+        console.log(" browse      = ", crawler.browseCounter);
+        console.log(" browseNext  = ", crawler.browseNextCounter);
+        console.log(" transaction = ", crawler.transactionCounter);
+        if (true) {
+            // todo : treeify.asTree performance is *very* slow on large object, replace with better implementation
+            // xx console.log(treeify.asTree(obj, true));
+            treeify.asLines(obj, true, true, (line) => {
+                console.log(line);
             });
-
-
-            //client.on("receive_response", print_stat);
-
-            t = Date.now();
-            //xx crawler.on("browsed", function (element) {
-            //xx     console.log("->",(new Date()).getTime()-t,element.browseName.name,element.nodeId.toString());
-            //xx });
-
-            const nodeId = "ObjectsFolder";
-            console.log("now crawling object folder ...please wait...");
-            crawler.read(nodeId, function (err, obj) {
-                console.log(" Time         = ", (new Date()).getTime() - t);
-                console.log(" read        = ", crawler.readCounter);
-                console.log(" browse      = ", crawler.browseCounter);
-                console.log(" transaction = ", crawler.transactionCounter);
-                if (!err) {
-
-                    if (false) {
-                        // todo : treeify.asTree performance is *very* slow on large object, replace with better implementation
-                        //xx console.log(treeify.asTree(obj, true));
-                        treeify.asLines(obj, true, true, function (line) {
-                            console.log(line);
-                        });
-                    } else {
-                        process.exit(1);
-                    }
-                }
-                client.removeListener("receive_response", print_stat);
-                callback(err);
-            });
-
-        } else {
-            callback();
         }
-
-
-    },
+        crawler.dispose();
+    }
+    client.removeListener("receive_response", print_stat);
 
     // -----------------------------------------------------------------------------------------------------------------
     // enumerate all Condition Types exposed by the server
     // -----------------------------------------------------------------------------------------------------------------
-    function (callback) {
 
-        enumerateAllConditionTypes(the_session,function(err,conditionTypes,conditionTree){
-            console.log(treeify.asTree(conditionTree));
-            callback();
-        });
-    },
+    console.log("--------------------------------------------------------------- Enumerate all Condition Types exposed by the server");
+    const conditionTree = await enumerateAllConditionTypes(the_session);
+    console.log(treeify.asTree(conditionTree));
+    console.log(" -----------------------------------------------------------------------------------------------------------------");
 
     // -----------------------------------------------------------------------------------------------------------------
     // enumerate all objects that have an Alarm & Condition instances
     // -----------------------------------------------------------------------------------------------------------------
-    function (callback) {
 
-        enumerateAllAlarmAndConditionInstances(the_session,function(err,alarms) {
+    const alarms = await enumerateAllAlarmAndConditionInstances(the_session);
 
-            if(!err) {
+    console.log(" -------------------------------------------------------------- Alarms & Conditions ------------------------");
+    for (const alarm of alarms) {
+        console.log(
+            "parent = ",
+            chalk.cyan(w(alarm.parent.toString(), 30)),
+            chalk.green.bold(w(alarm.typeDefinitionName, 30)),
+            "alarmName = ",
+            chalk.cyan(w(alarm.browseName.toString(), 30)),
+            chalk.yellow(w(alarm.alarmNodeId.toString(), 40))
+        );
+    }
+    console.log(" -----------------------------------------------------------------------------------------------------------------");
 
-                console.log(" -------------------------------------------------------------------- Alarms & Conditions ------------------------");
-                alarms.forEach(function(alarm) {
-                    console.log(
-                        "parent = ",
-                        w(alarm.parent.toString(),30).cyan,
-                        w(alarm.typeDefinitionName,30).green.bold,
-                        "alarmName = ",
-                        w(alarm.browseName.toString(),30).cyan,
-                        w(alarm.alarmNodeId.toString(),40).yellow
-                    );
-                });
-                console.log(" -----------------------------------------------------------------------------------------------------------------");
+    // -----------------------------------------------------------------------------------------------------------------
+    // Testing if server implements QueryFirst
+    // -----------------------------------------------------------------------------------------------------------------
+    try {
+        console.log(" ----------------------------------------------------------  Testing QueryFirst");
+        const queryFirstRequest = {
+            view: {
+                viewId: NodeId.nullNodeId
+            },
 
-            }
-            callback();
-        });
+            nodeTypes: [
+                {
+                    typeDefinitionNode: makeExpandedNodeId("i=58"),
 
+                    includeSubTypes: true,
 
-    },
-    // ------------------ check if server supports Query Services
-    function (callback){
+                    dataToReturn: [{
 
-        const queryFirstRequest = {};
-
-        the_session.queryFirst(queryFirstRequest,function(err/*,queryFirstResult*/) {
-            if (err) {
-                console.log("QueryFirst is not supported by Server");
-            }
-            callback();
-        });
-
-    },
-
-    function _resd_historyServerCapabilities(callback) {
-
-        opcua.readHistoryServerCapabilities(the_session,function(err,historyServerCapabilities){
-            console.log(historyServerCapabilities);
-            callback(null);
-        });
-    },
-    // create Read
-    function (callback) {
-
-        if (!doHistory) {
-            return callback();
-        }
-        const now = Date.now();
-        const start = now-1000; // read 1 seconds of history
-        the_session.readHistoryValue(monitored_node,start,now,function(err,historicalReadResult) {
-
-            if(!err)  {
-                console.log(" historicalReadResult =",historicalReadResult.toString());
-            } else {
-                console.log(" ERROR",err.toString());
-            }
-            callback();
-
-        });
-    },
-
-    // -----------------------------------------
-    // create subscription
-    function (callback) {
-
-        const parameters = {
-            requestedPublishingInterval: 100,
-            requestedLifetimeCount: 1000,
-            requestedMaxKeepAliveCount: 12,
-            maxNotificationsPerPublish: 10,
-            publishingEnabled: true,
-            priority: 10
+                        attributeId: AttributeIds.AccessLevel,
+                        relativePath: undefined
+                    }]
+                }
+            ]
         };
 
-        the_subscription = new opcua.ClientSubscription(the_session, parameters);
+        console.log(" -----------------------------------------------------------------------------------------------------------------");
+    } catch (err) {
+        console.log(" Server is not supporting queryFirst err=", err.message);
+    }
+    // create Read
+    if (doHistory) {
 
-        function getTick() {
-            return Date.now();
+        console.log(" ---------------------------------------------------------- History Read------------------------");
+        const now = Date.now();
+        const start = now - 1000; // read 1 seconds of history
+        console.log(" -----------------------------------------------------------------------------------------------------------------");
+    }
+
+    // ----------------------------------------------------------------------------------
+    // create subscription
+    // ----------------------------------------------------------------------------------
+    console.log(" ----------------------------------------------------------  Create Subscription ");
+    const parameters = {
+        maxNotificationsPerPublish: 10,
+        priority: 10,
+        publishingEnabled: true,
+        requestedLifetimeCount: 1000,
+        requestedMaxKeepAliveCount: 12,
+        requestedPublishingInterval: 2000
+    };
+
+    the_subscription = await the_session.createSubscription2(parameters);
+
+    let t = getTick();
+
+    console.log("started subscription :", the_subscription.subscriptionId);
+    console.log(" revised parameters ");
+    console.log("  revised maxKeepAliveCount  ", the_subscription.maxKeepAliveCount, " ( requested ", parameters.requestedMaxKeepAliveCount + ")");
+    console.log("  revised lifetimeCount      ", the_subscription.lifetimeCount, " ( requested ", parameters.requestedLifetimeCount + ")");
+    console.log("  revised publishingInterval ", the_subscription.publishingInterval, " ( requested ", parameters.requestedPublishingInterval + ")");
+
+    the_subscription.on("internal_error", (err) => {
+        console.log(" received internal error", err.message);
+    }).on("keepalive", () => {
+        const t4 = getTick();
+        const span = t4 - t;
+        t = t4;
+        console.log("keepalive ", span / 1000, "sec",
+            " pending request on server = ", the_subscription.getPublishEngine().nbPendingPublishRequests);
+
+    }).on("terminated", () => { /* */
+    });
+
+    try {
+        const results1 = await the_subscription.getMonitoredItems();
+        console.log("MonitoredItems clientHandles", results1.clientHandles);
+        console.log("MonitoredItems serverHandles", results1.serverHandles);
+    } catch (err) {
+        console.log("Server doesn't seems to implement getMonitoredItems method ", err.message);
+    }
+    // get_monitored_item
+
+    // monitor_a_variable_node_value
+    console.log("Monitoring monitor_a_variable_node_value");
+
+    // ---------------------------------------------------------------
+    //  monitor a variable node value
+    // ---------------------------------------------------------------
+    console.log(" Monitoring node ", monitored_node.toString());
+    const monitoredItem = ClientMonitoredItem.create(
+        the_subscription,
+        {
+            attributeId: AttributeIds.Value,
+            nodeId: monitored_node
+        },
+        {
+            discardOldest: true,
+            queueSize: 10000,
+            samplingInterval: 1000
+            // xx filter:  { parameterTypeId: "ns=0;i=0",  encodingMask: 0 },
         }
+    );
+    monitoredItem.on("initialized", () => {
+        console.log("monitoredItem initialized");
+    });
+    monitoredItem.on("changed", (dataValue1) => {
+        console.log(monitoredItem.itemToMonitor.nodeId.toString(), " value has changed to " + dataValue1.value.toString());
+    });
+    monitoredItem.on("err", (err_message) => {
+        console.log(monitoredItem.itemToMonitor.nodeId.toString(), chalk.red(" ERROR"), err_message);
+    });
 
-        let t = getTick();
+    const results = await the_subscription.getMonitoredItems();
+    console.log("MonitoredItems clientHandles", results.clientHandles);
+    console.log("MonitoredItems serverHandles", results.serverHandles);
 
-        the_subscription.on("started", function () {
+    console.log("Monitoring monitor_the_object_events");
 
-            console.log("started subscription :", the_subscription.subscriptionId);
+    // ---------------------------------------------------------------
+    //  monitor the object events
+    // ---------------------------------------------------------------
 
-            console.log(" revised parameters ");
-            console.log("  revised maxKeepAliveCount  ", the_subscription.maxKeepAliveCount, " ( requested ", parameters.requestedMaxKeepAliveCount + ")");
-            console.log("  revised lifetimeCount      ", the_subscription.lifetimeCount, " ( requested ", parameters.requestedLifetimeCount + ")");
-            console.log("  revised publishingInterval ", the_subscription.publishingInterval, " ( requested ", parameters.requestedPublishingInterval + ")");
-            console.log("  suggested timeout hint     ", the_subscription.publish_engine.timeoutHint);
+    const baseEventTypeId = "i=2041"; // BaseEventType;
+    const serverObjectId = "i=2253";
 
-            callback();
+    const fields = [
+        "EventId",
+        "EventType",
+        "SourceNode",
+        "SourceName",
+        "Time",
+        "ReceiveTime",
+        "Message",
+        "Severity",
 
-        }).on("internal_error", function (err) {
-            console.log(" received internal error", err.message);
+        // ConditionType
+        "ConditionClassId",
+        "ConditionClassName",
+        "ConditionName",
+        "BranchId",
+        "Retain",
+        "EnabledState",
+        "Quality",
+        "LastSeverity",
+        "Comment",
+        "ClientUserId",
 
-        }).on("keepalive", function () {
+        // AcknowledgeConditionType
+        "AckedState",
+        "ConfirmedState",
 
-            const t1 = getTick();
-            const span = t1 - t;
-            t = t1;
-            console.log("keepalive ", span / 1000, "sec", " pending request on server = ", the_subscription.publish_engine.nbPendingPublishRequests);
+        // AlarmConditionType
+        "ActiveState",
+        "InputNode",
+        "SuppressedState",
 
-        }).on("terminated", function (err) {
+        "HighLimit",
+        "LowLimit",
+        "HighHighLimit",
+        "LowLowLimit",
 
-        });
-    },
+        "Value"
+    ];
 
-    function get_monitored_item(callback) {
+    const eventFilter = constructEventFilter(fields, [
+        resolveNodeId("ConditionType")
+    ]);
 
-        the_session.getMonitoredItems(the_subscription.subscriptionId, function (err, results) {
-            if (!err) {
-                console.log("MonitoredItems clientHandles", results.clientHandles);
-                console.log("MonitoredItems serverHandles", results.serverHandles);
-            } else {
-                console.log(" getMonitoredItems ERROR ".red, err.message.cyan);
-            }
-            callback();
-        });
+    const event_monitoringItem = ClientMonitoredItem.create(
+        the_subscription,
+        {
+            attributeId: AttributeIds.EventNotifier,
+            nodeId: serverObjectId
+        },
+        {
+            discardOldest: true,
+            filter: eventFilter,
+            queueSize: 100000
+        }
+    );
 
+    event_monitoringItem.on("initialized", () => {
+        console.log("event_monitoringItem initialized");
+    });
 
-    },
+    event_monitoringItem.on("changed", (eventFields) => {
+        dumpEvent(the_session, fields, eventFields);
+    });
+    event_monitoringItem.on("err", (err_message) => {
+        console.log(chalk.red("event_monitoringItem ", baseEventTypeId, " ERROR"), err_message);
+    });
 
-    function monitor_a_variable_node_value(callback) {
-        console.log("Monitoring monitor_a_variable_node_value");
+    console.log("--------------------------------------------- Monitoring alarms");
+    const alarmNodeId = coerceNodeId("ns=2;s=1:Colours/EastTank?Green");
+    await monitorAlarm(the_subscription);
 
-        // ---------------------------------------------------------------
-        //  monitor a variable node value
-        // ---------------------------------------------------------------
-        const monitoredItem = the_subscription.monitor(
-            {
-                nodeId: monitored_node,
-                attributeId: AttributeIds.Value
-            },
-            {
-                samplingInterval: 250,
-                //xx filter:  { parameterTypeId: "ns=0;i=0",  encodingMask: 0 },
-                queueSize: 10000,
-                discardOldest: true
-            }
-        );
-        monitoredItem.on("initialized", function () {
-            console.log("monitoredItem initialized");
-            callback();
-        });
-        monitoredItem.on("changed", function (dataValue) {
-            console.log(monitoredItem.itemToMonitor.nodeId.toString(), " value has changed to " + dataValue.value.toString());
-        });
-        monitoredItem.on("err", function (err_message) {
-            console.log(monitoredItem.itemToMonitor.nodeId.toString(), " ERROR".red, err_message);
-            callback();
-        });
+    console.log("Starting timer ", timeout);
+    if (timeout > 0) {
 
-    },
+        // simulate a connection break at t =timeout/2
+        // new Promise((resolve) => {
+        setTimeout(() => {
 
-    function monitor_the_object_events(callback) {
-        console.log("Monitoring monitor_the_object_events");
+            console.log(chalk.red("  -------------------------------------------------------------------- "));
+            console.log(chalk.red("  --                               SIMULATE CONNECTION BREAK        -- "));
+            console.log(chalk.red("  -------------------------------------------------------------------- "));
+            const socket = client._secureChannel._transport._socket;
+            socket.end();
+            socket.emit("error", new Error("ECONNRESET"));
+        }, timeout / 2.0);
+        // });
 
-        // ---------------------------------------------------------------
-        //  monitor the object events
-        // ---------------------------------------------------------------
-
-        const baseEventTypeId = "i=2041"; // BaseEventType;
-        const serverObjectId = "i=2253";
-
-        const fields = [
-            "EventId",
-            "EventType",
-            "SourceNode",
-            "SourceName",
-            "Time",
-            "ReceiveTime",
-            "Message",
-            "Severity",
-
-            // ConditionType
-            "ConditionClassId",
-            "ConditionClassName",
-            "ConditionName",
-            "BranchId",
-            "Retain",
-            "EnabledState",
-            "Quality",
-            "LastSeverity",
-            "Comment",
-            "ClientUserId",
-
-            // AcknowledgeConditionType
-            "AckedState",
-            "ConfirmedState",
-
-            // AlarmConditionType
-            "ActiveState",
-            "InputNode",
-            "SuppressedState",
-
-            "HighLimit",
-            "LowLimit",
-            "HighHighLimit",
-            "LowLowLimit",
-
-            "Value"
-        ];
-
-
-        const eventFilter = opcua.constructEventFilter(fields,[opcua.resolveNodeId("ConditionType")]);
-
-        const event_monitoringItem = the_subscription.monitor(
-            {
-                nodeId:      serverObjectId,
-                attributeId: AttributeIds.EventNotifier
-            },
-            {
-                queueSize: 100000,
-                filter: eventFilter,
-                discardOldest: true
-            }
-        );
-
-        event_monitoringItem.on("initialized", function () {
-            console.log("event_monitoringItem initialized");
-            callback();
-        });
-
-        event_monitoringItem.on("changed", function (eventFields) {
-            dumpEvent(the_session,fields,eventFields,function() {});
-        });
-        event_monitoringItem.on("err", function (err_message) {
-            console.log("event_monitoringItem ", baseEventTypeId, " ERROR".red, err_message);
-        });
-
-    },
-
-    function (callback) {
-        console.log("Monitoring alarms");
-        const alarmNodeId = "ns=2;s=1:Colours/EastTank?Green";
-        monitorAlarm(the_subscription,alarmNodeId,function() {
-            callback();
-        });
-    },
-
-
-    function (callback) {
-        console.log("Starting timer ",timeout);
-        if (timeout > 0) {
-            setTimeout(function () {
+        await new Promise((resolve) => {
+            setTimeout(async () => {
+                console.log("time out => shutting down ");
                 if (!the_subscription) {
-                    return callback();
+                    return resolve();
                 }
-                the_subscription.terminate(callback);
+                if (the_subscription) {
+                    const s = the_subscription;
+                    the_subscription = null;
+                    await s.terminate();
+                    await the_session.close();
+                    await client.disconnect();
+                    console.log(" Done ");
+                    process.exit(0);
+                }
             }, timeout);
-
-            // simulate a connection break at t =timeout/2
-            setTimeout(function () {
-
-                console.log("  -------------------------------------------------------------------- ".red.bgWhite);
-                console.log("  --                               SIMULATE CONNECTION BREAK        -- ".red.bgWhite);
-                console.log("  -------------------------------------------------------------------- ".red.bgWhite);
-                const socket = client._secureChannel._transport._socket;
-                socket.end();
-                socket.emit("error", new Error("ECONNRESET"));
-            }, timeout/2.0);
-
-        }else {
-            callback();
-        }
-    },
-
-
-    function (callback) {
-        console.log(" closing session");
-        the_session.close(function (err) {
-            console.log(" session closed",err);
-            callback();
         });
-    },
 
-    function (callback) {
-        console.log(" Calling disconnect");
-        client.disconnect(callback);
     }
-], function (err) {
 
-    console.log(" disconnected".cyan);
+    console.log(" closing session");
+    await the_session.close();
+    console.log(" session closed");
 
-    if (err) {
-        console.log(" client : process terminated with an error".red.bold);
-        console.log(" error", err);
-        console.log(" stack trace", err.stack);
-    } else {
-        console.log("success !!   ");
-    }
-    // force disconnection
-    if (client) {
-        client.disconnect(function () {
-            const exit = require("exit");
-            console.log("Exiting");
-            exit();
-        });
-    }
-});
+    console.log(" Calling disconnect");
+    await client.disconnect();
 
-process.on("error",function(err){
+    console.log(chalk.cyan(" disconnected"));
 
-    console.log(" UNTRAPPED ERROR",err.message);
-});
+    console.log("success !!   ");
+}
 
 let user_interruption_count = 0;
-process.on("SIGINT", function () {
+process.on("SIGINT", async () => {
 
-    console.log(" user interuption ...");
+    console.log(" user interruption ...");
 
     user_interruption_count += 1;
     if (user_interruption_count >= 3) {
         process.exit(1);
     }
     if (the_subscription) {
-
-        console.log(" Received client interruption from user ".red.bold);
-        console.log(" shutting down ...".red.bold);
-
-        the_subscription.terminate(function() {});
+        console.log(chalk.red.bold(" Received client interruption from user "));
+        console.log(chalk.red.bold(" shutting down ..."));
+        const subscription = the_subscription;
         the_subscription = null;
+
+        await subscription.terminate();
+        await the_session.close();
+        await client.disconnect();
+        process.exit(0);
     }
 });
+
+main();

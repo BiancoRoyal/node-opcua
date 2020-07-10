@@ -6,13 +6,13 @@ const path = require("path");
 const fs = require("fs");
 const existsSync = fs.existsSync;
 
-const encode_decode_round_trip_test = require("node-opcua-packet-analyzer/test_helpers/encode_decode_round_trip_test").encode_decode_round_trip_test;
+const encode_decode_round_trip_test = require("node-opcua-packet-analyzer/dist/test_helpers").encode_decode_round_trip_test;
 
 
 const AddressSpace = require("node-opcua-address-space").AddressSpace;
-const generate_address_space = require("node-opcua-address-space").generate_address_space;
+const generateAddressSpace = require("node-opcua-address-space").generateAddressSpace;
 
-const makeExpandedNodeId = require("node-opcua-nodeid/src/expanded_nodeid").makeExpandedNodeId;
+const makeExpandedNodeId = require("node-opcua-nodeid").makeExpandedNodeId;
 const Variant = require("node-opcua-variant").Variant;
 const DataType = require("node-opcua-variant").DataType;
 
@@ -36,7 +36,7 @@ xdescribe("ComplexType read from XML NodeSET file shall be binary encode-able", 
 
         const xml_file = getFixture("fixture_nodeset_enumtype.xml");
 
-        generate_address_space(addressSpace, xml_file, function (err) {
+        generateAddressSpace(addressSpace, xml_file, function (err) {
             createExtensionObjectDefinition(addressSpace);
             done(err);
         });
@@ -48,7 +48,7 @@ xdescribe("ComplexType read from XML NodeSET file shall be binary encode-able", 
     it("a DataType should provide a DefaultBinary Encoding object", function () {
 
         const serverStatusType = addressSpace.findDataType("ServerStatusDataType");
-        serverStatusType.getEncodingNodeId("Default Binary").nodeId.toString().should.eql("ns=0;i=864");
+        serverStatusType.getEncodingNode("Default Binary").nodeId.toString().should.eql("ns=0;i=864");
 
     });
 
@@ -71,7 +71,7 @@ xdescribe("ComplexType read from XML NodeSET file shall be binary encode-able", 
             shutdownReason: {text: "for maintenance"}
         });
 
-        should(serverStatus._schema.name).eql("ServerStatus");
+        should(serverStatus.schema.name).eql("ServerStatusDataType");
         serverStatus.startTime.should.be.instanceOf(Date);
         serverStatus.secondsTillShutdown.should.eql(100);
     });

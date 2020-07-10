@@ -57,13 +57,13 @@ module.exports = function (test) {
         it("KK1 a subscription should report monitored item notification for ServerStatus", function (done) {
 
 
-            const client = new OPCUAClient();
+            const client = OPCUAClient.create();
             const endpointUrl = test.endpointUrl;
 
             perform_operation_on_subscription(client, endpointUrl, function (session, subscription, inner_done) {
 
 
-                const monitoredItem = subscription.monitor({
+                const monitoredItem = opcua.ClientMonitoredItem.create(subscription, {
                     nodeId: opcua.resolveNodeId("ns=0;i=2256"), // ServerStatus Extension Object
                     attributeId: opcua.AttributeIds.Value
                 },{
@@ -92,7 +92,7 @@ module.exports = function (test) {
                     dataValue.value.value.should.have.ownProperty("buildInfo");
                     dataValue.value.value.should.have.ownProperty("startTime");
                     dataValue.value.value.should.have.ownProperty("shutdownReason");
-                    dataValue.value.value.constructor.name.should.eql("ServerStatus");
+                    dataValue.value.value.constructor.name.should.eql("ServerStatusDataType");
 
                     //xx console.log(dataValue.value.value.currentTime.toISOString());
                     //xx console.log("dataValue = ",dataValue.toString());

@@ -8,8 +8,8 @@ const perform_operation_on_client_session = require("../../test_helpers/perform_
 const opcua = require("node-opcua");
 const StatusCodes = opcua.StatusCodes;
 const OPCUAClient = opcua.OPCUAClient;
-const UnregisterNodesRequest = opcua.register_node_service.UnregisterNodesRequest;
-const RegisterNodesRequest = opcua.register_node_service.RegisterNodesRequest;
+const UnregisterNodesRequest = opcua.UnregisterNodesRequest;
+const RegisterNodesRequest = opcua.RegisterNodesRequest;
 const AttributeIds = opcua.AttributeIds;
 const DataType = opcua.DataType;
 
@@ -20,7 +20,7 @@ module.exports = function (test) {
         let client, endpointUrl;
 
         beforeEach(function (done) {
-            client = new OPCUAClient({});
+            client = OPCUAClient.create({});
             endpointUrl = test.endpointUrl;
             done();
         });
@@ -55,7 +55,7 @@ module.exports = function (test) {
                     ]
                 });
                 session.performMessageTransaction(request, function (err, response) {
-                    should(err).eql(null);
+                    should.not.exist(err);
                     response.registeredNodeIds.length.should.eql(1);
                     inner_done();
                 });
@@ -88,7 +88,7 @@ module.exports = function (test) {
                 });
                 session.performMessageTransaction(request, function (err, response) {
                     should.exist(response);
-                    should(err).eql(null);
+                    should.not.exist(err);
                     inner_done();
                 });
 

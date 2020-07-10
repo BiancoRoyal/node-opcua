@@ -1,5 +1,5 @@
 "use strict";
-
+const chalk = require("chalk");
 const should = require("should");
 const assert = require("node-opcua-assert").assert;
 const async = require("async");
@@ -70,7 +70,7 @@ describe("Functional test : one server with many concurrent clients", function()
     }
 
     function construct_client_scenario(data) {
-        const client = new OPCUAClient({
+        const client = OPCUAClient.create({
             serverCertificate: serverCertificateChain,
             requestedSessionTimeout: 120 * 1000
         });
@@ -99,7 +99,7 @@ describe("Functional test : one server with many concurrent clients", function()
                 client.createSession(function(err, session) {
                     debugLog(" session created for ", name);
                     data.session = session;
-                    debugLog(" Error =".yellow.bold, err);
+                    debugLog(chalk.yellow.bold(" Error ="), err);
                     callback(err);
                 });
             },
@@ -111,9 +111,8 @@ describe("Functional test : one server with many concurrent clients", function()
             function(callback) {
                 debugLog(" Creating monitored Item for client", name);
                 const session = data.session;
-                assert(session instanceof ClientSession);
 
-                const subscription = new ClientSubscription(session, {
+                const subscription = ClientSubscription.create(session, {
                     requestedPublishingInterval: 200,
                     requestedLifetimeCount: 10 * 60 * 10,
                     requestedMaxKeepAliveCount: 10,
@@ -124,18 +123,19 @@ describe("Functional test : one server with many concurrent clients", function()
 
                 subscription.on("started", function() {
                     debugLog(
-                        "subscription started".yellow.bold,
-                        name.cyan,
+                        chalk.yellow.bold("subscription started"),
+                        chalk.cyan(name),
                         expectedSubscriptionCount,
                         server.currentSubscriptionCount
                     );
                 });
 
                 subscription.on("terminated", function() {
-                    debugLog("subscription terminated".red.bold, name);
+                    debugLog(chalk.red.bold("subscription terminated"), name);
                 });
 
-                const monitoredItem = subscription.monitor(
+                const monitoredItem = opcua.ClientMonitoredItem.create(
+                    subscription,
                     {
                         nodeId: makeNodeId(VariableIds.Server_ServerStatus_CurrentTime),
                         attributeId: AttributeIds.Value

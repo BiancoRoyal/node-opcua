@@ -9,17 +9,17 @@ an implementation of a OPC UA stack fully written in javascript and nodejs
 [![Build Status](https://travis-ci.org/node-opcua/node-opcua.png?branch=master)](https://travis-ci.org/node-opcua/node-opcua)
 [![Build status](https://ci.appveyor.com/api/projects/status/8sgtm3n15aii98oc/branch/master?svg=true)](https://ci.appveyor.com/project/erossignon/node-opcua/branch/master)
 [![HitCount](http://hits.dwyl.io/node-opcua/node-opcua.svg)](http://hits.dwyl.io/node-opcua/node-opcua)
-<!-- [![NSP Status](https://nodesecurity.io/orgs/node-opcua/projects/cb2eff26-fb17-4d6b-ab89-7fafafdc88bc/badge)](https://nodesecurity.io/orgs/node-opcua/projects/cb2eff26-fb17-4d6b-ab89-7fafafdc88bc) -->
+[![lerna](https://img.shields.io/badge/maintained%20with-lerna-cc00ff.svg)](https://lernajs.io/)
+
 <!-- [![Dependency Status](https://gemnasium.com/node-opcua/node-opcua.png)](https://gemnasium.com/node-opcua/node-opcua) -->
 [![Coverage Status](https://coveralls.io/repos/node-opcua/node-opcua/badge.png)](https://coveralls.io/r/node-opcua/node-opcua)
 [![Code Climate](https://codeclimate.com/github/node-opcua/node-opcua.png)](https://codeclimate.com/github/node-opcua/node-opcua)
 
 [![OPC UA](http://b.repl.ca/v1/OPC-UA-blue.png)](http://opcfoundation.org/)
 [![Gitter chat](https://badges.gitter.im/node-opcua/node-opcua.png)](https://gitter.im/node-opcua/node-opcua)
+
 [Node-opcua](http://node-opcua.github.io/) is an full OPC-UA stack written in NodeJS.
 
-
-[![Flattr us](https://api.flattr.com/button/flattr-badge-large.png)](https://flattr.com/@gadz_er).
 
 Why NodeJS ?
 
@@ -30,13 +30,20 @@ Because nodeJs is a great framework to design asynchronous application.
 
 ### installing node-opcua as a node package
 
-    $ npm install node-opcua
+    $ mkdir mytest
+    $ cd mytest
+    $ npm init 
+    $ npm install node-opcua --unsafe-perms
+    $ # create your first app.js file !
 
 
 ### installing node-opcua samples as a node package
 
 ```shell
-    $ npm install node-opcua-samples
+    $ mkdir myserver
+    $ cd myserver
+    $ npm init
+    $ npm install node-opcua-samples --unsafe-perms
     $ ./node_modules/.bin/simple_server
 ```   
    or
@@ -69,7 +76,7 @@ Because nodeJs is a great framework to design asynchronous application.
 
  * [create a server](https://github.com/node-opcua/node-opcua/blob/master/documentation/creating_a_server.md)
  
- * [create a client](https://github.com/node-opcua/node-opcua/blob/master/documentation/creating_a_client.md)
+ * [create a client in typescript](https://github.com/node-opcua/node-opcua/blob/master/documentation/creating_a_client_typescript.md)
    
 
 ### API Documentation
@@ -78,7 +85,7 @@ Because nodeJs is a great framework to design asynchronous application.
                 
 ## Minimum nodejs requirement 
 
-  * nodejs version 6.10 or above
+  * nodejs version 8.16 or above
                                   
 ## Contributing
 
@@ -89,14 +96,13 @@ Because nodeJs is a great framework to design asynchronous application.
 
 ## Supporting the project
 
-If you like the project, please 
-[![Flattr us](https://api.flattr.com/button/flattr-badge-large.png)](https://flattr.com/@gadz_er).
+If you like the project, please consider [sponsoring the author :beer: :tada: ](https://github.com/sponsors/erossignon), 
+
 This will give us full of motivation to carry on and keep working on the roadmap.
 
 [![NPM](https://nodei.co/npm/node-opcua.png?downloads=true&stars=true)](https://nodei.co/npm/node-opcua/)
 
 [![Project Stats](https://www.openhub.net/p/713850/widgets/project_thin_badge.gif)](https://www.openhub.net/p/node-opcua)
-
 
 ## Getting commercial support
 
@@ -111,8 +117,8 @@ To get commercial support,  please contact [sterfive](https://www.sterfive.com)
 |                            |FindServers()           |  :white_check_mark:       |
 |                            |GetEndpoints()          |  :white_check_mark:       |
 |                            |RegisterServer()        |  :white_check_mark:       |
-|                            |RegisterServer2()        |  :white_check_mark:       |
-|                            |FindServersOnNetwork()        |  :white_check_mark:       |
+|                            |RegisterServer2()       |  :white_check_mark:       |
+|                            |FindServersOnNetwork()  |  :white_check_mark:       |
 | Secure Channel Service Set |                        |         |
 |                            |OpenSecureChannel()     |  :white_check_mark:       |
 |                            |CloseSecureChannel()    |  :white_check_mark:       |
@@ -172,7 +178,7 @@ To get commercial support,  please contact [sterfive](https://www.sterfive.com)
 | **Authentication**                     | **Status**               | **Comment**        |
 | Anonymous                              |:white_check_mark:        |                    |
 | User Name Password                     |:white_check_mark:        |                    |
-| X509 Certificate                       |:new_moon:                |                    |
+| X509 Certificate                       |:white_check_mark:        | in version 2.0.x (sponsored)  |
 | __**client facets**__                  |                          |                    |
 | Base Client Behaviour                  |:white_check_mark:       | |
 | AddressSpace Lookup                    |:white_check_mark:       | |
@@ -186,7 +192,7 @@ To get commercial support,  please contact [sterfive](https://www.sterfive.com)
 | Advanced Type                          |:white_check_mark:       | |
 | Programming                            |:new_moon:               | |
 | Auditing                               |:first_quarter_moon:               | |
-| Redundancy                             |:new_moon:               | |
+| Redundancy                             |:new_moon:               |Sponsors wanted |
 | __**server profiles**__                |                         | |
 | Core Server                            | :white_check_mark:      | |
 | Data Access Server                     | :white_check_mark:      | |
@@ -196,14 +202,15 @@ To get commercial support,  please contact [sterfive](https://www.sterfive.com)
 | Standard DataChange Subscription Server| :white_check_mark:                         | |
 | Standard Event Subscription Server     | :white_check_mark:                         | |
 | Standard UA Server                     | :white_check_mark:                         | |
-| Redundancy Transparent Server          | :new_moon:              | |
-| Redundancy Visible Server              | :new_moon:              | |
-| Node Management Server                 | :new_moon:              | |
+| Redundancy Transparent Server          | :new_moon:              |Sponsors wanted |
+| Redundancy Visible Server              | :new_moon:              |Sponsors wanted |
+| Node Management Server                 | :new_moon:              |Sponsors wanted |
 | Auditing Server                        | :first_quarter_moon:   | |
-| Complex Type Server                    | :first_quarter_moon:                        | |
-| Session Diagnostics                    |  :white_check_mark:                         | |
-| Subscription Diagnostics               |  :white_check_mark:                         | |
-| Alarms & Conditions                    |  :white_check_mark:                         | |
+| Complex Type Server                    | :first_quarter_moon:                        |Sponsors wanted |
+| Session Diagnostics                    |  :white_check_mark:                         | (sponsored)|
+| Subscription Diagnostics               |  :white_check_mark:                         | (sponsored)|
+| Alarms & Conditions                    |  :white_check_mark:                         | (sponsored)|
+| Pub & Sub                              |  :new_moon:                         |Sponsors wanted |
 
 
 

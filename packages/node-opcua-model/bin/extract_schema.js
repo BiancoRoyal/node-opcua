@@ -1,12 +1,12 @@
-const opcua = require("node-opcua-client");
-const async = require("async");
-const assert = require("node-opcua-assert").assert;
+const { OPCUAClient } = require("node-opcua-client");
+const { parse_opcua_common  } = require("../lib/parse_server_common");
+const { callbackify } = require("util")
 
 const yargs = require("yargs/yargs");
 
 const argv = yargs(process.argv)
     .wrap(132)
-    //.usage("Usage: $0 -d --endpoint <endpointUrl> [--securityMode (NONE|SIGNANDENCRYPT|SIGN)] [--securityPolicy (None|Basic256|Basic128Rsa15)] --node <node_id_to_monitor> --crawl")
+    //.usage("Usage: $0 -d --endpoint <endpointUrl> [--securityMode (None|SignAndEncrypt|Sign)] [--securityPolicy (None|Basic256|Basic128Rsa15)] --node <node_id_to_monitor> --crawl")
     .demand("endpoint")
     .string("endpoint")
     .describe("endpoint", "the end point to connect to ")
@@ -26,7 +26,6 @@ const argv = yargs(process.argv)
     .argv;
 
 const endpointUrl = argv.endpoint || "opc.tcp://localhost:48010";
-const parse_opcua_common = require("../lib/parse_server_common").parse_opcua_common;
 
 
 function parse_opcua_server(endpoint, callback) {
@@ -41,9 +40,9 @@ function parse_opcua_server(endpoint, callback) {
         }
     };
 
-    const client = new opcua.OPCUAClient(options);
+    const client = OPCUAClient.create(options);
     client.withSession(endpointUrl, function (session, callback) {
-        parse_opcua_common(session, callback);
+        callbackify(parse_opcua_common)(session, callback);
     }, function (err) {
         callback(err);
     });
@@ -86,10 +85,10 @@ parse_opcua_server(endpointUrl, function (err) {
 
  */
 /* in Binary
-  <opc:StructuredType Name="EUInformation" BaseType="ua:ExtensionObject">
+  <opc:StructuredTypeSchemaInterface Name="EUInformation" BaseType="ua:ExtensionObject">
     <opc:Field Name="NamespaceUri" TypeName="opc:String" />
     <opc:Field Name="UnitId" TypeName="opc:Int32" />
     <opc:Field Name="DisplayName" TypeName="ua:LocalizedText" />
     <opc:Field Name="Description" TypeName="ua:LocalizedText" />
-  </opc:StructuredType>
+  </opc:StructuredTypeSchemaInterface>
  */

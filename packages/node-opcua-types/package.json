@@ -1,0 +1,58 @@
+{
+  "name": "node-opcua-types",
+  "version": "2.7.0",
+  "description": "pure nodejs OPCUA SDK - module -generator",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "generate": "tsc -b tsconfig.pre.json && ts-node source/generate && tsc -b",
+    "build": "npm run generate",
+    "test": "mocha -r ts-node/register test/**/*.ts",
+    "clean": "node -e \"require('rimraf').sync('dist');\""
+  },
+  "dependencies": {
+    "node-opcua-assert": "^2.6.1",
+    "node-opcua-basic-types": "^2.7.0",
+    "node-opcua-binary-stream": "^2.6.1",
+    "node-opcua-buffer-utils": "^2.6.1",
+    "node-opcua-data-model": "^2.7.0",
+    "node-opcua-data-value": "^2.7.0",
+    "node-opcua-date-time": "^2.6.1",
+    "node-opcua-debug": "^2.6.1",
+    "node-opcua-enum": "^2.6.1",
+    "node-opcua-extension-object": "^2.7.0",
+    "node-opcua-factory": "^2.7.0",
+    "node-opcua-generator": "^2.7.0",
+    "node-opcua-guid": "^2.6.1",
+    "node-opcua-nodeid": "^2.6.1",
+    "node-opcua-numeric-range": "^2.7.0",
+    "node-opcua-packet-analyzer": "^2.7.0",
+    "node-opcua-schemas": "^2.7.0",
+    "node-opcua-status-code": "^2.6.1",
+    "node-opcua-utils": "^2.7.0",
+    "node-opcua-variant": "^2.7.0",
+    "underscore": "^1.10.2"
+  },
+  "devDependencies": {
+    "@types/mocha": "^7.0.2",
+    "mocha-typescript": "^1.1.17",
+    "should": "^13.2.3",
+    "source-map-support": "^0.5.19"
+  },
+  "author": "Etienne Rossignon",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/node-opcua/node-opcua.git"
+  },
+  "keywords": [
+    "OPCUA",
+    "opcua",
+    "m2m",
+    "iot",
+    "opc ua",
+    "internet of things"
+  ],
+  "homepage": "http://node-opcua.github.io/",
+  "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c"
+}

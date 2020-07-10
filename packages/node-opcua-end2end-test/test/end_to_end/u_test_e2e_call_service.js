@@ -1,4 +1,4 @@
-/*global describe, it, require*/
+    /*global describe, it, require*/
 "use strict";
 const should = require("should");
 
@@ -30,7 +30,7 @@ module.exports = function (test) {
         let client, endpointUrl;
 
         beforeEach(function (done) {
-            client = new OPCUAClient({
+            client = OPCUAClient.create({
                 requestedSessionTimeout: 600 *1000 // use long session time out
             });
             endpointUrl = test.endpointUrl;
@@ -301,7 +301,7 @@ module.exports = function (test) {
 
 
             const methodToCalls = [{
-                objectId: coerceNodeId("ns=0;i=864"), //  Default Binary doesn't have methods
+                objectId: resolveNodeId("Server_ServerStatus_CurrentTime"), //  a Variable doesn't have methods
                 methodId: coerceNodeId("ns=0;i=11489"),
                 inputArguments: [{dataType: DataType.UInt32, value: [1]}]
             }];
@@ -313,7 +313,10 @@ module.exports = function (test) {
                         should.not.exist(err);
                         results.length.should.eql(1);
 
-                        results[0].statusCode.should.equalOneOf(StatusCodes.BadNodeIdInvalid,StatusCodes.BadMethodInvalid);
+                        results[0].statusCode.should.equalOneOf(
+                            StatusCodes.BadInvalidArgument,
+                            StatusCodes.BadNodeIdInvalid,
+                            StatusCodes.BadMethodInvalid);
 
                         inner_done();
                     },inner_done);
@@ -457,6 +460,32 @@ module.exports = function (test) {
 
         });
 
+        it("QA should succeed and return BadArgumentsMissing when CallRequest as a missing argument", function(done){
+            opcua.MethodIds.Server_GetMonitoredItems.should.eql(11492);
+
+            const subscriptionId = 100;
+            const methodToCalls = [{
+                objectId: coerceNodeId("ns=0;i=2253"),  // SERVER
+                methodId: coerceNodeId("ns=0;i=11492"), // GetMonitoredItem
+                inputArguments: [
+                ]
+            }];
+
+            perform_operation_on_client_session(client, endpointUrl, function (session, inner_done) {
+
+                session.call(methodToCalls, function (err, results) {
+                    exec_safely(function(){
+                        if (!err) {
+                            results.length.should.eql(1);
+                            results[0].statusCode.should.eql(StatusCodes.BadArgumentsMissing);
+                        }
+
+                        inner_done(err);
+                    },inner_done);
+                });
+            }, done);
+        });
+
         describe("GetMonitoredItems", function () {
 
             it("T1 A client should be able to call the GetMonitoredItems standard OPCUA command, and return BadSubscriptionId if input args subscriptionId is invalid ", function (done) {
@@ -506,7 +535,7 @@ module.exports = function (test) {
 
                     const subscriptionId = subscription.subscriptionId;
 
-                    const monitoredItem = subscription.monitor(
+                    const monitoredItem = opcua.ClientMonitoredItem.create(subscription,
                         {nodeId: resolveNodeId("ns=0;i=2258"), attributeId: AttributeIds.Value},
                         {samplingInterval: 10, discardOldest: true, queueSize: 1});
 

@@ -1,30 +1,38 @@
 {
- "name": "node-opcua-extension-object",
- "version": "0.7.2",
- "description": "pure nodejs OPCUA SDK - module -extension-object",
- "main": "index.js",
- "scripts": {
-  "test": "echo no test"
- },
- "dependencies": {
-  "node-opcua-assert": "^0.7.0",
-  "node-opcua-basic-types": "^0.7.2",
-  "node-opcua-factory": "^0.7.2",
-  "node-opcua-nodeid": "^0.7.2"
- },
- "author": "Etienne Rossignon",
- "license": "MIT",
- "repository": {
-  "type": "git",
-  "url": "git://github.com/node-opcua/node-opcua.git"
- },
- "keywords": [
-  "OPCUA",
-  "opcua",
-  "m2m",
-  "iot",
-  "opc ua",
-  "internet of things"
- ],
- "homepage": "http://node-opcua.github.io/"
+  "name": "node-opcua-extension-object",
+  "version": "2.7.0",
+  "description": "pure nodejs OPCUA SDK - module -extension-object",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "tslint source/**/*.ts",
+    "clean": "node -e \"require('rimraf').sync('dist');\"",
+    "test": "echo no test"
+  },
+  "dependencies": {
+    "chalk": "^4.0.0",
+    "node-opcua-assert": "^2.6.1",
+    "node-opcua-basic-types": "^2.7.0",
+    "node-opcua-binary-stream": "^2.6.1",
+    "node-opcua-debug": "^2.6.1",
+    "node-opcua-factory": "^2.7.0",
+    "node-opcua-nodeid": "^2.6.1"
+  },
+  "author": "Etienne Rossignon",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/node-opcua/node-opcua.git"
+  },
+  "keywords": [
+    "OPCUA",
+    "opcua",
+    "m2m",
+    "iot",
+    "opc ua",
+    "internet of things"
+  ],
+  "homepage": "http://node-opcua.github.io/",
+  "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c"
 }

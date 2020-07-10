@@ -1,64 +1,68 @@
 "use strict";
 const should = require("should");
 const assert = require("node-opcua-assert").assert;
-const color = require("colors");
-const sinon =require("sinon");
+const chalk = require("chalk");
+const sinon = require("sinon");
 
 
-const debugLog = require("node-opcua-debug").make_debugLog(__filename);
-
-const FakeServer = require("../test_helpers/fake_socket").FakeServer;
-
-const AcknowledgeMessage = require("../_generated_/_auto_generated_AcknowledgeMessage").AcknowledgeMessage;
-const TCPErrorMessage = require("../_generated_/_auto_generated_TCPErrorMessage").TCPErrorMessage;
-
-const ClientTCP_transport = require("../src/client_tcp_transport").ClientTCP_transport;
-const packTcpMessage = require("../src/tools").packTcpMessage;
 const StatusCodes = require("node-opcua-status-code").StatusCodes;
 const StatusCode = require("node-opcua-status-code").StatusCode;
-const utils  =require("node-opcua-utils");
 const hexDump = require("node-opcua-debug").hexDump;
 const compare_buffers = require("node-opcua-utils").compare_buffers;
+const debugLog = require("node-opcua-debug").make_debugLog(__filename);
+
+const FakeServer = require("../dist/test_helpers").FakeServer;
+
+const AcknowledgeMessage = require("..").AcknowledgeMessage;
+const TCPErrorMessage = require("..").TCPErrorMessage;
+const ClientTCP_transport = require("..").ClientTCP_transport;
+const packTcpMessage = require("..").packTcpMessage;
+
 
 describe("testing ClientTCP_transport", function () {
+
+
+    this.timeout(5000);
 
     let transport;
     let spyOnClose, spyOnConnect, spyOnConnectionBreak;
 
-    let fake_server;
-    let url;
+    let fakeServer;
+    let endpointUrl;
 
     beforeEach(function (done) {
+
         transport = new ClientTCP_transport();
 
         spyOnClose = sinon.spy();
-        transport.on("close",spyOnClose);
+        transport.on("close", spyOnClose);
 
         spyOnConnect = sinon.spy();
-        transport.on("connect",spyOnConnect);
+        transport.on("connect", spyOnConnect);
 
         spyOnConnectionBreak = sinon.spy();
-        transport.on("connection_break",spyOnConnectionBreak);
-        
-        fake_server = new FakeServer(function(err){
-            url = fake_server.url;
-            //xx console.log("-----------",err,url);
-            done();
+        transport.on("connection_break", spyOnConnectionBreak);
+
+        fakeServer = new FakeServer();
+        fakeServer.initialize((err) => {
+            endpointUrl = fakeServer.url;
+            done(err);
         });
     });
 
     afterEach(function (done) {
 
         transport.disconnect(function (err) {
+            transport.removeAllListeners();
             transport = null;
-            fake_server.shutdown(function(err){
-                fake_server = null;
+            fakeServer.shutdown(function (err) {
+                fakeServer = null;
                 done(err);
             });
         });
     });
 
-    const fake_AcknowledgeMessage = new AcknowledgeMessage({
+    const fakeAcknowledgeMessage = new AcknowledgeMessage({
         protocolVersion: 0,
         receiveBufferSize: 8192,
         sendBufferSize: 8192,
@@ -66,26 +70,26 @@ describe("testing ClientTCP_transport", function () {
         maxChunkCount: 600000
     });
 
-    it("should create and connect to a client TCP", function (done) {
+    it("TCS1 should create and connect to a client TCP", function (done) {
 
-        const spyOnServerWrite = sinon.spy(function (socket,data) {
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
             assert(data);
             // received Fake HEL Message
             // send Fake ACK response
-            const messageChunk = packTcpMessage("ACK", fake_AcknowledgeMessage);
+            const messageChunk = packTcpMessage("ACK", fakeAcknowledgeMessage);
             socket.write(messageChunk);
         });
 
-        fake_server.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
 
-        transport.connect(url, function (err) {
+        transport.connect(endpointUrl, function (err) {
 
             spyOnConnect.callCount.should.eql(1);
             spyOnClose.callCount.should.eql(0);
             spyOnConnectionBreak.callCount.should.eql(0);
             spyOnServerWrite.callCount.should.eql(1);
 
-            transport.disconnect(function(err) {
+            transport.disconnect(function (err) {
 
                 spyOnConnect.callCount.should.eql(1);
                 spyOnClose.callCount.should.eql(1);
@@ -99,16 +103,16 @@ describe("testing ClientTCP_transport", function () {
 
     });
 
-    it("should report a time out error if trying to connect to a non responding server", function (done) {
+    it("TCS2 should report a time out error if trying to connect to a non responding server", function (done) {
 
-        const spyOnServerWrite = sinon.spy(function (socket,data) {
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
             // DO NOTHING !!
         });
-        fake_server.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
 
-        transport.timeout = 10; // very short timeout;
+        transport.timeout = 500; // very short timeout;
 
-        transport.connect(url, function (err) {
+        transport.connect(endpointUrl, function (err) {
 
             if (err) {
                 err.message.should.containEql("Timeout");
@@ -128,17 +132,17 @@ describe("testing ClientTCP_transport", function () {
 
     it("should report an error if the server close the socket unexpectedly", function (done) {
 
-        const spyOnServerWrite = sinon.spy(function (socket,data) {
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
             should.exist(data);
             // received Fake HEL Message
             // Pretend the message is malformed or that the server crashed for some reason : abort now !
             socket.end();
         });
-        fake_server.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
 
         transport.timeout = 1000; // very short timeout;
 
-        transport.connect(url, function (err) {
+        transport.connect(endpointUrl, function (err) {
 
             if (err) {
 
@@ -164,7 +168,7 @@ describe("testing ClientTCP_transport", function () {
     it("should report an error if the server reports a protocol version mismatch", function (done) {
 
 
-        const spyOnServerWrite = sinon.spy(function (socket,data) {
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
             // received Fake HEL Message
 
             // Pretend the protocol version is wrong.
@@ -176,11 +180,11 @@ describe("testing ClientTCP_transport", function () {
                 socket.end();
             });
         });
-        fake_server.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
 
         transport.timeout = 1000; // very short timeout;
 
-        transport.connect(url, function (err) {
+        transport.connect(endpointUrl, function (err) {
             if (err) {
                 err.message.should.match(/The applications do not have compatible protocol versions/);
 
@@ -206,12 +210,12 @@ describe("testing ClientTCP_transport", function () {
 
 
         let counter = 1;
-        const spyOnServerWrite = sinon.spy(function (socket,data) {
-            debugLog("\ncounter = ".cyan.bold, counter);
-            debugLog(hexDump(data).yellow.bold);
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
+            debugLog(chalk.cyan.bold("\ncounter = "), counter);
+            debugLog(chalk.yellow.bold(hexDump(data)));
             if (counter === 1) {
                 // HEL/ACK transaction
-                const messageChunk = packTcpMessage("ACK", fake_AcknowledgeMessage);
+                const messageChunk = packTcpMessage("ACK", fakeAcknowledgeMessage);
                 counter += 1;
                 socket.write(messageChunk);
 
@@ -228,15 +232,15 @@ describe("testing ClientTCP_transport", function () {
             }
             counter.should.be.lessThan(4);
         });
-        fake_server.pushResponse(spyOnServerWrite);
-        fake_server.pushResponse(spyOnServerWrite);
-        fake_server.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
 
 
         transport.timeout = 1000; // very short timeout;
 
         transport.on("message", function (message_chunk) {
-            debugLog(hexDump(message_chunk).cyan.bold);
+            debugLog(chalk.cyan.bold(hexDump(message_chunk)));
             compare_buffers(message_chunk.slice(8), message1);
 
             spyOnConnect.callCount.should.eql(1);
@@ -248,9 +252,9 @@ describe("testing ClientTCP_transport", function () {
             done();
         });
 
-        transport.connect(url, function (err) {
+        transport.connect(endpointUrl, function (err) {
             if (err) {
-                console.log(" err = ".bgWhite.red,err.message);
+                console.log(chalk.bgWhite.red(" err = "), err.message);
             }
             assert(!err);
             const buf = transport.createChunk("MSG", "F", message1.length);
@@ -267,22 +271,22 @@ describe("testing ClientTCP_transport", function () {
         let server_confirms_that_server_socket_has_been_closed = false;
         let transport_confirms_that_close_event_has_been_processed = false;
 
-        const spyOnServerWrite = sinon.spy(function (socket,data) {
-            debugLog("\ncounter = ".cyan.bold, counter);
-            debugLog(hexDump(data).yellow.bold);
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
+            debugLog(chalk.cyan.bold("\ncounter = "), counter);
+            debugLog(chalk.yellow.bold(hexDump(data)));
             if (counter === 1) {
                 // HEL/ACK transaction
-                const messageChunk = packTcpMessage("ACK", fake_AcknowledgeMessage);
+                const messageChunk = packTcpMessage("ACK", fakeAcknowledgeMessage);
                 counter += 1;
                 socket.write(messageChunk);
                 return;
             }
             assert(false, "unexpected data received");
         });
-        fake_server.pushResponse(spyOnServerWrite);
-        fake_server.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
 
-        fake_server.on("end", function () {
+        fakeServer.on("end", function () {
             server_confirms_that_server_socket_has_been_closed = true;
         });
 
@@ -294,19 +298,19 @@ describe("testing ClientTCP_transport", function () {
             should(err).be.eql(null, "close event shall have err===null, when disconnection is initiated by the client itself");
         });
 
-        transport.connect(url, function (err) {
+        transport.connect(endpointUrl, function (err) {
             if (err) {
-                console.log(" err = ".bgWhite.red,err.message);
+                console.log(chalk.bgWhite.red(" err = "), err.message);
             }
             assert(!err);
             server_confirms_that_server_socket_has_been_closed.should.equal(false);
             transport_confirms_that_close_event_has_been_processed.should.equal(false);
             transport.disconnect(function (err) {
                 if (err) {
-                    console.log(" err = ".bgWhite.red,err.message);
+                    console.log(chalk.bgWhite.red(" err = "), err.message);
                 }
                 assert(!err);
-                setImmediate(function() {
+                setImmediate(function () {
                     server_confirms_that_server_socket_has_been_closed.should.equal(true);
                     transport_confirms_that_close_event_has_been_processed.should.equal(true);
                     done(err);
@@ -322,13 +326,13 @@ describe("testing ClientTCP_transport", function () {
         let server_confirms_that_server_socket_has_been_closed = false;
         let transport_confirms_that_close_event_has_been_processed = false;
 
-        const spyOnServerWrite = sinon.spy(function (socket,data) {
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
 
-            debugLog("\ncounter = ".cyan.bold, counter);
-            debugLog(hexDump(data).yellow.bold);
+            debugLog(chalk.cyan.bold("\ncounter = "), counter);
+            debugLog(chalk.yellow.bold(hexDump(data)));
             if (counter === 1) {
                 // HEL/ACK transaction
-                const messageChunk = packTcpMessage("ACK", fake_AcknowledgeMessage);
+                const messageChunk = packTcpMessage("ACK", fakeAcknowledgeMessage);
                 counter += 1;
                 socket.write(messageChunk);
 
@@ -343,9 +347,9 @@ describe("testing ClientTCP_transport", function () {
                 assert(false, "unexpected data received");
             }
         });
-        fake_server.pushResponse(spyOnServerWrite);
+        fakeServer.pushResponse(spyOnServerWrite);
 
-        fake_server.on("end", function () {
+        fakeServer.on("end", function () {
             server_confirms_that_server_socket_has_been_closed = true;
         });
 
@@ -353,7 +357,6 @@ describe("testing ClientTCP_transport", function () {
         transport.timeout = 1000; // very short timeout;
         transport.on("close", function (err) {
 
-            //xx console.log(" XXXXX where are we ?", (new Error()).stack);
 
             transport_confirms_that_close_event_has_been_processed.should.eql(false, "close event shall only be received once");
 
@@ -366,7 +369,7 @@ describe("testing ClientTCP_transport", function () {
 
         });
 
-        transport.connect(url, function (err) {
+        transport.connect(endpointUrl, function (err) {
             assert(!err);
         });
 

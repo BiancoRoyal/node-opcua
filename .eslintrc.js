@@ -1,8 +1,10 @@
 module.exports = {
+//    "parser": "typescript-eslint-parser",
     extends: "eslint:recommended",
     parserOptions: {
         ecmaVersion: 2017,
         sourceType: "module"
+
     },
     globals : {
         "Float32Array": true,
@@ -21,11 +23,13 @@ module.exports = {
         "WeakMap": true
     },
     env: {
+        es6: true,
         node: true,
         mocha: true
     },
     rules: {
-        strict: 0,                     // controls location of Use Strict Directives
+        "no-dupe-class-members": 0,
+        "strict": 0,                     // controls location of Use Strict Directives
         "no-underscore-dangle": 0,     // disallow dangling underscores in identifiers
         "no-irregular-whitespace": 2,  // disallow irregular whitespace outside of strings and comments
         "no-multi-spaces": 0,           // disallow use of multiple spaces

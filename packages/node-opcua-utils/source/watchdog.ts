@@ -1,73 +1,84 @@
-import * as _ from "underscore";
+/**
+ * @module node-opcua-utils
+ */
 import { EventEmitter } from "events";
 import { assert } from "node-opcua-assert";
+import * as _ from "underscore";
+
+
+type ArbitraryClockTick = number; // in millisecond
+type DurationInMillisecond = number;
+
+/**
+ * a arbitrary clock which is system dependant and 
+ * insensible to clock drifts ....
+ * 
+ */
+function _getCurrentSystemTick(): ArbitraryClockTick {
+    const h = process.hrtime();
+    const n = h[1] / 1000000;
+    assert(n <= 1000);
+    return (h[0] * 1000 + n);
+}
 
 export interface IWatchdogData2 {
     key: number;
     subscriber: ISubscriber;
-    timeout: number;
-    last_seen: number;
+    timeout: DurationInMillisecond;
+    lastSeen: ArbitraryClockTick;
     visitCount: number;
 }
+
 export interface ISubscriber {
+
     _watchDog?: WatchDog;
-    _watchDogData: IWatchdogData2;
+    _watchDogData?: IWatchdogData2;
+
     watchdogReset: () => void;
     keepAlive?: () => void;
-    onClientSeen?: (t: Date) => void;
+    onClientSeen?: () => void;
 }
 
-function has_expired(watchDogData: IWatchdogData2, currentTime: number) {
-    const elapsed_time = currentTime - watchDogData.last_seen;
-    return elapsed_time > watchDogData.timeout;
+function hasExpired(watchDogData: IWatchdogData2, currentTime: ArbitraryClockTick) {
+    const elapsedTime = currentTime - watchDogData.lastSeen;
+    return elapsedTime > watchDogData.timeout;
 }
 
 function keepAliveFunc(this: ISubscriber) {
-    const self: ISubscriber = this as ISubscriber;
-    assert(self._watchDog instanceof WatchDog);
-    assert(_.isNumber(self._watchDogData.key));
-    self._watchDogData.last_seen = Date.now();
-    if (self.onClientSeen) {
-        self.onClientSeen(new Date(self._watchDogData.last_seen));
+
+    assert(this._watchDog instanceof WatchDog);
+    if (!this._watchDogData || !this._watchDog) {
+        throw new Error("Internal error");
+    }
+    assert(_.isNumber(this._watchDogData.key));
+    this._watchDogData.lastSeen = this._watchDog.getCurrentSystemTick();
+    if (this.onClientSeen) {
+        this.onClientSeen();
     }
 }
 
 export class WatchDog extends EventEmitter {
+    /**
+     * returns the number of subscribers using the WatchDog object.
+     */
+    get subscriberCount(): number {
+        return Object.keys(this._watchdogDataMap).length;
+    }
+
     private readonly _watchdogDataMap: { [id: number]: IWatchdogData2 };
     private _counter: number;
-    private _current_time: number;
+    private _currentTime: ArbitraryClockTick;
     private _timer: NodeJS.Timer | null;
-    private readonly _visit_subscriber_b: (...args: any[]) => void;
+    private readonly _visitSubscriberB: (...args: any[]) => void;
 
     constructor() {
         super();
 
         this._watchdogDataMap = {};
         this._counter = 0;
-        this._current_time = Date.now();
-        this._visit_subscriber_b = this._visit_subscriber.bind(this);
+        this._currentTime = this.getCurrentSystemTick();
+        this._visitSubscriberB = this._visit_subscriber.bind(this);
         this._timer = null; // as NodeJS.Timer;
-    }
-
-    private _visit_subscriber() {
-        const self = this;
-
-        self._current_time = Date.now();
-
-        const expired_subscribers = _.filter(self._watchdogDataMap, function(watchDogData: IWatchdogData2) {
-            watchDogData.visitCount += 1;
-            return has_expired(watchDogData, self._current_time);
-        });
-
-        //xx console.log("_visit_subscriber", _.map(expired_subscribers, _.property("key")));
-        if (expired_subscribers.length) {
-            self.emit("timeout", expired_subscribers);
-        }
-        expired_subscribers.forEach((watchDogData: IWatchdogData2) => {
-            self.removeSubscriber(watchDogData.subscriber);
-            watchDogData.subscriber.watchdogReset();
-        });
-        //xx self._current_time = Date.now();
     }
 
     /**
@@ -82,48 +93,52 @@ export class WatchDog extends EventEmitter {
      * if the subscriber failed to call keepAlive withing the timeout period.
      * @param subscriber
      * @param timeout
-     * @return {number}
+     * @return the numerical key associated with this subscriber
      */
-    addSubscriber(subscriber: ISubscriber, timeout: number) {
-        const self = this;
-        self._current_time = Date.now();
+    public addSubscriber(subscriber: ISubscriber, timeout: number): number {
+        this._currentTime = this.getCurrentSystemTick();
         timeout = timeout || 1000;
         assert(_.isNumber(timeout), " invalid timeout ");
         assert(_.isFunction(subscriber.watchdogReset), " the subscriber must provide a watchdogReset method ");
         assert(!_.isFunction(subscriber.keepAlive));
 
-        self._counter += 1;
-        const key = self._counter;
+        this._counter += 1;
+        const key = this._counter;
 
-        subscriber._watchDog = self;
+        subscriber._watchDog = this;
         subscriber._watchDogData = {
-            key: key,
-            subscriber: subscriber,
-            timeout: timeout,
-            last_seen: self._current_time,
+            key,
+            lastSeen: this._currentTime,
+            subscriber,
+            timeout,
             visitCount: 0
         } as IWatchdogData2;
 
-        self._watchdogDataMap[key] = subscriber._watchDogData;
+        this._watchdogDataMap[key] = subscriber._watchDogData;
 
         if (subscriber.onClientSeen) {
-            subscriber.onClientSeen(new Date(subscriber._watchDogData.last_seen));
+            subscriber.onClientSeen();
         }
+
         subscriber.keepAlive = keepAliveFunc.bind(subscriber);
 
         // start timer when the first subscriber comes in
-        if (self.subscriberCount === 1) {
-            assert(self._timer === null);
+        if (this.subscriberCount === 1) {
+            assert(this._timer === null);
             this._start_timer();
         }
-
+        assert(this._timer !== null);
         return key;
     }
 
-    removeSubscriber(subscriber: ISubscriber) {
+    public removeSubscriber(subscriber: ISubscriber) {
         if (!subscriber._watchDog) {
             return; // already removed !!!
         }
+        if (!subscriber._watchDogData) {
+            throw new Error("Internal error");
+        }
+
         assert(subscriber._watchDog instanceof WatchDog);
         assert(_.isNumber(subscriber._watchDogData.key));
         assert(_.isFunction(subscriber.keepAlive));
@@ -135,31 +150,46 @@ export class WatchDog extends EventEmitter {
         delete subscriber.keepAlive;
 
         // delete timer when the last subscriber comes out
-        //xx console.log("xxxx WatchDog.prototype.removeSubscriber ",this.subscriberCount );
         if (this.subscriberCount === 0) {
             this._stop_timer();
         }
     }
 
-    shutdown(): void {
+    public shutdown(): void {
         assert(
             this._timer === null && Object.keys(this._watchdogDataMap).length === 0,
             " leaking subscriber in watchdog"
         );
     }
-    /**
-     * returns the number of subscribers using the WatchDog object.
-     * @property subscriberCount
-     * @type {number}
-     */
-    get subscriberCount(): number {
-        return Object.keys(this._watchdogDataMap).length;
+
+    public getCurrentSystemTick(): ArbitraryClockTick {
+        return _getCurrentSystemTick();
+    }
+
+    private _visit_subscriber() {
+
+        this._currentTime = this.getCurrentSystemTick();
+
+        const expiredSubscribers = _.filter(this._watchdogDataMap, (watchDogData: IWatchdogData2) => {
+            watchDogData.visitCount += 1;
+            return hasExpired(watchDogData, this._currentTime);
+        });
+
+        // xx console.log("_visit_subscriber", _.map(expired_subscribers, _.property("key")));
+        if (expiredSubscribers.length) {
+            this.emit("timeout", expiredSubscribers);
+        }
+        expiredSubscribers.forEach((watchDogData: IWatchdogData2) => {
+            this.removeSubscriber(watchDogData.subscriber);
+            watchDogData.subscriber.watchdogReset();
+        });
     }
 
     private _start_timer(): void {
         assert(this._timer === null, " setInterval already called ?");
-        this._timer = setInterval(this._visit_subscriber_b, 1000) as NodeJS.Timer;
+        this._timer = setInterval(this._visitSubscriberB, 1000) as NodeJS.Timer;
     }
+
     private _stop_timer(): void {
         assert(this._timer !== null, "_stop_timer already called ?");
         if (this._timer !== null) {
@@ -167,4 +197,5 @@ export class WatchDog extends EventEmitter {
             this._timer = null;
         }
     }
+
 }

@@ -5,35 +5,34 @@
 const should = require("should");
 const sinon = require("sinon");
 
+const SessionContext = require("node-opcua-address-space").SessionContext;
+const add_eventGeneratorObject = require("node-opcua-address-space").add_eventGeneratorObject;
 const subscription_service = require("node-opcua-service-subscription");
+const MonitoringParameters = subscription_service.MonitoringParameters;
 const StatusCodes = require("node-opcua-status-code").StatusCodes;
-
-const Subscription = require("../src/server_subscription").Subscription;
-const SubscriptionState = require("../src/server_subscription").SubscriptionState;
-const ServerSidePublishEngine = require("../src/server_publish_engine").ServerSidePublishEngine;
-
+const encode_decode = require("node-opcua-basic-types");
 const TimestampsToReturn = require("node-opcua-service-read").TimestampsToReturn;
-
 const MonitoredItemCreateRequest = subscription_service.MonitoredItemCreateRequest;
 const makeBrowsePath = require("node-opcua-service-translate-browse-path").makeBrowsePath;
-
 const DataType = require("node-opcua-variant").DataType;
 const DataValue = require("node-opcua-data-value").DataValue;
 const Variant = require("node-opcua-variant").Variant;
 const VariantArrayType = require("node-opcua-variant").VariantArrayType;
-
 const AttributeIds = require("node-opcua-data-model").AttributeIds;
 
 const NodeId = require("node-opcua-nodeid").NodeId;
 const coerceNodeId = require("node-opcua-nodeid").coerceNodeId;
-const makeNodeId = require("node-opcua-nodeid").makeNodeId;
 
-const MonitoredItem = require("../src/monitored_item").MonitoredItem;
-const encode_decode = require("node-opcua-basic-types");
+const Subscription = require("..").Subscription;
+const SubscriptionState = require("..").SubscriptionState;
+const ServerSidePublishEngine = require("..").ServerSidePublishEngine;
+const MonitoredItem = require("..").MonitoredItem;
+const ServerEngine = require("..").ServerEngine;
 
-const SessionContext = require("node-opcua-address-space").SessionContext;
+const mini_nodeset_filename = require("node-opcua-address-space").get_mini_nodeset_filename();
+const nodesets = require("node-opcua-nodesets").nodesets;
+
 const context = SessionContext.defaultContext;
-const MonitoringParameters = subscription_service.MonitoringParameters;
 
 const doDebug = false;
 
@@ -83,10 +82,6 @@ function install_spying_samplingFunc() {
     return spy_samplingEventCall;
 }
 
-const server_engine = require("../src/server_engine");
-
-const add_eventGeneratorObject = require("node-opcua-address-space/test_helpers/add_event_generator_object").add_eventGeneratorObject;
-
 
 function simulate_client_adding_publish_request(publishEngine, callback) {
     callback = callback || function () {
@@ -95,8 +90,8 @@ function simulate_client_adding_publish_request(publishEngine, callback) {
     publishEngine._on_PublishRequest(publishRequest, callback);
 }
 
-const describeWithLeakDetector = require("node-opcua-leak-detector").describeWithLeakDetector;
-describeWithLeakDetector("Subscriptions and MonitoredItems", function () {
+const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
+describe("SM1 - Subscriptions and MonitoredItems", function () {
 
     this.timeout(Math.max(300000, this._timeout));
 
@@ -110,8 +105,8 @@ describeWithLeakDetector("Subscriptions and MonitoredItems", function () {
     const test = this;
 
     before(function (done) {
-        engine = new server_engine.ServerEngine();
-        engine.initialize({nodeset_filename: server_engine.nodeset_filename}, function () {
+        engine = new ServerEngine();
+        engine.initialize({nodeset_filename: nodesets.standard_nodeset_file}, function () {
 
             addressSpace = engine.addressSpace;
             namespace = addressSpace.getOwnNamespace();
@@ -483,8 +478,8 @@ describeWithLeakDetector("Subscriptions and MonitoredItems", function () {
 
         const result = subscription.getMonitoredItems({});
         result.statusCode.should.eql(StatusCodes.Good);
-        result.serverHandles.map(parseInt).should.eql([monitoredItem.monitoredItemId]);
-        result.clientHandles.map(parseInt).should.eql([monitoredItem.clientHandle]);
+        result.serverHandles.map((a) => parseInt(a, 10)).should.eql([monitoredItem.monitoredItemId]);
+        result.clientHandles.map((a) => parseInt(a, 10)).should.eql([monitoredItem.clientHandle]);
 
         subscription.terminate();
         subscription.dispose();
@@ -640,7 +635,7 @@ describeWithLeakDetector("Subscriptions and MonitoredItems", function () {
 
         function add_monitoredItem(subscription) {
 
-            const nodeId = 'ns=1;s=Static_Float';
+            const nodeId = "ns=1;s=Static_Float";
             const monitoredItemCreateRequest = new MonitoredItemCreateRequest({
                 itemToMonitor: {
                     nodeId: nodeId,
@@ -654,7 +649,7 @@ describeWithLeakDetector("Subscriptions and MonitoredItems", function () {
                 }
             });
 
-            const n = addressSpace.findNode('ns=100;s=Static_Float');
+            const n = addressSpace.findNode("ns=100;s=Static_Float");
             //xx console.log(n.toString());
 
             subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
@@ -1245,7 +1240,7 @@ describeWithLeakDetector("Subscriptions and MonitoredItems", function () {
 
 
         function changeEURange(analogItem, done) {
-            const dataValueOrg = analogItem.readAttribute(SessionContext.defaultContext, AttributeIds.Value);
+            const dataValueOrg = analogItem.readAttribute(AttributeIds.Value);
 
             const dataValue = {
                 value: {
@@ -1401,7 +1396,7 @@ describeWithLeakDetector("Subscriptions and MonitoredItems", function () {
     });
 });
 
-describe("monitoredItem advanced", function () {
+describe("SM2 - MonitoredItem advanced", function () {
 
     let addressSpace;
     let namespace;
@@ -1409,13 +1404,12 @@ describe("monitoredItem advanced", function () {
     let engine;
     let publishEngine;
     before(function (done) {
-        engine = new server_engine.ServerEngine();
+        engine = new ServerEngine();
 
-        engine.initialize({nodeset_filename: server_engine.mini_nodeset_filename}, function () {
+        engine.initialize({nodeset_filename: mini_nodeset_filename}, function () {
 
             addressSpace = engine.addressSpace;
             namespace = addressSpace.getOwnNamespace();
-
 
             const node = namespace.addVariable({
                 organizedBy: "RootFolder",
@@ -1438,6 +1432,7 @@ describe("monitoredItem advanced", function () {
     });
     after(function () {
         engine.shutdown();
+        engine.dispose();
         engine = null;
     });
 
@@ -1453,11 +1448,13 @@ describe("monitoredItem advanced", function () {
         this.clock.restore();
         if (publishEngine) {
             publishEngine.shutdown();
+            publishEngine.dispose();
             publishEngine = null;
         }
     });
 
-    describe("#maxNotificationsPerPublish", function () {
+    describe("SM2A - #maxNotificationsPerPublish", function () {
+
         it("should have a proper maxNotificationsPerPublish default value", function (done) {
             const subscription = new Subscription({
                 publishEngine: publishEngine
@@ -1554,13 +1551,17 @@ describe("monitoredItem advanced", function () {
             this.clock.tick(100);
             this.clock.tick(100);
             this.clock.tick(100);
+            // add an extra tick to allow all setImmediate call to be honoured
+            this.clock.tick(1);
+
 
             freeze_data_source();
 
-            monitoredItem1.queue.length.should.eql(5);
-            monitoredItem2.queue.length.should.eql(5);
-            monitoredItem3.queue.length.should.eql(5);
-            monitoredItem4.queue.length.should.eql(5);
+            // it should have initial value + 5 modification
+            monitoredItem1.queue.length.should.eql(6);
+            monitoredItem2.queue.length.should.eql(6);
+            monitoredItem3.queue.length.should.eql(6);
+            monitoredItem4.queue.length.should.eql(6);
 
             this.clock.tick(800);
 
@@ -1582,7 +1583,7 @@ describe("monitoredItem advanced", function () {
             publishResponse1.moreNotifications.should.eql(true);
 
 
-            spy_callback.callCount.should.eql(6);
+            spy_callback.callCount.should.eql(7);
 
             const publishResponse2 = spy_callback.getCall(2).args[1];
             numberOfnotifications(publishResponse2).should.not.be.greaterThan(subscription.maxNotificationsPerPublish + 1);
@@ -1594,7 +1595,10 @@ describe("monitoredItem advanced", function () {
 
             const publishResponse4 = spy_callback.getCall(5).args[1];
             numberOfnotifications(publishResponse4).should.not.be.greaterThan(subscription.maxNotificationsPerPublish + 1);
-            publishResponse4.moreNotifications.should.eql(false);
+
+            const publishResponse5 = spy_callback.getCall(6).args[1];
+            numberOfnotifications(publishResponse5).should.not.be.greaterThan(subscription.maxNotificationsPerPublish + 1);
+            publishResponse5.moreNotifications.should.eql(false);
 
 
             subscription.terminate();
@@ -1611,7 +1615,7 @@ describe("monitoredItem advanced", function () {
         });
     });
 
-    describe("Subscription.subscriptionDiagnostics", function () {
+    describe("SM2B - Subscription.subscriptionDiagnostics", function () {
 
 
         let subscription;

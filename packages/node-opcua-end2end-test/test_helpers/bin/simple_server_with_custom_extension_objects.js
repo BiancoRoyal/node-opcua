@@ -1,6 +1,12 @@
 /* eslint no-process-exit: 0 */
 "use strict";
 
+const chalk = require("chalk");
+const path = require("path");
+const fs = require("fs");
+const opcua = require("node-opcua");
+
+
 Error.stackTraceLimit = Infinity;
 
 const argv = require("yargs")
@@ -10,23 +16,19 @@ const argv = require("yargs")
     .alias('p', 'port')
     .argv;
 
-const path = require("path");
-const fs = require("fs");
-const opcua = require("node-opcua");
-
 const rootFolder = path.join(__dirname,"../");
 function constructFilename(pathname) {
     return path.join(__dirname,"../../",pathname);
 }
 
 const OPCUAServer = opcua.OPCUAServer;
-const standard_nodeset_file = opcua.standard_nodeset_file;
+const standard_nodeset_file = opcua.nodesets.standard_nodeset_file;
 
 
 const port = parseInt(argv.port) || 26555;
 
-const server_certificate_file            = constructFilename("certificates/server_cert_1024.pem");
-const server_certificate_privatekey_file = constructFilename("certificates/server_key_1024.pem");
+const server_certificate_file            = constructFilename("certificates/server_cert_2048.pem");
+const server_certificate_privatekey_file = constructFilename("certificates/server_key_2048.pem");
 
 const server_options = {
     certificateFile: server_certificate_file,
@@ -47,10 +49,8 @@ process.title = "Node OPCUA Server on port : " + server_options.port;
 
 const server = new OPCUAServer(server_options);
 
-const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
-
 console.log("   Server with custom modeling ");
-console.log("  server PID          :".yellow, process.pid);
+console.log(chalk.yellow("  server PID          :"), process.pid);
 
 server.on("post_initialize", function () {
 
@@ -77,15 +77,17 @@ server.start(function (err) {
         console.log(" Server failed to start ... exiting");
         process.exit(-3);
     }
-    console.log("  server on port      :".yellow, server.endpoints[0].port.toString().cyan);
-    console.log("  endpointUrl         :".yellow, endpointUrl.cyan);
-    console.log("\n  server now waiting for connections. CTRL+C to stop".yellow);
+    const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+
+    console.log(chalk.yellow("  server on port      :"),chalk.cyan( server.endpoints[0].port.toString()));
+    console.log(chalk.yellow("  endpointUrl         :"),chalk.cyan(endpointUrl));
+    console.log(chalk.yellow("\n  server now waiting for connections. CTRL+C to stop"));
 });
 
 process.on('SIGINT', function () {
     // only work on linux apparently
     server.shutdown(1000, function () {
-        console.log(" shutting down completed ".red.bold);
+        console.log(chalk.red.bold(" shutting down completed "));
         process.exit(-1);
     });
 });

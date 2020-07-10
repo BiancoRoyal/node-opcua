@@ -4,17 +4,14 @@
 const should = require("should");
 
 const ec = require("..");
-
 const BinaryStream = require("node-opcua-binary-stream").BinaryStream;
-
 const guid = require("node-opcua-guid");
-
 const makeNodeId = require("node-opcua-nodeid").makeNodeId;
 const NodeIdType = require("node-opcua-nodeid").NodeIdType;
 const NodeId = require("node-opcua-nodeid").NodeId;
 
-const makeExpandedNodeId = require("node-opcua-nodeid/src/expanded_nodeid").makeExpandedNodeId;
-const ExpandedNodeId = require("node-opcua-nodeid/src/expanded_nodeid").ExpandedNodeId;
+const makeExpandedNodeId = require("node-opcua-nodeid").makeExpandedNodeId;
+const ExpandedNodeId = require("node-opcua-nodeid").ExpandedNodeId;
 
 /**
  * @method test_encode_decode
@@ -37,7 +34,7 @@ function test_encode_decode(obj, encode_func, decode_func, expectedLength, verif
     binaryStream.length.should.equal(expectedLength);
 
     if (verify_buffer_func) {
-        verify_buffer_func(binaryStream._buffer);
+        verify_buffer_func(binaryStream.buffer);
     }
     binaryStream.rewind();
 
@@ -320,7 +317,8 @@ describe("testing built-in type encoding", function() {
         const nodeId = new NodeId(NodeIdType.BYTESTRING, crypto.randomBytes(16));
 
         const expectedLength = 1 + 2 + 4 + 16;
-        test_encode_decode(nodeId, ec.encodeNodeId, ec.decodeNodeId, expectedLength, function(buffer) {});
+        test_encode_decode(nodeId, ec.encodeNodeId, ec.decodeNodeId, expectedLength, function(buffer) {
+        });
     });
 
     it("should encode and decode a Expanded NodeId  - TwoBytes", function() {
@@ -422,6 +420,14 @@ describe("encoding and decoding arrays", function() {
 });
 
 describe("check isValid and random for various types", function() {
+
+    it("isValidDouble on string shall return false", () => {
+        ec.isValidDouble("Value").should.eql(false);
+    });
+    it("isValidFloat on string shall return false", () => {
+        ec.isValidFloat("Value").should.eql(false);
+    });
+
     it("should test isValid on Int32", function() {
         ec.isValidInt32(0).should.eql(true);
         ec.isValidInt32(-10).should.eql(true);
@@ -566,7 +572,7 @@ describe("DateTime", function() {
 
             const stream = new BinaryStream(10);
             ec.encodeDateTime(date1, stream);
-            //xx console.log(stream._buffer.toString("hex"));
+            //xx console.log(stream.buffer.toString("hex"));
 
             stream.rewind();
             const date2 = ec.decodeDateTime(stream);
@@ -601,7 +607,7 @@ describe("Float", function() {
         const stream = new BinaryStream(4);
         ec.encodeFloat(0.0, stream);
 
-        console.log(stream._buffer.toString("hex"));
+        console.log(stream.buffer.toString("hex"));
 
         stream.rewind();
         const value = ec.decodeFloat(stream);

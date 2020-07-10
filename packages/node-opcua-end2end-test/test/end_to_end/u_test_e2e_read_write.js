@@ -19,7 +19,7 @@ module.exports = function (test) {
         let client, endpointUrl;
 
         beforeEach(function (done) {
-            client = new OPCUAClient();
+            client = OPCUAClient.create();
             endpointUrl = test.endpointUrl;
             done();
         });
@@ -92,10 +92,10 @@ module.exports = function (test) {
                         dataValue.serverTimestamp = null;
                         dataValues[0].serverTimestamp = null;
                         if (!sameDataValue(dataValue, dataValues[0])) {
-                            console.log(" ------- > expected".yellow);
-                            console.log(dataValue.toString().yellow);
-                            console.log(" ------- > actual".cyan);
-                            console.log(dataValues[0].toString().cyan);
+                            console.log(chalk.yellow(" ------- > expected"));
+                            console.log(chalk.yellow(dataValue.toString()));
+                            console.log(chalk.cyan(" ------- > actual"));
+                            console.log(chalk.cyan(dataValues[0].toString()));
                             // dataValue.toString().split("\n").should.eql(results[0].toString().split("\n"));
                             return inner_done(new Error("dataValue is not as expected"));
                         }
@@ -177,10 +177,10 @@ module.exports = function (test) {
 
                 async.series([
                     function (callback) {
-                        const request = new opcua.read_service.ReadRequest({
+                        const request = new opcua.ReadRequest({
                             nodesToRead: nodesToRead,
                             maxAge: maxAge,
-                            timestampsToReturn: opcua.read_service.TimestampsToReturn.Both
+                            timestampsToReturn: opcua.TimestampsToReturn.Both
                         });
 
                         session.performMessageTransaction(request, function (err/*, response*/) {
@@ -190,10 +190,10 @@ module.exports = function (test) {
 
                     },
                     function (callback) {
-                        const request = new opcua.read_service.ReadRequest({
+                        const request = new opcua.ReadRequest({
                             nodesToRead: nodesToRead,
                             maxAge: maxAge,
-                            timestampsToReturn: opcua.read_service.TimestampsToReturn.Both
+                            timestampsToReturn: opcua.TimestampsToReturn.Both
                         });
 
                         session.performMessageTransaction(request, function (err/*, response*/) {
@@ -204,10 +204,10 @@ module.exports = function (test) {
                     },
                     function (callback) {
 
-                        const request = new opcua.read_service.ReadRequest({
+                        const request = new opcua.ReadRequest({
                             nodesToRead: nodesToRead,
                             maxAge: maxAge,
-                            timestampsToReturn: opcua.read_service.TimestampsToReturn.Server
+                            timestampsToReturn: opcua.TimestampsToReturn.Server
                         });
 
                         session.performMessageTransaction(request, function (err/*, response*/) {

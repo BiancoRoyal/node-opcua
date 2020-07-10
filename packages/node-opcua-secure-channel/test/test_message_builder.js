@@ -1,9 +1,9 @@
 const should = require("should");
 
-const MessageBuilder = require("../src/message_builder").MessageBuilder;
+const MessageBuilder = require("..").MessageBuilder;
 
 
-const packets = require("node-opcua-transport/test-fixtures/fixture_full_tcp_packets");
+const packets = require("node-opcua-transport/dist/test-fixtures");
 
 const redirectToFile = require("node-opcua-debug").redirectToFile;
 const debugLog = require("node-opcua-debug").make_debugLog(__filename);
@@ -49,7 +49,7 @@ describe("MessageBuilder", function () {
      */
     function test_behavior_with_bad_packet(test_case_name, bad_packet, done) {
 
-        redirectToFile("MessageBuilder_" + test_case_name + ".log", function () {
+        //xx redirectToFile("MessageBuilder_" + test_case_name + ".log", function () {
 
             const messageBuilder = new MessageBuilder();
 
@@ -74,8 +74,7 @@ describe("MessageBuilder", function () {
 
 
             messageBuilder.feed(bad_packet); // OpenSecureChannel message
-        }, function () {
-        });
+        //}, function () {});
 
     }
 

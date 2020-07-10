@@ -17,7 +17,7 @@ const SignatureData = require("node-opcua-service-secure-channel").SignatureData
 
 const port = 2000;
 
-const empty_nodeset_filename = opcua.empty_nodeset_filename;
+const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
 
 const crypto_utils = require("node-opcua-crypto");
 
@@ -37,7 +37,7 @@ describe("testing the server ability to deny client session request (server with
         const serverCertificate = server.getCertificateChain();
 
         options = {
-            securityMode: opcua.MessageSecurityMode.SIGNANDENCRYPT,
+            securityMode: opcua.MessageSecurityMode.SignAndEncrypt,
             securityPolicy: opcua.SecurityPolicy.Basic256,
             serverCertificate: serverCertificate,
             defaultSecureTokenLifetime: 2000
@@ -105,7 +105,7 @@ describe("testing the server ability to deny client session request (server with
 
     it("Server shall accept a secure client connection with a valid clientSignature", function (done) {
         // this is the nominal case
-        const client = new OPCUAClient(options);
+        const client = OPCUAClient.create(options);
         test_connection(client, function (err) {
             should(err).equal(null);
         }, done);
@@ -114,7 +114,7 @@ describe("testing the server ability to deny client session request (server with
 
     it("Server shall reject a secure client connection if ActiveSession.clientSignature has the wrong algorithm", function (done) {
 
-        const client = new OPCUAClient(options);
+        const client = OPCUAClient.create(options);
         const old_computeClientSignature = client.computeClientSignature;
         const computeClientSignatureStub = sinon.stub();
 
@@ -131,7 +131,7 @@ describe("testing the server ability to deny client session request (server with
     });
     it("Server shall reject a secure client connection if ActiveSession.clientSignature is missing", function (done) {
 
-        const client = new OPCUAClient(options);
+        const client = OPCUAClient.create(options);
         const old_computeClientSignature = client.computeClientSignature;
         const computeClientSignatureStub = sinon.stub();
         computeClientSignatureStub.returns(null);
@@ -149,7 +149,7 @@ describe("testing the server ability to deny client session request (server with
     it("Server shall reject a secure client connection if ActiveSession.clientSignature is tampered", function (done) {
 
 
-        const client = new OPCUAClient(options);
+        const client = OPCUAClient.create(options);
         const old_computeClientSignature = client.computeClientSignature;
         const computeClientSignatureStub = sinon.stub();
 
@@ -178,7 +178,7 @@ describe("testing the server ability to deny client session request (server with
         const options = {
             endpoint_must_exist: true
         };
-        const client = new OPCUAClient(options);
+        const client = OPCUAClient.create(options);
         test_connection(client, function (err) {
             err.message.should.match(/Invalid server Nonce/);
             bad_nonce.should.be.greaterThan(0);
@@ -189,7 +189,7 @@ describe("testing the server ability to deny client session request (server with
 
     it("TA -#createSession Server  shall return an error if requestHeader.clientNonce has less than 32 bytes", function (done) {
 
-        const client = new OPCUAClient(options);
+        const client = OPCUAClient.create(options);
 
         async.series([
 
@@ -200,7 +200,7 @@ describe("testing the server ability to deny client session request (server with
 
             function (callback) {
 
-                const createSessionRequest = new opcua.session_service.CreateSessionRequest({
+                const createSessionRequest = new opcua.CreateSessionRequest({
                     requestHeader: {},
                     clientNonce: Buffer.alloc(31)
                 });
@@ -221,12 +221,12 @@ describe("testing the server ability to deny client session request (server with
 
         // in this case, server certificate will be extracted from the getPoint Information
         const options = {
-            securityMode: opcua.MessageSecurityMode.SIGNANDENCRYPT,
+            securityMode: opcua.MessageSecurityMode.SignAndEncrypt,
             securityPolicy: opcua.SecurityPolicy.Basic256,
             serverCertificate: null, // NOT KNOWN
             defaultSecureTokenLifetime: 2000
         };
-        const client = new OPCUAClient(options);
+        const client = OPCUAClient.create(options);
 
         async.series([
 

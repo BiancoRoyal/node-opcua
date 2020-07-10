@@ -5,6 +5,7 @@ const async = require("async");
 const should = require("should");
 
 const opcua = require("node-opcua");
+const chalk = require("chalk");
 
 const doDebug = false;
 
@@ -45,9 +46,9 @@ module.exports = function (test) {
                 func(function(err) {
                     if (doDebug) {
                         if (err) {
-                            console.log("   ", msg.red, err.message, r(getTick() - t));
+                            console.log("   ", chalk.red(msg), err.message, r(getTick() - t));
                         } else {
-                            console.log("   ", msg.green, r(getTick() - t));
+                            console.log("   ", chalk.green(msg), r(getTick() - t));
                         }
                     }
                     return callback(err);
@@ -97,7 +98,7 @@ module.exports = function (test) {
                 connectionStrategy: connectivity_strategy,
                 requestedSessionTimeout: 100000
             };
-            client = new opcua.OPCUAClient(options);
+            client = opcua.OPCUAClient.create(options);
             const endpointUrl = test.endpointUrl;
             client.on("send_request",function(req) {
                 if(doDebug) { console.log(req.constructor.name); }
@@ -107,10 +108,10 @@ module.exports = function (test) {
             });
 
             client.on("start_reconnection", function (err) {
-                if(doDebug) { console.log("start_reconnection".bgWhite.yellow,data.index);}
+                if(doDebug) { console.log(chalk.bgWhite.yellow("start_reconnection"),data.index);}
             });
             client.on("backoff", function (number, delay) {
-                if(doDebug) { console.log("backoff".bgWhite.yellow,number,delay);}
+                if(doDebug) { console.log(chalk.bgWhite.yellow("backoff"),number,delay);}
             });
 
             //xx client.knowsServerEndpoint.should.eql(true);
@@ -140,10 +141,10 @@ module.exports = function (test) {
             for (let i = 0; i < nb; i++) {
                 q.push({index: i});
             }
-            q.drain = function () {
+            q.drain(() => {
                 //xx console.log("done");
                 done();
-            }
+            });
         });
 
     });
