@@ -22,7 +22,7 @@ import {
     ServerSecureChannelLayer,
     ServerSecureChannelParent,
     toURI,
-    AsymmetricAlgorithmSecurityHeader,
+    AsymmetricAlgorithmSecurityHeader
 } from "node-opcua-secure-channel";
 import { UserTokenType } from "node-opcua-service-endpoints";
 import { EndpointDescription } from "node-opcua-service-endpoints";
@@ -46,7 +46,7 @@ function extractSocketData(socket: net.Socket, reason: string): ISocketData {
         remoteAddress,
         remoteFamily,
         remotePort,
-        timestamp: new Date(),
+        timestamp: new Date()
     };
     return data;
 }
@@ -61,7 +61,7 @@ function extractChannelData(channel: ServerSecureChannelLayer): IChannelData {
         securityMode,
         securityPolicy,
         timeout,
-        transactionsCount,
+        transactionsCount
     } = channel;
 
     const channelData: IChannelData = {
@@ -73,7 +73,7 @@ function extractChannelData(channel: ServerSecureChannelLayer): IChannelData {
         securityMode,
         securityPolicy,
         timeout,
-        transactionsCount,
+        transactionsCount
     };
     return channelData;
 }
@@ -167,6 +167,20 @@ export interface AddStandardEndpointDescriptionsParam {
     resourcePath?: string;
 }
 
+function getUniqueName(name: string, collection: { [key: string]: number }) {
+    if (collection[name]) {
+        let counter = 0;
+        while (collection[name + "_" + counter.toString()]) {
+            counter++;
+        }
+        name = name + "_" + counter.toString();
+        collection[name] = 1;
+        return name;
+    } else {
+        collection[name] = 1;
+        return name;
+    }
+}
 /**
  * OPCUAServerEndPoint a Server EndPoint.
  * A sever end point is listening to one port
@@ -202,7 +216,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
     private _listen_callback: any;
     private _started: boolean = false;
     private _counter = OPCUAServerEndPointCounter++;
-
+    private _policy_deduplicator: { [key: string]: number } = {};
     constructor(options: OPCUAServerEndPointOptions) {
         super();
 
@@ -376,6 +390,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
         // now build endpointUrl
         this._endpoints.push(
             _makeEndpointDescription({
+                collection: this._policy_deduplicator,
                 endpointUrl,
                 hostname,
                 port,
@@ -390,7 +405,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
                 allowUnsecurePassword: options.allowUnsecurePassword,
                 resourcePath: options.resourcePath,
 
-                restricted: !!options.restricted,
+                restricted: !!options.restricted
             })
         );
     }
@@ -629,9 +644,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
                 // istanbul ignore next
                 if (doDebug) {
                     this._dump_statistics();
-                    debugLog(
-                        "server connected  with : " + (socket as any).remoteAddress + ":" + (socket as any).remotePort
-                    );
+                    debugLog("server connected  with : " + (socket as any).remoteAddress + ":" + (socket as any).remotePort);
                 }
             })
             .on("close", () => {
@@ -690,7 +703,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
                 defaultSecureTokenLifetime: this.defaultSecureTokenLifetime,
                 // objectFactory: this.objectFactory,
                 parent: this,
-                timeout: this.timeout,
+                timeout: this.timeout
             });
 
             socket.resume();
@@ -927,6 +940,8 @@ interface MakeEndpointDescriptionOptions {
     allowUnsecurePassword?: boolean; // default false
 
     restricted: boolean;
+
+    collection: { [key: string]: number };
 }
 
 interface EndpointDescriptionEx extends EndpointDescription {
@@ -939,26 +954,26 @@ function estimateSecurityLevel(securityMode: MessageSecurityMode, securityPolicy
     }
     let offset = 100;
     if (securityMode === MessageSecurityMode.SignAndEncrypt) {
-        offset = 100;
+        offset = 200;
     }
     switch (securityPolicy) {
-        case SecurityPolicy.None:
-            return 0;
         case SecurityPolicy.Basic128:
         case SecurityPolicy.Basic128Rsa15:
         case SecurityPolicy.Basic192:
-            return 2;
+            return 2; // deprecated => low
         case SecurityPolicy.Basic192Rsa15:
-            return 3;
+            return 3; // deprecated => low
         case SecurityPolicy.Basic256:
-            return 4;
+            return 4; // deprecated => low
         case SecurityPolicy.Basic256Rsa15:
             return 4 + offset;
         case SecurityPolicy.Basic256Sha256:
             return 6 + offset;
         case SecurityPolicy.Aes128_Sha256_RsaOaep:
             return 1;
+
         default:
+        case SecurityPolicy.None:
             return 1;
     }
 }
@@ -975,6 +990,7 @@ function _makeEndpointDescription(options: MakeEndpointDescriptionOptions): Endp
     assert(!!options.hostname && typeof options.hostname === "string");
     assert(_.isBoolean(options.restricted));
 
+    const u = (n: string) => getUniqueName(n, options.collection);
     options.securityLevel =
         options.securityLevel === undefined
             ? estimateSecurityLevel(options.securityMode, options.securityPolicy)
@@ -988,86 +1004,58 @@ function _makeEndpointDescription(options: MakeEndpointDescriptionOptions): Endp
     if (options.securityPolicy === SecurityPolicy.None) {
         if (options.allowUnsecurePassword) {
             userIdentityTokens.push({
-                policyId: "username_unsecure",
+                policyId: u("username_unsecure"),
                 tokenType: UserTokenType.UserName,
 
                 issuedTokenType: null,
                 issuerEndpointUrl: null,
-                securityPolicyUri: null,
+                securityPolicyUri: null
             });
         }
 
         userIdentityTokens.push({
-            policyId: "username_basic256",
+            policyId: u("username_basic256"),
             tokenType: UserTokenType.UserName,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic256,
+            securityPolicyUri: SecurityPolicy.Basic256
         });
 
         userIdentityTokens.push({
-            policyId: "username_basic128",
+            policyId: u("username_basic128Rsa15"),
             tokenType: UserTokenType.UserName,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic128Rsa15,
+            securityPolicyUri: SecurityPolicy.Basic128Rsa15
         });
 
         userIdentityTokens.push({
-            policyId: "username_basic256Sha256",
+            policyId: u("username_basic256Sha256"),
             tokenType: UserTokenType.UserName,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic256Sha256,
-        });
-
-        userIdentityTokens.push({
-            policyId: "certificate_basic256Sha256",
-            tokenType: UserTokenType.Certificate,
-
-            issuedTokenType: null,
-            issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic256Sha256,
+            securityPolicyUri: SecurityPolicy.Basic256Sha256
         });
 
         // X509
         userIdentityTokens.push({
-            policyId: "certificate_basic256",
+            policyId: u("certificate_basic256"),
             tokenType: UserTokenType.UserName,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic256,
+            securityPolicyUri: SecurityPolicy.Basic256
         });
-
         userIdentityTokens.push({
-            policyId: "certificate_basic128",
-            tokenType: UserTokenType.UserName,
-
-            issuedTokenType: null,
-            issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic128Rsa15,
-        });
-
-        userIdentityTokens.push({
-            policyId: "certificate_basic256Sha256",
-            tokenType: UserTokenType.UserName,
-
-            issuedTokenType: null,
-            issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic256Sha256,
-        });
-
-        userIdentityTokens.push({
-            policyId: "certificate_basic256Sha256",
+            policyId: u("certificate_basic256Sha256"),
             tokenType: UserTokenType.Certificate,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: SecurityPolicy.Basic256Sha256,
+            securityPolicyUri: SecurityPolicy.Basic256Sha256
         });
     } else {
         // note:
@@ -1075,32 +1063,32 @@ function _makeEndpointDescription(options: MakeEndpointDescriptionOptions): Endp
         //  userIdentityTokens can be left to null.
         //  in this case this mean that secure policy will be the same as connection security policy
         userIdentityTokens.push({
-            policyId: "usernamePassword",
+            policyId: u("usernamePassword"),
             tokenType: UserTokenType.UserName,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: null,
+            securityPolicyUri: null
         });
 
         userIdentityTokens.push({
-            policyId: "certificateX509",
+            policyId: u("certificateX509"),
             tokenType: UserTokenType.Certificate,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: null,
+            securityPolicyUri: null
         });
     }
 
     if (options.allowAnonymous) {
         userIdentityTokens.push({
-            policyId: "anonymous",
+            policyId: u("anonymous"),
             tokenType: UserTokenType.Anonymous,
 
             issuedTokenType: null,
             issuerEndpointUrl: null,
-            securityPolicyUri: null,
+            securityPolicyUri: null
         });
     }
 
@@ -1116,7 +1104,7 @@ function _makeEndpointDescription(options: MakeEndpointDescriptionOptions): Endp
         userIdentityTokens,
 
         securityLevel: options.securityLevel,
-        transportProfileUri: default_transportProfileUri,
+        transportProfileUri: default_transportProfileUri
     }) as EndpointDescriptionEx;
 
     (endpoint as any).__defineGetter__("endpointUrl", () => {
@@ -1157,5 +1145,5 @@ const defaultSecurityPolicies = [
     SecurityPolicy.Basic128Rsa15,
     SecurityPolicy.Basic256,
     // xx UNUSED!!    SecurityPolicy.Basic256Rsa15,
-    SecurityPolicy.Basic256Sha256,
+    SecurityPolicy.Basic256Sha256
 ];
