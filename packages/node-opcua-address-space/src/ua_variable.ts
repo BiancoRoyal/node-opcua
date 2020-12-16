@@ -6,7 +6,6 @@
 // tslint:disable:max-line-length
 import * as chalk from "chalk";
 import { assert } from "node-opcua-assert";
-import * as _ from "underscore";
 
 import {
     isValidDataEncoding,
@@ -27,18 +26,12 @@ import { NumericRange } from "node-opcua-numeric-range";
 import { WriteValue, WriteValueOptions } from "node-opcua-service-write";
 import { StatusCode, StatusCodes, CallbackT } from "node-opcua-status-code";
 import {
-    EnumDefinition,
-    EnumField,
-    HistoryReadDetails,
     HistoryReadResult,
-    HistoryReadResultOptions,
-    Range,
     ReadAtTimeDetails,
     ReadEventDetails,
     ReadProcessedDetails,
     ReadRawModifiedDetails,
-    StructureDefinition,
-    StructureDescription
+    StructureDefinition
 } from "node-opcua-types";
 import * as utils from "node-opcua-utils";
 import { lowerFirstLetter } from "node-opcua-utils";
@@ -61,7 +54,7 @@ import {
     UAVariable as UAVariablePublic,
     UAVariableType
 } from "../source";
-import { BaseNode } from "./base_node";
+import { BaseNode, InternalBaseNodeOptions } from "./base_node";
 import {
     _clone,
     apply_condition_refresh,
@@ -83,7 +76,7 @@ function isGoodish(statusCode: StatusCode) {
 export function adjust_accessLevel(accessLevel: any): AccessLevelFlag {
     accessLevel = utils.isNullOrUndefined(accessLevel) ? "CurrentRead | CurrentWrite" : accessLevel;
     accessLevel = makeAccessLevelFlag(accessLevel);
-    assert(_.isFinite(accessLevel));
+    assert(isFinite(accessLevel));
     return accessLevel;
 }
 
@@ -96,7 +89,7 @@ export function adjust_userAccessLevel(userAccessLevel: any, accessLevel: any): 
 }
 
 function adjust_samplingInterval(minimumSamplingInterval: number): number {
-    assert(_.isFinite(minimumSamplingInterval));
+    assert(isFinite(minimumSamplingInterval));
     if (minimumSamplingInterval < 0) {
         return -1; // only -1 is a valid negative value for samplingInterval and means "unspecified"
     }
@@ -171,6 +164,7 @@ function validateDataType(addressSpace: AddressSpace, dataTypeNodeId: NodeId, va
         throw new Error("cannot find Enumeration DataType node in standard address space");
     }
     if (destUADataType.isSupertypeOf(enumerationUADataType)) {
+        // istanbul ignore next
         if (doDebug) {
             console.log("destUADataType.", destUADataType.browseName.toString(), destUADataType.nodeId.toString());
             console.log(
@@ -205,25 +199,57 @@ function validateDataType(addressSpace: AddressSpace, dataTypeNodeId: NodeId, va
     return dest_isSuperTypeOf_variant;
 }
 
+interface UAVariableOptions extends InternalBaseNodeOptions {
+    value?: any;
+    dataType: NodeId | string;
+    valueRank?: number;
+    arrayDimensions?: null | number[];
+    accessLevel?: any;
+    userAccessLevel?: any;
+    minimumSamplingInterval?: number; // default -1
+    historizing?: number;
+    permissions?: Permissions;
+    /* @param [options.permissions] {Permissions}
+     * @param options.parentNodeId {NodeId}
+     */
+}
+
+export function verifyRankAndDimensions(options: { valueRank?: number; arrayDimensions?: number[] | null }) {
+    // evaluate valueRank arrayDimensions is specified but valueRank is null
+    if (options.arrayDimensions && options.valueRank === undefined) {
+        options.valueRank = options.arrayDimensions.length;
+    }
+    options.valueRank = options.valueRank === undefined ? -1 : options.valueRank || 0; // UInt32
+    assert(typeof options.valueRank === "number");
+
+    options.arrayDimensions = options.arrayDimensions || null;
+    assert(options.arrayDimensions === null || Array.isArray(options.arrayDimensions));
+
+    if (options.arrayDimensions && options.valueRank <= 0) {
+        throw new Error("[CONFORMANCE] arrayDimensions must be null if valueRank <=0");
+    }
+    // specify default arrayDimension if not provided
+    if (options.valueRank > 0 && !options.arrayDimensions) {
+        options.arrayDimensions = new Array(options.valueRank).fill(0);
+    }
+    if (!options.arrayDimensions && options.valueRank > 0) {
+        throw new Error("[CONFORMANCE] arrayDimension must be specified  if valueRank >0 " + options.valueRank);
+    }
+    if (options.valueRank > 0 && options.arrayDimensions!.length !== options.valueRank) {
+        throw new Error(
+            "[CONFORMANCE] when valueRank> 0, arrayDimensions must have valueRank elements, this.valueRank =" +
+                options.valueRank +
+                "  whereas arrayDimensions.length =" +
+                options.arrayDimensions!.length
+        );
+    }
+}
 /**
  * A OPCUA Variable Node
  *
  * @class UAVariable
  * @constructor
  * @extends  BaseNode
- * @param options  {Object}
- * @param options.value
- * @param options.browseName {string}
- * @param options.dataType   {NodeId|String}
- * @param options.valueRank  {Int32}
- * @param options.arrayDimensions {null|Array<Integer>}
- * @param options.accessLevel {AccessLevel}
- * @param options.userAccessLevel {AccessLevel}
- * @param [options.minimumSamplingInterval = -1]
- * @param [options.historizing = false] {Boolean}
- * @param [options.permissions] {Permissions}
- * @param options.parentNodeId {NodeId}
- *
  *  The AccessLevel Attribute is used to indicate how the Value of a Variable can be accessed (read/write) and if it
  *  contains current and/or historic data. The AccessLevel does not take any user access rights into account,
  *  i.e. although the Variable is writable this may be restricted to a certain user / user group.
@@ -244,7 +270,6 @@ function validateDataType(addressSpace: AddressSpace, dataTypeNodeId: NodeId, va
  *  indicates if the history of the Variable is available via the OPC UA server.
  *
  */
-
 export class UAVariable extends BaseNode implements UAVariablePublic {
     public readonly nodeClass = NodeClass.Variable;
     public dataType: NodeId;
@@ -262,7 +287,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
     public minimumSamplingInterval: number;
     public historizing: boolean;
     public semantic_version: number;
-    public _permissions: any | null;
+    public _permissions: Permissions | null;
     public arrayDimensions: null | number[];
 
     public $extensionObject?: any;
@@ -277,23 +302,20 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
         return super.typeDefinitionObj as UAVariableType;
     }
 
-    constructor(options: any) {
+    constructor(options: UAVariableOptions) {
         super(options);
 
+        verifyRankAndDimensions(options);
+        this.valueRank = options.valueRank!;
+        this.arrayDimensions = options.arrayDimensions!;
+
         this.dataType = this.resolveNodeId(options.dataType); // DataType (NodeId)
-        assert(this.dataType instanceof NodeId);
-
-        this.valueRank = options.valueRank === undefined ? -1 : options.valueRank || 0; // UInt32
-        assert(typeof this.valueRank === "number");
-
-        this.arrayDimensions = options.arrayDimensions || null;
-        assert(_.isNull(this.arrayDimensions) || _.isArray(this.arrayDimensions));
 
         this.accessLevel = adjust_accessLevel(options.accessLevel);
 
         this.userAccessLevel = adjust_userAccessLevel(options.userAccessLevel, options.accessLevel);
 
-        this.minimumSamplingInterval = adjust_samplingInterval(options.minimumSamplingInterval);
+        this.minimumSamplingInterval = adjust_samplingInterval(options.minimumSamplingInterval || 0);
 
         this.historizing = !!options.historizing; // coerced to boolean
 
@@ -319,7 +341,6 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
     }
 
     public isUserReadable(context: SessionContext): boolean {
-        assert(context instanceof SessionContext);
         if (context.checkPermission) {
             assert(context.checkPermission instanceof Function);
             return context.checkPermission(this, "CurrentRead");
@@ -328,7 +349,6 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
     }
 
     public isWritable(context: SessionContext): boolean {
-        assert(context instanceof SessionContext);
         return (this.accessLevel & AccessLevelFlag.CurrentWrite) === AccessLevelFlag.CurrentWrite;
     }
 
@@ -437,6 +457,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
 
     public asyncRefresh(...args: any[]): any {
         const oldestDate = args[0] as Date;
+        assert(oldestDate instanceof Date);
         const callback = args[1] as DataValueCallback;
 
         if (!this.refreshFunc) {
@@ -480,7 +501,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
     public writeEnumValue(value: string | number): void {
         const enumInfo = this._getEnumerationInfo();
 
-        if (_.isString(value)) {
+        if (typeof value === "string") {
             if (!enumInfo.nameIndex.hasOwnProperty(value)) {
                 const possibleValues = Object.keys(enumInfo.nameIndex).join(",");
                 throw new Error("UAVariable#writeEnumValue: cannot find value " + value + " in [" + possibleValues + "]");
@@ -488,7 +509,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
             const valueIndex = enumInfo.nameIndex[value].value;
             value = valueIndex;
         }
-        if (_.isFinite(value)) {
+        if (isFinite(value)) {
             const possibleValues = Object.keys(enumInfo.nameIndex).join(",");
 
             if (!enumInfo.valueIndex[value]) {
@@ -578,19 +599,31 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
             if (variant.dataType === null || variant.dataType === undefined) {
                 throw new Error("Variant must provide a valid dataType" + variant.toString());
             }
+            if (
+                variant.dataType === DataType.Boolean &&
+                (this.dataType.namespace !== 0 || this.dataType.value !== DataType.Boolean)
+            ) {
+                throw new Error("Variant must provide a valid Boolean" + variant.toString());
+            }
+            if (
+                this.dataType.namespace === 0 &&
+                this.dataType.value == DataType.LocalizedText &&
+                variant.dataType !== DataType.LocalizedText
+            ) {
+                throw new Error("Variant must provide a valid LocalizedText" + variant.toString());
+            }
         }
 
         variant = Variant.coerce(variant);
 
         const now = coerceClock(sourceTimestamp, 0);
 
-        const dataValue = new DataValue({
-            serverPicoseconds: now.picoseconds,
-            serverTimestamp: now.timestamp,
-            sourcePicoseconds: now.picoseconds,
-            sourceTimestamp: now.timestamp,
-            statusCode
-        });
+        const dataValue = new DataValue(null);
+        dataValue.serverPicoseconds = now.picoseconds;
+        dataValue.serverTimestamp = now.timestamp;
+        dataValue.sourcePicoseconds = now.picoseconds;
+        dataValue.sourceTimestamp = now.timestamp;
+        dataValue.statusCode = statusCode;
         dataValue.value = variant as Variant;
         this._internal_set_dataValue(dataValue);
     }
@@ -604,8 +637,8 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
             // source timestamp was not specified by the caller
             // we will set the timestamp ourself with the current clock
             if (context.currentTime) {
-                dataValue.sourceTimestamp = context.currentTime;
-                dataValue.sourcePicoseconds = 0;
+                dataValue.sourceTimestamp = context.currentTime.timestamp;
+                dataValue.sourcePicoseconds = context.currentTime.picoseconds;
             } else {
                 const { timestamp, picoseconds } = getCurrentClock();
                 dataValue.sourceTimestamp = timestamp;
@@ -614,8 +647,8 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
         }
 
         if (context.currentTime && !dataValue.serverTimestamp) {
-            dataValue.serverTimestamp = context.currentTime;
-            dataValue.serverPicoseconds = 0;
+            dataValue.serverTimestamp = context.currentTime.timestamp;
+            dataValue.serverPicoseconds = context.currentTime.picoseconds;
         }
         assert(context instanceof SessionContext);
 
@@ -632,7 +665,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
             throw new Error("Invalid Number of args");
         }
 
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
         assert(dataValue instanceof DataValue);
         // index range could be string
         indexRange = NumericRange.coerce(indexRange);
@@ -728,7 +761,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
         assert(writeValue instanceof WriteValue);
         assert(writeValue.value instanceof DataValue);
         assert(writeValue.value!.value instanceof Variant);
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
 
         // Spec 1.0.2 Part 4 page 58
         // If the SourceTimestamp or the ServerTimestamp is specified, the Server shall
@@ -794,7 +827,6 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
         variable._dataValue.statusCode = StatusCodes.Good;
 
         if (variable.minimumSamplingInterval === 0) {
-            // xx console.log("xxx touchValue = ",variable.browseName.toString(),variable._dataValue.value.value);
             if (variable.listenerCount("value_changed") > 0) {
                 const clonedDataValue = variable.readValue();
                 variable.emit("value_changed", clonedDataValue);
@@ -964,37 +996,33 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
 
         options = options || {};
 
-        assert(!_.isFunction(this._timestamped_set_func), "UAVariable already bound");
-        assert(!_.isFunction(this._timestamped_get_func), "UAVariable already bound");
+        assert(typeof this._timestamped_set_func !== "function", "UAVariable already bound");
+        assert(typeof this._timestamped_get_func !== "function", "UAVariable already bound");
         bind_getter.call(this, options as GetterOptions);
         bind_setter.call(this, options as SetterOptions);
 
         const _historyRead = (options as BindVariableOptionsVariation1).historyRead;
         if (_historyRead) {
-            assert(!_.isFunction(this._historyRead) || this._historyRead === UAVariable.prototype._historyRead);
-            assert(_.isFunction(_historyRead));
+            assert(typeof this._historyRead !== "function" || this._historyRead === UAVariable.prototype._historyRead);
+            assert(typeof _historyRead === "function");
 
             this._historyRead = _historyRead;
             assert(this._historyRead.length === 6);
         }
 
-        assert(_.isFunction(this._timestamped_set_func));
+        assert(typeof this._timestamped_set_func === "function");
         assert(this._timestamped_set_func.length === 3);
     }
 
     /**
      * @method readValueAsync
-     * @param context
-     * @param callback
-     * @param callback.err
-     * @param callback.dataValue
-     * @async
      */
-    public readValueAsync(context?: SessionContext | null, callback?: any): any {
+    public readValueAsync(context: SessionContext | null, callback: CallbackT<DataValue>): void;
+    public readValueAsync(context: SessionContext | null): Promise<DataValue>;
+    public readValueAsync(context: SessionContext | null, callback?: any): any {
         if (!context) {
             context = SessionContext.defaultContext;
         }
-        assert(context instanceof SessionContext);
         assert(callback instanceof Function);
 
         this.__waiting_callbacks = this.__waiting_callbacks || [];
@@ -1024,7 +1052,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
                 innerCallback(null, dataValue);
             };
         } else {
-            func = _.isFunction(this.refreshFunc) ? this.asyncRefresh.bind(this, new Date()) : readImmediate;
+            func = typeof this.refreshFunc === "function" ? this.asyncRefresh.bind(this, new Date()) : readImmediate;
         }
 
         const satisfy_callbacks = (err: Error | null, dataValue?: DataValue) => {
@@ -1059,7 +1087,8 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
 
     public clone(options?: any, optionalFilter?: any, extraInfo?: any): UAVariable {
         options = options || {};
-        options = _.extend(_.clone(options), {
+        options = {
+            ...options,
             // check this eventNotifier: this.eventNotifier,
             // check this symbolicName: this.symbolicName,
 
@@ -1070,13 +1099,13 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
             minimumSamplingInterval: this.minimumSamplingInterval,
             userAccessLevel: this.userAccessLevel,
             valueRank: this.valueRank
-        });
+        };
 
         const newVariable = _clone.call(this, UAVariable, options, optionalFilter, extraInfo) as UAVariable;
 
         newVariable.bindVariable();
 
-        assert(_.isFunction(newVariable._timestamped_set_func));
+        assert(typeof newVariable._timestamped_set_func === "function");
 
         assert(newVariable.dataType === this.dataType);
         newVariable._dataValue = this._dataValue.clone();
@@ -1109,7 +1138,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
         const dataType = addressSpace.findDataType(this.dataType);
         if (!dataType) {
             // may be we are in the process of loading a xml file and the corresponding dataType
-            // has not yet been lodaded !
+            // has not yet been loaded !
             return true;
         }
         try {
@@ -1163,8 +1192,32 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
 
         // -------------------- make sure we do not bind a variable twice ....
         if (this.$extensionObject) {
-            assert(utils.isNullOrUndefined(optionalExtensionObject), "unsupported case");
-            assert(this.checkExtensionObjectIsCorrect(this.$extensionObject!));
+            // istanbul ignore next
+            // if (!force && !utils.isNullOrUndefined(optionalExtensionObject)) {
+            //     throw new Error(
+            //         "bindExtensionObject: unsupported case : $extensionObject already exists on " +
+            //             this.browseName.toString() +
+            //             " " +
+            //             this.nodeId.toString()
+            //     );
+            // }
+            // istanbul ignore next
+            if (!this.checkExtensionObjectIsCorrect(this.$extensionObject!)) {
+                console.log(
+                    "on node : ",
+                    this.browseName.toString(),
+                    this.nodeId.toString(),
+                    "dataType=",
+                    this.dataType.toString({ addressSpace: this.addressSpace })
+                );
+                console.log(this.$extensionObject?.toString());
+                throw new Error(
+                    "bindExtensionObject: $extensionObject is incorrect: we are expecting a " +
+                        this.dataType.toString({ addressSpace: this.addressSpace }) +
+                        " but we got a " +
+                        this.$extensionObject?.constructor.name
+                );
+            }
             return this.$extensionObject;
             // throw new Error("Variable already bound");
         }
@@ -1199,7 +1252,6 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
                 {
                     timestamped_get() {
                         const prop = self.$extensionObject[name];
-                        // xx  console.log("XYXYX timestamped_get ", propertyNode.nodeId.toString(), prop);
 
                         if (prop === undefined) {
                             propertyNode._dataValue.value.dataType = DataType.Null;
@@ -1213,7 +1265,6 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
                         return new DataValue(propertyNode._dataValue);
                     },
                     timestamped_set(dataValue, callback) {
-                        // xx console.log("XYXYX timestamped_set : Not Implemented");
                         callback(null, StatusCodes.BadNotWritable);
                     }
                 },
@@ -1232,7 +1283,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
             console.log("You need to provide a extension object yourself ");
             throw new Error("bindExtensionObject requires a extensionObject as associated dataType is only abstract");
         }
-        if (s.value && s.value.dataType === DataType.Null) {
+        if (s.value && (s.value.dataType === DataType.Null || (s.value.dataType === DataType.ExtensionObject && !s.value.value))) {
             // create a structure and bind it
             extensionObject_ = this.$extensionObject || addressSpace.constructExtensionObject(this.dataType);
             extensionObject_ = new Proxy(extensionObject_, makeHandler(this));
@@ -1248,7 +1299,6 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
             this.bindVariable(
                 {
                     timestamped_get() {
-                        // xx console.log("XYXYXY: reading  Extension Object !!!!", self.browseName.toString());
                         self._dataValue.value.value = self.$extensionObject;
                         const d = new DataValue(self._dataValue);
                         d.value = new Variant(d.value);
@@ -1260,7 +1310,6 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
                             return callback(null, StatusCodes.BadInvalidArgument);
                         }
 
-                        // xx console.log("XYXYXY: writing a new Extension Object !!!!", self.browseName.toString(), dataValue.toString());
                         self.$extensionObject = new Proxy(ext, makeHandler(self));
                         self.touchValue();
                         callback(null, StatusCodes.Good);
@@ -1283,6 +1332,7 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
         // ------------------------------------------------------
         const definition = dt._getDefinition() as StructureDefinition;
 
+        // istanbul ignore next
         if (!definition) {
             console.log("xx definition missing in ", dt.toString());
         }
@@ -1537,6 +1587,12 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
                 throw new Error("Invalid Extension Object");
             }
         }
+        // istanbul ignore next
+        if (this.dataType.namespace === 0) {
+            if (this.dataType.value === DataType.LocalizedText && dataValue.value.dataType !== DataType.LocalizedText) {
+                throw new Error("Invalid dataValue provided (expecting a LocalizedText) but got " + dataValue.toString());
+            }
+        }
 
         const old_dataValue = this._dataValue;
 
@@ -1589,7 +1645,8 @@ export class UAVariable extends BaseNode implements UAVariablePublic {
     }
 
     private _readArrayDimensions(): DataValue {
-        assert(_.isArray(this.arrayDimensions) || this.arrayDimensions === null);
+        assert(Array.isArray(this.arrayDimensions) || this.arrayDimensions === null);
+        assert(!this.arrayDimensions || this.valueRank > 0, "arrayDimension must be null if valueRank <0");
         const options = {
             statusCode: StatusCodes.Good,
             value: { dataType: DataType.UInt32, arrayType: VariantArrayType.Array, value: this.arrayDimensions }
@@ -1660,7 +1717,7 @@ export interface UAVariable {
 }
 
 function check_valid_array(dataType: DataType, array: any): boolean {
-    if (_.isArray(array)) {
+    if (Array.isArray(array)) {
         return true;
     }
     switch (dataType) {
@@ -1780,7 +1837,7 @@ function _Variable_bind_with_async_refresh(this: UAVariable, options: any) {
     /* jshint validthis: true */
     assert(this instanceof UAVariable);
 
-    assert(_.isFunction(options.refreshFunc));
+    assert(typeof options.refreshFunc === "function");
     assert(!options.get, "a getter shall not be specified when refreshFunc is set");
     assert(!options.timestamped_get, "a getter shall not be specified when refreshFunc is set");
 
@@ -1804,7 +1861,7 @@ function _Variable_bind_with_async_refresh(this: UAVariable, options: any) {
 function _Variable_bind_with_timestamped_get(this: UAVariable, options: any) {
     /* jshint validthis: true */
     assert(this instanceof UAVariable);
-    assert(_.isFunction(options.timestamped_get));
+    assert(typeof options.timestamped_get === "function");
     assert(!options.get, "should not specify 'get' when 'timestamped_get' exists ");
     assert(!this._timestamped_get_func);
 
@@ -1836,7 +1893,7 @@ function _Variable_bind_with_timestamped_get(this: UAVariable, options: any) {
 function _Variable_bind_with_simple_get(this: UAVariable, options: any) {
     /* jshint validthis: true */
     assert(this instanceof UAVariable);
-    assert(_.isFunction(options.get), "should specify get function");
+    assert(typeof options.get === "function", "should specify get function");
     assert(options.get.length === 0, "get function should not have arguments");
     assert(!options.timestamped_get, "should not specify a timestamped_get function when get is specified");
     assert(!this._timestamped_get_func);
@@ -1861,7 +1918,7 @@ function _Variable_bind_with_simple_get(this: UAVariable, options: any) {
             if (!this._dataValue || !isGoodish(this._dataValue.statusCode) || !sameVariant(this._dataValue.value, value)) {
                 this.setValueFromSource(value, StatusCodes.Good);
             } else {
-                // XXXY console.log("YYYYYYYYYYYYYYYYYYYYYYYYYY",this.browseName.toString());
+                // XX console.log("YYYYYYYYYYYYYYYYYYYYYYYYYY",this.browseName.toString());
             }
             return this._dataValue;
         }
@@ -1874,7 +1931,7 @@ function _Variable_bind_with_simple_get(this: UAVariable, options: any) {
 
 function _Variable_bind_with_simple_set(this: UAVariable, options: any) {
     assert(this instanceof UAVariable);
-    assert(_.isFunction(options.set), "should specify set function");
+    assert(typeof options.set === "function", "should specify set function");
     assert(!options.timestamped_set, "should not specify a timestamped_set function");
 
     assert(!this._timestamped_set_func);
@@ -1904,7 +1961,7 @@ function _Variable_bind_with_simple_set(this: UAVariable, options: any) {
 
 function _Variable_bind_with_timestamped_set(this: UAVariable, options: any) {
     assert(this instanceof UAVariable);
-    assert(_.isFunction(options.timestamped_set));
+    assert(typeof options.timestamped_set === "function");
     assert(
         options.timestamped_set.length === 2,
         "timestamped_set must have 2 parameters  timestamped_set: function(dataValue,callback){}"
@@ -1926,14 +1983,14 @@ interface SetterOptions {
     timestamped_get?: any;
 }
 function bind_setter(this: UAVariable, options: SetterOptions) {
-    if (_.isFunction(options.set)) {
+    if (typeof options.set === "function") {
         // variation 1
         _Variable_bind_with_simple_set.call(this, options);
-    } else if (_.isFunction(options.timestamped_set)) {
+    } else if (typeof options.timestamped_set === "function") {
         // variation 2
-        assert(_.isFunction(options.timestamped_get), "timestamped_set must be used with timestamped_get ");
+        assert(typeof options.timestamped_get === "function", "timestamped_set must be used with timestamped_get ");
         _Variable_bind_with_timestamped_set.call(this, options);
-    } else if (_.isFunction(options.timestamped_get)) {
+    } else if (typeof options.timestamped_get === "function") {
         // timestamped_get is  specified but timestamped_set is not
         // => Value is read-only
         _Variable_bind_with_timestamped_set.call(this, {
@@ -1954,13 +2011,13 @@ interface GetterOptions {
     value?: any;
 }
 function bind_getter(this: UAVariable, options: GetterOptions) {
-    if (_.isFunction(options.get)) {
+    if (typeof options.get === "function") {
         // variation 1
         _Variable_bind_with_simple_get.call(this, options);
-    } else if (_.isFunction(options.timestamped_get)) {
+    } else if (typeof options.timestamped_get === "function") {
         // variation 2
         _Variable_bind_with_timestamped_get.call(this, options);
-    } else if (_.isFunction(options.refreshFunc)) {
+    } else if (typeof options.refreshFunc === "function") {
         // variation 3
         _Variable_bind_with_async_refresh.call(this, options);
     } else {
@@ -1986,7 +2043,6 @@ function _getter(target: any, key: string /*, receiver*/) {
 }
 
 function _setter(variable: UAVariable, target: any, key: string, value: any /*, receiver*/) {
-    // xx   console.log("xxxxx in _setter with  ", variable.nodeId.toString(), key);
     target[key] = value;
     const child = (variable as any)[key] as UAVariable | null;
     if (child && child.touchValue) {

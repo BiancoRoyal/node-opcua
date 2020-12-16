@@ -1,12 +1,9 @@
 "use strict";
 const should = require("should");
-const ChunkManager = require("..").ChunkManager;
-
-const util = require("util");
 const { assert } = require("node-opcua-assert");
-const _ = require("underscore");
+const { hexDump } = require("node-opcua-debug");
 
-const hexDump = require("node-opcua-debug").hexDump;
+const { ChunkManager } = require("..");
 
 function make_packet(packet_length) {
     const buf = Buffer.allocUnsafe(packet_length);
@@ -56,7 +53,7 @@ function fake_encrypt_buffer(buffer) {
 
     this.encrypt_block = fake_encrypt_block;
 
-    assert(_.isFunction(this.encrypt_block));
+    assert(typeof this.encrypt_block === "function");
 
     const nbBlocks = Math.ceil(buffer.length / (this.plainBlockSize));
 

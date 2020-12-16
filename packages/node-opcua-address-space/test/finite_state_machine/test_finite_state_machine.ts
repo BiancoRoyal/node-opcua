@@ -9,13 +9,13 @@ import {
     AddressSpace,
     ExclusiveLimitStateMachineType,
     FiniteStateMachineType,
-    generateAddressSpace,
     promoteToStateMachine,
     StateMachine,
     StateMachineType,
     UAObject,
     Transition
 } from "../..";
+import { generateAddressSpace } from "../../nodeJS";
 
 const doDebug = false;
 
@@ -35,8 +35,10 @@ describe("Testing Finite State Machine", () => {
         ];
         await generateAddressSpace(addressSpace, xml_files);
     });
-    after(() => {
-        addressSpace.dispose();
+    after(async () => {
+        if (addressSpace) {
+            addressSpace.dispose();
+        }
     });
 
     it("finite state machine should have expected mandatory and optional fields", async () => {

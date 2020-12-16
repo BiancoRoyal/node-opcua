@@ -31,7 +31,7 @@ describe("testing Client - Umbrella ", function() {
         port: port,
         maxConnectionsPerEndpoint: 500,
         silent: true,
-        nodeset_filename: [opcua.nodesets.standard_nodeset_file],
+        nodeset_filename: [opcua.nodesets.standard],
     };
 
     function start_external_server(done) {
@@ -253,6 +253,7 @@ describe("testing Client - Umbrella ", function() {
     require("./u_test_e2e_issue_596")(test);
     require("./u_test_e2e_issue_610_timeoutHint_overflow")(test);
     require("./u_test_e2e_sessionDiagnostics")(test);
+    require("./u_test_e2e_sessionDiagnostics2")(test);
     require("./u_test_e2e_sessionSecurityDiagnostics")(test);
     require("./u_test_e2e_issue_activate_an_expired_session")(test);
     require("./u_test_e2e_server_behavior_on_wrong_channel_id")(test);
@@ -261,7 +262,10 @@ describe("testing Client - Umbrella ", function() {
     require("./alarms_and_conditions/u_test_e2e_alarm_client_side")(test);
 
     require("./u_test_e2e_monitoredItem_client_terminated_event")(test);
-
+    require("./u_test_e2e_endpoint_should_be_case_insensitive")(test);
+    require("./u_test_e2e_keepAlive")(test);
+    require("./u_test_e2e_createsSession_endpoints")(test);
+    
     // typescripts tests starts here...
     require("./u_test_e2e_deadband_filter").t(test);
 });

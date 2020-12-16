@@ -1,8 +1,6 @@
 /**
  * @module node-opcua-address-space
  */
-import _ = require("underscore");
-
 import { assert } from "node-opcua-assert";
 import { ExtraDataTypeManager, resolveDynamicExtensionObject } from "node-opcua-client-dynamic-extension-object";
 import { NodeClass } from "node-opcua-data-model";
@@ -77,8 +75,11 @@ export function callMethodHelper(
 
     let l_extraDataTypeManager: ExtraDataTypeManager;
 
-    ensureDatatypeExtractedWithCallback(addressSpace, (err2: Error | null, extraDataTypeManager: ExtraDataTypeManager) => {
-        l_extraDataTypeManager = extraDataTypeManager;
+    ensureDatatypeExtractedWithCallback(addressSpace, (err2: Error | null, extraDataTypeManager?: ExtraDataTypeManager) => {
+        if (err2) {
+            return callback(err2);
+        }
+        l_extraDataTypeManager = extraDataTypeManager!;
 
         // resolve opaque data structure from inputArguments
         for (const variant of inputArguments) {
@@ -98,10 +99,10 @@ export function callMethodHelper(
             assert(callMethodResponse.statusCode);
 
             if (callMethodResponse.statusCode === StatusCodes.Good) {
-                assert(_.isArray(callMethodResponse.outputArguments));
+                assert(Array.isArray(callMethodResponse.outputArguments));
             }
 
-            assert(_.isArray(callMethodResponse.inputArgumentResults));
+            assert(Array.isArray(callMethodResponse.inputArgumentResults));
             assert(callMethodResponse.inputArgumentResults!.length === methodInputArguments.length);
 
             if (callMethodResponse.outputArguments) {

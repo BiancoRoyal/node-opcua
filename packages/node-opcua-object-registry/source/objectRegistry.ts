@@ -2,14 +2,12 @@
  * @module node-opcua-object-registry
  */
 import { assert } from "node-opcua-assert";
-import { trace_from_this_projet_only } from "node-opcua-debug";
-import * as _ from "underscore";
+import { traceFromThisProjectOnly } from "node-opcua-debug";
 
 const gRegistries: ObjectRegistry[] = [];
 let hashCounter = 1;
 
 export class ObjectRegistry {
-
     public static doDebug = false;
     public static registries: any = gRegistries;
 
@@ -17,7 +15,6 @@ export class ObjectRegistry {
     private readonly _cache: any;
 
     constructor(objectType?: any) {
-
         this._objectType = objectType;
         this._cache = {};
         gRegistries.push(this);
@@ -28,7 +25,6 @@ export class ObjectRegistry {
     }
 
     public register(obj: any): void {
-
         if (!this._objectType) {
             this._objectType = obj.constructor;
         }
@@ -41,7 +37,7 @@ export class ObjectRegistry {
 
         // istanbul ignore next
         if (ObjectRegistry.doDebug) {
-            obj._____trace = trace_from_this_projet_only();
+            obj._____trace = traceFromThisProjectOnly();
         }
     }
 
@@ -56,21 +52,24 @@ export class ObjectRegistry {
     }
 
     public toString(): string {
-
         const className = this.getClassName();
         let str = " className :" + className + " found => " + this.count() + " object leaking\n";
 
-        _.forEach(this._cache, (obj: any/*,key*/) => {
+        for (const obj of Object.values(this._cache) as any[]) {
             str += obj.constructor.name + " " + obj.toString() + "\n";
-        });
+        }
 
         if (ObjectRegistry.doDebug) {
-            _.forEach(this._cache, (obj: any, key) => {
-                const cachedObject = this._cache[key];
+            for (const [key, cachedObject] of Object.entries(this._cache) as any[]) {
                 assert(cachedObject.hasOwnProperty("_____trace"));
                 str += "   " + key + cachedObject._____trace + "\n";
-            });
+            }
         }
         return str;
     }
+}
+
+ObjectRegistry.doDebug = process?.env?.NODEOPCUA_REGISTRY?.match(/DEBUG/) ? true : false;
+if (ObjectRegistry.doDebug) {
+    console.log("ObjectRegistry.doDebug = ", ObjectRegistry.doDebug);
 }

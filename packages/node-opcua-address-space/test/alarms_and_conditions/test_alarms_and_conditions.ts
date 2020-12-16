@@ -1,7 +1,9 @@
 import * as fs from "fs";
-import * as nodesets from "node-opcua-nodesets";
+import { nodesets } from "node-opcua-nodesets";
 import * as should from "should";
-import { AddressSpace, generateAddressSpace } from "../../source";
+
+import { AddressSpace } from "../..";
+import { generateAddressSpace } from "../../nodeJS";
 
 import { utest_acknowledgeable_condition } from "./utest_acknowledgeable_condition";
 import { utest_alarm_condition } from "./utest_alarm_condition";
@@ -26,7 +28,7 @@ describe("AddressSpace : Conditions 1", function (this: any) {
         addressSpace = AddressSpace.create();
         addressSpace.registerNamespace("PRIVATE_NAMESPACE");
 
-        const xml_file = nodesets.standard_nodeset_file;
+        const xml_file = nodesets.standard;
 
         fs.existsSync(xml_file).should.be.eql(true);
 
@@ -40,25 +42,25 @@ describe("AddressSpace : Conditions 1", function (this: any) {
             browseName: "Green",
             eventNotifier: 0x1,
             notifierOf: addressSpace.rootFolder.objects.server,
-            organizedBy: addressSpace.rootFolder.objects,
+            organizedBy: addressSpace.rootFolder.objects
         });
 
         source = namespace.addObject({
             browseName: "Motor.RPM",
             componentOf: green,
-            eventSourceOf: green,
+            eventSourceOf: green
         });
 
         test.variableWithAlarm = namespace.addVariable({
             browseName: "VariableWithLimit",
             dataType: "Double",
-            propertyOf: source,
+            propertyOf: source
         });
 
         test.setpointNodeNode = namespace.addVariable({
             browseName: "SetPointValue",
             dataType: "Double",
-            propertyOf: source,
+            propertyOf: source
         });
 
         test.addressSpace = addressSpace;

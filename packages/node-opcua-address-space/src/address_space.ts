@@ -3,7 +3,6 @@
  */
 
 import * as chalk from "chalk";
-import * as _ from "underscore";
 
 import { assert } from "node-opcua-assert";
 import { ExtraDataTypeManager } from "node-opcua-client-dynamic-extension-object";
@@ -20,13 +19,11 @@ import {
     BrowsePathResult,
     BrowsePathTargetOptions,
     BrowseResultOptions,
-    RelativePathElement,
+    RelativePathElement
 } from "node-opcua-types";
 import * as utils from "node-opcua-utils";
 import { lowerFirstLetter } from "node-opcua-utils";
 import { DataType, Variant, VariantT } from "node-opcua-variant";
-import { AnyConstructorFunc } from "node-opcua-schemas";
-import { ConstructorFuncWithSchema } from "node-opcua-factory";
 import {
     AddReferenceOpts,
     AddressSpace as AddressSpacePublic,
@@ -40,7 +37,7 @@ import {
     UAObjectType as UAObjectTypePublic,
     UAReference,
     UAReferenceType as UAReferenceTypePublic,
-    UAVariableType as UAVariableTypePublic,
+    UAVariableType as UAVariableTypePublic
 } from "../source";
 import { AddressSpacePrivate } from "./address_space_private";
 import { UAAcknowledgeableConditionBase } from "./alarms_and_conditions";
@@ -141,7 +138,7 @@ export class AddressSpace implements AddressSpacePrivate {
      */
     public suspendBackReference: boolean = false;
     public isFrugal: boolean = false;
-    public historizingNodes?: any = {};
+    public historizingNodes?: { [key: string]: UAVariable } = {};
     public _condition_refresh_in_progress: boolean = false;
 
     public readonly isNodeIdString = isNodeIdString;
@@ -247,7 +244,7 @@ export class AddressSpace implements AddressSpacePrivate {
                 index,
                 namespaceUri,
                 publicationDate: new Date(),
-                version: "undefined",
+                version: "undefined"
             })
         );
         return this._namespaceArray[index];
@@ -281,14 +278,15 @@ export class AddressSpace implements AddressSpacePrivate {
      * @return {BaseNode|null}
      */
     public findNode(nodeId: NodeIdLike): BaseNode | null {
-        nodeId = this.resolveNodeId(nodeId);
-        assert(nodeId instanceof NodeId);
+        if (!(nodeId instanceof NodeId)) {
+            nodeId = this.resolveNodeId(nodeId);
+        }
         if (nodeId.namespace < 0 || nodeId.namespace >= this._namespaceArray.length) {
             // namespace index is out of bound
             return null;
         }
-        const namespace = this.getNamespace(nodeId.namespace);
-        return namespace.findNode(nodeId) as BaseNode;
+        const namespace = this._namespaceArray[nodeId.namespace];
+        return namespace.findNode2(nodeId) as BaseNode;
     }
 
     public findMethod(nodeId: NodeId | string): UAMethod | null {
@@ -449,13 +447,23 @@ export class AddressSpace implements AddressSpacePrivate {
         }
         /* istanbul ignore next */
         if (!(dataTypeNode instanceof UADataType)) {
-            throw new Error("Expecting a UADataType" + _orig_dataTypeNode.toString());
+            throw new Error(
+                "we are expecting an UADataType here :  " +
+                    _orig_dataTypeNode.toString() +
+                    " should not refer to a  " +
+                    dataTypeNode.constructor.name
+            );
         }
         dataTypeNode = dataTypeNode as UADataType;
 
         const enumerationType = this.findDataType("Enumeration")!;
         if (sameNodeId(enumerationType.nodeId, dataTypeNode!.nodeId)) {
             return DataType.Int32;
+        }
+
+        if (dataTypeNode.nodeId.namespace === 0 && dataTypeNode.nodeId.value === 29) {
+            // Number
+            return DataType.Null; //which one ?
         }
 
         if (dataTypeNode.nodeId.namespace === 0 && DataType[dataTypeNode.nodeId.value as number]) {
@@ -513,7 +521,7 @@ export class AddressSpace implements AddressSpacePrivate {
                 return null;
             }
         } else {
-            assert(_.isString(refType));
+            assert(typeof refType === "string");
             node = this._findReferenceType(refType, namespaceIndex) as UAReferenceType;
         }
         return node;
@@ -618,7 +626,7 @@ export class AddressSpace implements AddressSpacePrivate {
 
         return new Variant({
             dataType: DataType.ByteString,
-            value: Buffer.from(self._eventIdCounter),
+            value: Buffer.from(self._eventIdCounter)
         }) as VariantT<Buffer, DataType.ByteString>;
     }
 
@@ -671,7 +679,7 @@ export class AddressSpace implements AddressSpacePrivate {
 
         data.sourceName = data.sourceName || {
             dataType: DataType.String,
-            value: sourceNode.getDisplayName("en"),
+            value: sourceNode.getDisplayName("en")
         };
 
         const nowUTC = new Date();
@@ -868,7 +876,7 @@ export class AddressSpace implements AddressSpacePrivate {
         if (!browsePath.relativePath.elements || browsePath.relativePath.elements.length === 0) {
             return new BrowsePathResult({
                 statusCode: StatusCodes.BadNothingToDo,
-                targets: [],
+                targets: []
             });
         }
 
@@ -914,7 +922,7 @@ export class AddressSpace implements AddressSpacePrivate {
             const targets = nodeIds.map((nodeId: NodeId) => {
                 return {
                     remainingPathIndex: elements.length - index,
-                    targetId: nodeId,
+                    targetId: nodeId
                 };
             });
 
@@ -931,7 +939,7 @@ export class AddressSpace implements AddressSpacePrivate {
                 for (const target of targets) {
                     res.push({
                         remainingPathIndex: 0xffffffff,
-                        targetId: coerceExpandedNodeId(target.targetId),
+                        targetId: coerceExpandedNodeId(target.targetId)
                     });
                 }
             }
@@ -945,7 +953,7 @@ export class AddressSpace implements AddressSpacePrivate {
 
         return new BrowsePathResult({
             statusCode: StatusCodes.Good,
-            targets: res,
+            targets: res
         });
     }
 
@@ -967,7 +975,7 @@ export class AddressSpace implements AddressSpacePrivate {
             throw new Error("getExtensionObjectConstructor: dataType has unexpected type" + dataType);
         }
         const _dataType = dataType as UADataType;
-        // to do verify that dataType is of type "Strucuture"
+        // to do verify that dataType is of type "Structure"
         if (!_dataType.isSupertypeOf(this.findDataType("Structure")!)) {
             console.log(_dataType.toString());
         }
@@ -1024,7 +1032,7 @@ export class AddressSpace implements AddressSpacePrivate {
      */
     public registerShutdownTask(task: (this: AddressSpace) => void): void {
         this._shutdownTask = this._shutdownTask || [];
-        assert(_.isFunction(task));
+        assert(typeof task === "function");
         this._shutdownTask.push(task);
     }
 
@@ -1053,7 +1061,7 @@ export class AddressSpace implements AddressSpacePrivate {
         const browseResult: BrowseResultOptions = {
             continuationPoint: undefined,
             references: null,
-            statusCode: StatusCodes.Good,
+            statusCode: StatusCodes.Good
         };
 
         if (!browseDescription || browseDescription.browseDirection === BrowseDirection.Invalid) {
@@ -1207,7 +1215,9 @@ export class AddressSpace implements AddressSpacePrivate {
                 // xx console.log( "xx dealing with ",this._modelChanges.length);
                 // increase version number of participating nodes
 
-                const nodeIds = _.uniq(this._modelChanges.map((c: any) => c.affected));
+                // https://github.com/you-dont-need/You-Dont-Need-Lodash-Underscore
+                // const nodeIds = _.uniq(this._modelChanges.map((c: any) => c.affected));
+                const nodeIds = [...new Set(this._modelChanges.map((c: any) => c.affected))];
 
                 const nodes = nodeIds.map((nodeId: NodeId) => addressSpace.findNode(nodeId)!);
 
@@ -1221,7 +1231,7 @@ export class AddressSpace implements AddressSpacePrivate {
                         // xx console.log("xx raising event on server object");
                         addressSpace.rootFolder.objects.server.raiseEvent(eventTypeNode, {
                             // Part 5 - 6.4.32 GeneralModelChangeEventType
-                            changes: { dataType: "ExtensionObject", value: this._modelChanges },
+                            changes: { dataType: "ExtensionObject", value: this._modelChanges }
                         });
                     }
                 }
@@ -1312,12 +1322,12 @@ export class AddressSpace implements AddressSpacePrivate {
             return [];
         }
         references = references as Reference[] | AddReferenceOpts[];
-        assert(_.isArray(references));
+        assert(Array.isArray(references));
 
         return (references as any).map((el: Reference | AddReferenceOpts) => this.normalizeReferenceType(el));
     }
 
-    // -- Historycall Node  -----------------------------------------------------------------------------------------
+    // -- Historical Node  -----------------------------------------------------------------------------------------
     /**
      *
      * @param node
@@ -1449,11 +1459,11 @@ export class AddressSpace implements AddressSpacePrivate {
         return dataTypeNode.isSupertypeOf(enumerationNode);
     }
 
-    private _coerce_Type(dataType: BaseNode | string | NodeId, typeMap: any, typeMapName: any, finderMethod: any): NodeId {
+    private _coerce_Type(dataType: BaseNode | string | NodeId, typeMap: any, typeMapName: string, finderMethod: any): NodeId {
         if (dataType instanceof BaseNode) {
             dataType = dataType.nodeId;
         }
-        assert(_.isObject(typeMap));
+        assert(typeMap !== null && typeof typeMap === "object");
         let nodeId: NodeId | null;
         if (typeof dataType === "string") {
             const namespace0 = this.getDefaultNamespace();
@@ -1481,7 +1491,7 @@ export class AddressSpace implements AddressSpacePrivate {
 
         if (!el) {
             // verify that node Id exists in standard type map typeMap
-            const find = _.filter(typeMap, (a) => a === nodeId!.value);
+            const find = Object.values(typeMap).filter((a) => a === nodeId!.value);
             /* istanbul ignore next */
             if (find.length !== 1) {
                 throw new Error(" cannot find " + dataType.toString() + " in typeMap " + typeMapName + " L = " + find.length);
@@ -1510,8 +1520,7 @@ function _getNamespace(addressSpace: AddressSpace, nodeOrNodId: BaseNode | NodeI
     return addressSpace.getNamespace(nodeId.namespace);
 }
 
-function _find_by_node_id<T extends BaseNode>(addressSpace: AddressSpace, nodeId: NodeIdLike, namespaceIndex?: number): T {
-    assert(nodeId instanceof NodeId);
+function _find_by_node_id<T extends BaseNode>(addressSpace: AddressSpace, nodeId: NodeId, namespaceIndex?: number): T {
     const obj = addressSpace.findNode(nodeId);
     return obj as T;
 }
@@ -1536,7 +1545,7 @@ function _increase_version_number(node: BaseNode | null) {
         const previousValue = parseInt(node.nodeVersion.readValue().value.value, 10);
         node.nodeVersion.setValueFromSource({
             dataType: DataType.String,
-            value: (previousValue + 1).toString(),
+            value: (previousValue + 1).toString()
         });
         // xx console.log("xxx increasing version number of node ", node.browseName.toString(),previousValue);
     }

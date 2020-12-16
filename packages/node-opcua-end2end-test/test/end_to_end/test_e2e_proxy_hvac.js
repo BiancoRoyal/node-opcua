@@ -4,7 +4,6 @@ const createHVACSystem = require("../../test_helpers/hvac_system").createHVACSys
 
 const should = require("should");
 const async = require("async");
-const _ = require("underscore");
 
 
 const opcua = require("node-opcua");
@@ -146,7 +145,7 @@ describe("testing client Proxy", function() {
                     proxyManager.getObject(serverNodeId, function(err, object) {
                         //xx console.log(object);
                         serverObject = object;
-                        _.isFunction(serverObject.getMonitoredItems).should.eql(true);
+                        (typeof serverObject.getMonitoredItems === "function").should.eql(true);
                         callback(err);
                     });
                 },

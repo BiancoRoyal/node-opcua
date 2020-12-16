@@ -6,7 +6,6 @@
 import * as chalk from "chalk";
 import { Socket } from "net";
 import { assert } from "node-opcua-assert";
-import * as _ from "underscore";
 
 // opcua requires
 import { BinaryStream } from "node-opcua-binary-stream";
@@ -79,7 +78,7 @@ export class ServerTCP_transport extends TCP_transport {
      * Initialize the server transport.
      *
      *
-     *  The ServerTCP_transport initialisation process starts by waiting for the client to send a "HEL" message.
+     *  The ServerTCP_transport initialization process starts by waiting for the client to send a "HEL" message.
      *
      *  The  ServerTCP_transport replies with a "ACK" message and then start waiting for further messages of any size.
      *
@@ -96,7 +95,7 @@ export class ServerTCP_transport extends TCP_transport {
             debugLog(chalk.cyan("init socket"));
         }
         assert(!this._socket, "init already called!");
-        assert(_.isFunction(callback), "expecting a valid callback ");
+        assert(typeof callback === "function", "expecting a valid callback ");
         this._install_socket(socket);
         this._install_HEL_message_receiver(callback);
     }
@@ -109,12 +108,12 @@ export class ServerTCP_transport extends TCP_transport {
             debugLog(chalk.cyan("_abortWithError"));
         }
 
-        assert(_.isFunction(callback), "expecting a callback");
+        assert(typeof callback === "function", "expecting a callback");
 
         /* istanbul ignore else */
         if (!this._aborted) {
+            this._aborted = 1;
             setTimeout(() => {
-                this._aborted = 1;
                 // send the error message and close the connection
                 assert(StatusCodes.hasOwnProperty(statusCode.name));
 
@@ -126,7 +125,7 @@ export class ServerTCP_transport extends TCP_transport {
 
                 const errorResponse = new TCPErrorMessage({
                     reason: statusCode.description,
-                    statusCode,
+                    statusCode
                 });
 
                 const messageChunk = packTcpMessage("ERR", errorResponse);
@@ -157,7 +156,7 @@ export class ServerTCP_transport extends TCP_transport {
             maxMessageSize: this.maxMessageSize,
             protocolVersion: this.protocolVersion,
             receiveBufferSize: this.receiveBufferSize,
-            sendBufferSize: this.sendBufferSize,
+            sendBufferSize: this.sendBufferSize
         });
         const messageChunk = packTcpMessage("ACK", acknowledgeMessage);
 
@@ -210,7 +209,7 @@ export class ServerTCP_transport extends TCP_transport {
             assert(data.length >= 24);
 
             const helloMessage = decodeMessage(stream, HelloMessage) as HelloMessage;
-            assert(_.isFinite(this.protocolVersion));
+            assert(isFinite(this.protocolVersion));
 
             // OPCUA Spec 1.03 part 6 - page 41
             // The Server shall always accept versions greater than what it supports.
@@ -254,11 +253,7 @@ export class ServerTCP_transport extends TCP_transport {
             if (doDebug) {
                 debugLog(chalk.red("BadCommunicationError ") + "Expecting 'HEL' message to initiate communication");
             }
-            this._abortWithError(
-                StatusCodes.BadCommunicationError,
-                "Expecting 'HEL' message to initiate communication",
-                callback
-            );
+            this._abortWithError(StatusCodes.BadCommunicationError, "Expecting 'HEL' message to initiate communication", callback);
         }
     }
 }

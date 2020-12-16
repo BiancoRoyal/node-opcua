@@ -1,7 +1,6 @@
 "use strict";
 
 const sinon = require("sinon");
-const _ = require("underscore");
 const EventEmitter = require("events").EventEmitter;
 const util = require("util");
 const should = require("should");
@@ -91,13 +90,13 @@ describe("watch dog", function() {
 
     it("should install a 'keepAlive' method on  the subscribing object during addSubscriber and remove it during removeSubscriber", (done) => {
         const obj = new MyObject();
-        should(_.isFunction(obj.keepAlive)).eql(false);
+        should(typeof obj.keepAlive === "function").eql(false);
 
         watchDog.addSubscriber(obj, 100);
-        should(_.isFunction(obj.keepAlive)).eql(true);
+        should(typeof obj.keepAlive === "function").eql(true);
 
         watchDog.removeSubscriber(obj);
-        //xx should(_.isFunction(obj.keepAlive)).eql(false);
+        //xx should(typeof obj.keepAlive === "function").eql(false);
 
         done();
     });
