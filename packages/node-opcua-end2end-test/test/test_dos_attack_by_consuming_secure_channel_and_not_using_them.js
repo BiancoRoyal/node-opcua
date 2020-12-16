@@ -10,7 +10,6 @@ const sinon = require("sinon");
 const should = require("should");
 const async = require("async");
 const path = require("path");
-const _ = require("underscore");
 const defer = require("delayed");
 const chalk = require("chalk");
 
@@ -145,7 +144,7 @@ describe("testing Server resilience to DDOS attacks", function() {
             function createChannel(data, _inner_callback) {
 
 
-                _.isFunction(_inner_callback).should.eql(true);
+                (typeof _inner_callback === "function").should.eql(true);
                 const secureChannel = new ClientSecureChannelLayer({
                     defaultSecureTokenLifetime: 5000000,
                     securityMode: MessageSecurityMode.None,

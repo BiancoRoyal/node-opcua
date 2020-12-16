@@ -2,9 +2,8 @@
  * @module node-opcua-address-space
  */
 import * as chalk from "chalk";
-import * as _ from "underscore";
-
 import { assert } from "node-opcua-assert";
+import { ObjectTypeIds } from "node-opcua-constants";
 import { coerceLocalizedText, NodeClass } from "node-opcua-data-model";
 import { AttributeIds } from "node-opcua-data-model";
 import { NodeId } from "node-opcua-nodeid";
@@ -12,6 +11,7 @@ import { StatusCodes } from "node-opcua-status-code";
 import { DataType } from "node-opcua-variant";
 
 import { State, Transition, UAObject as UAObjectPublic, UAVariable as UAVariablePublic, TransitionSelector } from "../../source";
+import { registerNodePromoter } from "../../source/loader/register_node_promoter";
 
 import { BaseNode } from "../base_node";
 import { UAObject } from "../ua_object";
@@ -38,7 +38,6 @@ export interface StateMachine {
 }
 
 const defaultPredicate = (transitions: Transition[], fromState: State, toState: State) => {
-
     if (transitions.length === 0) {
         return null;
     }
@@ -175,7 +174,7 @@ export class StateMachine extends UAObject implements StateMachine {
             return node;
         } else if (node instanceof NodeId) {
             return addressSpace.findNode(node) as BaseNode;
-        } else if (_.isString(node)) {
+        } else if (typeof node === "string") {
             return (this.getStateByName(node) as any) as BaseNode;
         }
         return null;
@@ -199,12 +198,7 @@ export class StateMachine extends UAObject implements StateMachine {
             // istanbul ignore next
             if (doDebug) {
                 // tslint:disable-next-line: no-console
-                console.log(
-                    " No transition from ",
-                    this.currentStateNode.browseName.toString(),
-                    " to ",
-                    toStateNode.toString()
-                );
+                console.log(" No transition from ", this.currentStateNode.browseName.toString(), " to ", toStateNode.toString());
             }
             return false;
         }
@@ -220,12 +214,12 @@ export class StateMachine extends UAObject implements StateMachine {
     ): Transition | null {
         const addressSpace = this.addressSpace;
 
-        const _fromStateNode = this._coerceNode(fromStateNode) as State| null;
+        const _fromStateNode = this._coerceNode(fromStateNode);
         if (!_fromStateNode) {
             return null;
         }
 
-        const _toStateNode = this._coerceNode(toStateNode) as State | null;
+        const _toStateNode = this._coerceNode(toStateNode);
         if (!_toStateNode) {
             return null;
         }
@@ -252,7 +246,11 @@ export class StateMachine extends UAObject implements StateMachine {
         }
         // istanbul ignore next
         if (transitions.length > 1) {
-            const selectedTransition  = (predicate || defaultPredicate)(transitions as Transition[], _fromStateNode, _toStateNode);
+            const selectedTransition = (predicate || defaultPredicate)(
+                (transitions as unknown) as Transition[],
+                (_fromStateNode as unknown) as State,
+                (_toStateNode as unknown) as State
+            );
             return selectedTransition;
         }
         return (transitions[0] as any) as Transition;
@@ -287,11 +285,11 @@ export class StateMachine extends UAObject implements StateMachine {
     public setState(toStateNode: string | State | null, predicate?: TransitionSelector): void {
         if (!toStateNode) {
             this.currentStateNode = null;
-            this.currentState.setValueFromSource({ dataType: DataType.Null }, StatusCodes.BadStateNotActive);
+            this.currentState.setValueFromSource({ dataType: DataType.LocalizedText, value: null }, StatusCodes.BadStateNotActive);
             return;
         }
 
-        if (_.isString(toStateNode)) {
+        if (typeof toStateNode === "string") {
             const state = this.getStateByName(toStateNode);
             // istanbul ignore next
             if (!state) {
@@ -308,7 +306,7 @@ export class StateMachine extends UAObject implements StateMachine {
         this.currentState.setValueFromSource(
             {
                 dataType: DataType.LocalizedText,
-                value: coerceLocalizedText(toStateNode.browseName.toString()),
+                value: coerceLocalizedText(toStateNode.browseName.toString())
             },
             StatusCodes.Good
         );
@@ -333,40 +331,37 @@ export class StateMachine extends UAObject implements StateMachine {
                 // TransitionVariableType
                 transition: {
                     dataType: "LocalizedText",
-                    value: transitionNode.displayName[0],
+                    value: transitionNode.displayName[0]
                 },
 
                 "transition.id": transitionNode.transitionNumber.readValue().value,
 
                 fromState: {
                     dataType: "LocalizedText",
-                    value: fromStateNode ? fromStateNode.displayName[0] : "",
+                    value: fromStateNode ? fromStateNode.displayName[0] : ""
                 }, // StateVariableType
 
                 "fromState.id": fromStateNode
                     ? fromStateNode.stateNumber.readValue().value
                     : {
-                          dataType: "Null",
+                          dataType: "Null"
                       },
 
                 toState: {
                     dataType: "LocalizedText",
-                    value: toStateNode.displayName[0],
+                    value: toStateNode.displayName[0]
                 }, // StateVariableType
 
-                "toState.id": toStateNode.stateNumber.readValue().value,
+                "toState.id": toStateNode.stateNumber.readValue().value
             });
         } else {
             if (fromStateNode && fromStateNode !== toStateNode) {
+                // istanbul ignore next
                 if (doDebug) {
                     const f = fromStateNode.browseName.toString();
                     const t = toStateNode.browseName.toString();
-
                     // tslint:disable-next-line:no-console
-                    console.log(
-                        chalk.red("Warning"),
-                        " cannot raise event :  transition " + f + " to " + t + " is missing"
-                    );
+                    console.log(chalk.red("Warning"), " cannot raise event :  transition " + f + " to " + t + " is missing");
                 }
             }
         }
@@ -398,11 +393,7 @@ export class StateMachine extends UAObject implements StateMachine {
             this.setState(null);
         } else {
             const txt =
-                d.value && d.value.value
-                    ? d.value.value.text
-                        ? d.value.value.text.toString()
-                        : d.value.value.toString()
-                    : "";
+                d.value && d.value.value ? (d.value.value.text ? d.value.value.text.toString() : d.value.value.toString()) : "";
             this.currentStateNode = this.getStateByName(txt);
         }
     }
@@ -414,6 +405,8 @@ export function promoteToStateMachine(node: UAObjectPublic): StateMachine {
     }
     Object.setPrototypeOf(node, StateMachine.prototype);
     assert(node instanceof StateMachine, "should now  be a State Machine");
-    (node as StateMachine)._post_initialize();
-    return node as StateMachine;
+    const _node = node as StateMachine;
+    _node._post_initialize();
+    return _node;
 }
+registerNodePromoter(ObjectTypeIds.FiniteStateMachineType, promoteToStateMachine);

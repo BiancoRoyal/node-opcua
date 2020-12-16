@@ -1,6 +1,5 @@
 const should = require("should");
 const { assert } = require("node-opcua-assert");
-const _ = require("underscore");
 
 const opcua = require("node-opcua");
 
@@ -37,7 +36,7 @@ function build_client_server_session(options, done) {
     let server, client;
     let endpointUrl;
 
-    if (_.isFunction(options)) {
+    if (typeof options === "function") {
         done = options;
         options = {
             port: 2001,

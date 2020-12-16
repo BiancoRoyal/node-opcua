@@ -2,7 +2,6 @@
  * @module node-opcua-address-space
  */
 import * as chalk from "chalk";
-import * as _ from "underscore";
 
 import { assert } from "node-opcua-assert";
 import * as ec from "node-opcua-basic-types";
@@ -30,8 +29,8 @@ function myfindBuiltInType(dataType: DataType): any {
 export function encode_ArgumentList(definition: any[], args: any, stream: OutputBinaryStream) {
     assert(definition.length === args.length);
 
-    assert(_.isArray(definition));
-    assert(_.isArray(args));
+    assert(Array.isArray(definition));
+    assert(Array.isArray(args));
     assert(definition.length === args.length);
     assert(definition.length >= 0);
 
@@ -56,7 +55,7 @@ export function encode_ArgumentList(definition: any[], args: any, stream: Output
 }
 
 export function decode_ArgumentList(definition: any[], stream: BinaryStream): any[] {
-    if (!_.isArray(definition)) {
+    if (!Array.isArray(definition)) {
         throw new Error(
             "This BaseDataType cannot be decoded because it has no definition.\n" +
                 "Please construct a BaseDataType({definition : [{dataType: DataType.UInt32 }]});"
@@ -83,8 +82,8 @@ export function decode_ArgumentList(definition: any[], stream: BinaryStream): an
 }
 
 export function binaryStoreSize_ArgumentList(description: any, args: any) {
-    assert(_.isArray(description));
-    assert(_.isArray(args));
+    assert(Array.isArray(description));
+    assert(Array.isArray(args));
     assert(args.length === description.length);
 
     const stream = new BinaryStreamSizeCalculator();
@@ -309,22 +308,7 @@ export function build_retrieveInputArgumentsDefinition(addressSpace: AddressSpac
         const methodDeclaration = response.methodDeclaration!;
         // verify input Parameters
         const methodInputArguments = methodDeclaration.getInputArguments();
-        assert(_.isArray(methodInputArguments));
+        assert(Array.isArray(methodInputArguments));
         return methodInputArguments;
     };
-}
-
-export function convertJavaScriptToVariant(argumentDefinition: ArgumentOptions[], values: any[]): Variant[] {
-    assert(argumentDefinition.length === values.length);
-    assert(_.isArray(argumentDefinition));
-    assert(_.isArray(values));
-
-    return _.zip(values, argumentDefinition).map((pair: any) => {
-        pair = pair as [VariantLike, Argument];
-        const value = pair[0];
-        const arg = pair[1];
-        const variant = _.extend({}, arg);
-        variant.value = value;
-        return new Variant(variant);
-    });
 }

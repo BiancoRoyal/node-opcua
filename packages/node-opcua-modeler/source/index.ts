@@ -2,9 +2,11 @@ export * from "./types";
 export * from "./displayNodeElement";
 export * from "./promoteToMandatory";
 export * from "./setNamespaceMetaData";
-export * from "./buildModel";
+export * from "./build_model_inner";
 export * from "./addExtensionObjectDataType";
-
+export * from "./symbol";
+export * from "./to_cvs";
+export * from "./generate_markdown_doc";
 //
 export * from "node-opcua-address-space";
 export * from "node-opcua-nodesets";
@@ -21,7 +23,5 @@ export {
     EnumDefinition,
     EnumDefinitionOptions,
     StructureDefinition,
-    StructureDefinitionOptions,
+    StructureDefinitionOptions
 } from "node-opcua-types";
-
-

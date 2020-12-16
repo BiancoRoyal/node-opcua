@@ -17,7 +17,7 @@ import {
     makeSHA1Thumbprint,
     PrivateKeyPEM,
     PublicKeyPEM,
-    rsa_length,
+    rsa_length
 } from "node-opcua-crypto";
 
 import { assert } from "node-opcua-assert";
@@ -43,7 +43,7 @@ import {
     getCryptoFactory,
     getOptionsForSymmetricSignAndEncrypt,
     SecurityPolicy,
-    toURI,
+    toURI
 } from "../security_policy";
 import {
     AsymmetricAlgorithmSecurityHeader,
@@ -51,7 +51,7 @@ import {
     OpenSecureChannelRequest,
     OpenSecureChannelResponse,
     SecurityTokenRequestType,
-    ServiceFault,
+    ServiceFault
 } from "../services";
 
 // import * as backoff from "backoff";
@@ -71,7 +71,7 @@ const doPerfMonitoring = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBU
 const dumpSecurityHeader = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("SECURITY") >= 0;
 
 import { ICertificateKeyPairProvider, Request, Response } from "../common";
-import async = require("async");
+import * as async from "async";
 
 export const requestHandleNotSetValue = 0xdeadbeef;
 
@@ -103,7 +103,7 @@ interface RequestData {
 }
 
 function process_request_callback(requestData: RequestData, err?: Error | null, response?: Response) {
-    assert(_.isFunction(requestData.callback));
+    assert(typeof requestData.callback === "function");
 
     const request = requestData.request;
 
@@ -203,7 +203,7 @@ export function coerceConnectionStrategy(options: ConnectionStrategyOptions | nu
         initialDelay,
         maxDelay,
         maxRetry,
-        randomisationFactor,
+        randomisationFactor
     };
 }
 
@@ -250,7 +250,7 @@ export interface ClientSecureChannelLayerOptions {
 
     parent: ClientSecureChannelParent;
 
-    /* OPCUClientBase */
+    /* OPCUAClientBase */
     /**
      *   the transport timeout interval in ms ( default = 10 seconds)
      */
@@ -273,7 +273,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
     /**
      * true if the secure channel is trying to establish the connection with the server. In this case, the client
-     * may be in the middle of the b ackoff connection process.
+     * may be in the middle of the backoff connection process.
      *
      */
     public get isConnecting(): boolean {
@@ -293,7 +293,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
     }
 
     get timedOutRequestCount(): number {
-        return this._timedout_request_count;
+        return this._timeout_request_count;
     }
 
     public static defaultTransportTimeout = 60 * 1000; // 1 minute
@@ -319,7 +319,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
     private _requests: { [key: string]: RequestData };
 
     private __in_normal_close_operation: boolean;
-    private _timedout_request_count: number;
+    private _timeout_request_count: number;
     private _securityTokenTimeoutId: NodeJS.Timer | null;
     private readonly transportTimeout: number;
     private readonly connectionStrategy: any;
@@ -334,7 +334,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
     private securityHeader: AsymmetricAlgorithmSecurityHeader | null;
     private lastError?: Error;
     private _tick2: number = 0;
-    private _isDiscconnecting = false;
+    private _isDisconnecting = false;
 
     constructor(options: ClientSecureChannelLayerOptions) {
         super();
@@ -362,7 +362,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         this.protocolVersion = 0;
 
         this.messageChunker = new MessageChunker({
-            derivedKeys: null,
+            derivedKeys: null
         });
 
         this.defaultSecureTokenLifetime = options.defaultSecureTokenLifetime || 30000;
@@ -385,7 +385,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         this.messageBuilder = new MessageBuilder({
             name: "client",
             privateKey: this.getPrivateKey() || undefined,
-            securityMode: this.securityMode,
+            securityMode: this.securityMode
         });
         this._requests = {};
 
@@ -420,7 +420,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
         this.__in_normal_close_operation = false;
 
-        this._timedout_request_count = 0;
+        this._timeout_request_count = 0;
 
         this._securityTokenTimeoutId = null;
 
@@ -491,35 +491,30 @@ export class ClientSecureChannelLayer extends EventEmitter {
      *    ```
      */
     public create(endpointUrl: string, callback: ErrorCallback) {
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
 
         if (this.securityMode !== MessageSecurityMode.None) {
             if (!this.serverCertificate) {
                 return callback(
-                    new Error(
-                        "ClientSecureChannelLayer#create : expecting a  server certificate when securityMode is not None"
-                    )
+                    new Error("ClientSecureChannelLayer#create : expecting a  server certificate when securityMode is not None")
                 );
             }
 
             // take the opportunity of this async method to perform some async pre-processing
             if (!this.receiverPublicKey) {
-                extractPublicKeyFromCertificate(
-                    this.serverCertificate,
-                    (err: Error | null, publicKey?: PublicKeyPEM) => {
-                        /* istanbul ignore next */
-                        if (err) {
-                            return callback(err);
-                        }
-                        /* istanbul ignore next */
-                        if (!publicKey) {
-                            throw new Error("Internal Error");
-                        }
-                        this.receiverPublicKey = publicKey;
-
-                        this.create(endpointUrl, callback);
+                extractPublicKeyFromCertificate(this.serverCertificate, (err: Error | null, publicKey?: PublicKeyPEM) => {
+                    /* istanbul ignore next */
+                    if (err) {
+                        return callback(err);
                     }
-                );
+                    /* istanbul ignore next */
+                    if (!publicKey) {
+                        throw new Error("Internal Error");
+                    }
+                    this.receiverPublicKey = publicKey;
+
+                    this.create(endpointUrl, callback);
+                });
                 return;
             }
         }
@@ -528,10 +523,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
         const transport = new ClientTCP_transport();
         transport.timeout = this.transportTimeout;
-        debugLog(
-            "ClientSecureChannelLayer#create creating ClientTCP_transport with  transport.timeout = ",
-            transport.timeout
-        );
+        debugLog("ClientSecureChannelLayer#create creating ClientTCP_transport with  transport.timeout = ", transport.timeout);
         assert(!this._pending_transport);
         this._pending_transport = transport;
         this._establish_connection(transport, endpointUrl, (err?: Error | null) => {
@@ -546,7 +538,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
     }
 
     public dispose() {
-        this._isDiscconnecting = true;
+        this._isDisconnecting = true;
         this.abortConnection(() => {
             /* empty */
         });
@@ -567,9 +559,9 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
     public abortConnection(callback: ErrorCallback) {
         const self = this;
-        this._isDiscconnecting = true;
+        this._isDisconnecting = true;
         debugLog("abortConnection ", !!this.__call);
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
 
         async.series(
             [
@@ -597,7 +589,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
                     self._transport.disconnect(() => {
                         inner_callback();
                     });
-                },
+                }
             ],
             (err?: Error | null) => {
                 callback();
@@ -631,7 +623,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
      *
      */
     public performMessageTransaction(request: Request, callback: PerformTransactionCallback) {
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
         this._performMessageTransaction("MSG", request, callback);
     }
 
@@ -654,7 +646,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
     }
 
     public cancelPendingTransactions(callback: ErrorCallback): void {
-        assert(_.isFunction(callback), "expecting a callback function, but got " + callback);
+        assert(typeof callback === "function", "expecting a callback function, but got " + callback);
 
         // istanbul ignore next
         if (doDebug) {
@@ -672,9 +664,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             // kill timer id
             const transaction = this._requests[key];
             if (transaction.callback) {
-                transaction.callback(
-                    new Error("Transaction has been canceled because client channel  is being closed")
-                );
+                transaction.callback(new Error("Transaction has been canceled because client channel  is being closed"));
             }
         }
         setImmediate(callback);
@@ -691,7 +681,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
      * @param callback
      */
     public close(callback: ErrorCallback): void {
-        assert(_.isFunction(callback), "expecting a callback function, but got " + callback);
+        assert(typeof callback === "function", "expecting a callback function, but got " + callback);
 
         // cancel any pending transaction
         this.cancelPendingTransactions((/* err?: Error */) => {
@@ -749,7 +739,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
                 requestId,
                 "response.responseHeader.requestHandle=",
                 response.responseHeader.requestHandle,
-                response.schema.name
+                response.schema.name.padStart(30)
             );
         }
 
@@ -758,8 +748,9 @@ export class ClientSecureChannelLayer extends EventEmitter {
             console.log(
                 chalk.cyan.bold(timestamp(), "  <<<<<< _on_message_received "),
                 requestId,
-                response.schema.name,
-                response.responseHeader.serviceResult.toString()
+                response.schema.name.padStart(30),
+                response.responseHeader.serviceResult.toString(),
+                this.channelId
             );
         }
 
@@ -768,10 +759,11 @@ export class ClientSecureChannelLayer extends EventEmitter {
         /* istanbul ignore next */
         if (!requestData) {
             console.log(
-                chalk.cyan.bold("xxxxx  <<<<<< _on_message_received for unknwonw or timeout request "),
+                chalk.cyan.bold("xxxxx  <<<<<< _on_message_received for unknown or timeout request "),
                 requestId,
-                response.schema.name,
-                response.responseHeader.serviceResult.toString()
+                response.schema.name.padStart(30),
+                response.responseHeader.serviceResult.toString(),
+                this.channelId
             );
             throw new Error(" =>  invalid requestId =" + requestId);
         }
@@ -789,7 +781,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         if (response.responseHeader.requestHandle !== request.requestHeader.requestHandle) {
             const expected = request.requestHeader.requestHandle;
             const actual = response.responseHeader.requestHandle;
-            const moreInfo = "Class = " + response.schema.name;
+            const moreInfo = "Request= " + request.schema.name + " Response = " + response.schema.name;
 
             const message =
                 " WARNING SERVER responseHeader.requestHandle is invalid" +
@@ -807,6 +799,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
             debugLog(chalk.red.bold(message), chalk.yellow(moreInfo));
             console.log(chalk.red.bold(message), chalk.yellow(moreInfo));
+            console.log(request.toString());
         }
 
         requestData.response = response;
@@ -853,7 +846,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             lap_transaction: requestData._tick4 - requestData._tick0,
             lap_waiting_response: requestData._tick2 - requestData._tick1,
             request,
-            response,
+            response
         };
 
         if (doTraceStatistics) {
@@ -874,12 +867,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             for (const requestData of Object.values(this._requests)) {
                 if (requestData) {
                     const request = requestData.request;
-                    debugLog(
-                        "Cancelling pending transaction ",
-                        requestData.key,
-                        requestData.msgType,
-                        request?.schema.name
-                    );
+                    debugLog("Cancelling pending transaction ", requestData.key, requestData.msgType, request?.schema.name);
                     process_request_callback(requestData, err);
                 }
             }
@@ -915,11 +903,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             return;
         }
 
-        debugLog(
-            " client: Security Token ",
-            this.securityToken.tokenId,
-            " is about to expired, let's raise lifetime_75 event "
-        );
+        debugLog(" client: Security Token ", this.securityToken.tokenId, " is about to expired, let's raise lifetime_75 event ");
 
         /**
          * notify the observer that the secure channel has now reach 75% of its allowed live time and
@@ -966,7 +950,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             );
         }
         assert(this._securityTokenTimeoutId === null);
-        // security token renewal should happen without overallping
+        // security token renewal should happen without overlapping
         this._securityTokenTimeoutId = setTimeout(() => {
             this._securityTokenTimeoutId = null;
             this._on_security_token_about_to_expire();
@@ -988,7 +972,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             // this securityPolicy may not be support yet ... let's return null
             return null;
         }
-        assert(_.isObject(cryptoFactory));
+        assert(cryptoFactory !== null && typeof cryptoFactory === "object");
         return randomBytes(cryptoFactory.symmetricKeyLength);
     }
 
@@ -1011,20 +995,17 @@ export class ClientSecureChannelLayer extends EventEmitter {
             clientNonce: this.clientNonce, //
             clientProtocolVersion: this.protocolVersion,
             requestHeader: {
-                auditEntryId: null,
+                auditEntryId: null
             },
             requestType: requestType,
             requestedLifetime: this.defaultSecureTokenLifetime,
-            securityMode: this.securityMode,
+            securityMode: this.securityMode
         });
 
         this._performMessageTransaction(msgType, msg, (err?: Error | null, response?: Response) => {
             // istanbul ignore next
             if (response && response.responseHeader && response.responseHeader.serviceResult !== StatusCodes.Good) {
-                console.log(
-                    "xxxxx => response.responseHeader.serviceResult",
-                    response.responseHeader.serviceResult.toString()
-                );
+                console.log("xxxxx => response.responseHeader.serviceResult", response.responseHeader.serviceResult.toString());
                 err = new Error(response.responseHeader.serviceResult.toString());
             }
             if (!err && response) {
@@ -1156,7 +1137,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             //   - server too busy -
             //   - server shielding itself from a DDOS attack
             if (err) {
-                let should_abort = this._isDiscconnecting;
+                let should_abort = this._isDisconnecting;
 
                 if (err.message.match(/ECONNRESET/)) {
                     should_abort = true;
@@ -1169,7 +1150,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
                 if (this.__call) {
                     // connection cannot be establish ? if not, abort the backoff process
                     if (should_abort) {
-                        debugLog(" Aborting backoff process prematurally - err = ", err.message);
+                        debugLog(" Aborting backoff process prematurely - err = ", err.message);
                         this.__call.abort();
                     } else {
                         debugLog(" backoff - keep trying - err = ", err.message);
@@ -1271,13 +1252,10 @@ export class ClientSecureChannelLayer extends EventEmitter {
                 this.emit("security_token_renewed");
             } else {
                 debugLog("ClientSecureChannelLayer: Warning: securityToken hasn't been renewed -> err ", err);
-                // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX CHECHK ME !!!
-                this.closeWithError(
-                    new Error("Restarting because Request has timed out during OpenSecureChannel"),
-                    () => {
-                        /* */
-                    }
-                );
+                // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX CHECK ME !!!
+                this.closeWithError(new Error("Restarting because Request has timed out during OpenSecureChannel"), () => {
+                    /* */
+                });
             }
         });
     }
@@ -1322,7 +1300,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
      */
 
     private _performMessageTransaction(msgType: string, request: Request, callback: PerformTransactionCallback) {
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
 
         if (!this.isValid()) {
             return callback(new Error("ClientSecureChannelLayer => Socket is closed !"));
@@ -1395,15 +1373,11 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
         timerId = setTimeout(() => {
             timerId = null;
-            debugLog(
-                " Timeout .... waiting for response for ",
-                request.constructor.name,
-                request.requestHeader.toString()
-            );
+            debugLog(" Timeout .... waiting for response for ", request.constructor.name, request.requestHeader.toString());
             debugLog(" Timeout was ", timeout, "ms");
             hasTimedOut = true;
             modified_callback(new Error("Transaction has timed out ( timeout = " + timeout + " ms)"));
-            this._timedout_request_count += 1;
+            this._timeout_request_count += 1;
             /**
              * notify the observer that the response from the request has not been
              * received within the timeoutHint specified
@@ -1412,7 +1386,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
              */
             this.emit("timed_out_request", request);
 
-            // xx // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX CHECHK ME !!!
+            // xx // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX CHECK ME !!!
             // xx this.closeWithError(new Error("Restarting because Request has timed out (1)"), () => { });
         }, timeout);
 
@@ -1420,7 +1394,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             callback: modified_callback,
             msgType: msgType,
             request: request,
-            timerId: timerId,
+            timerId: timerId
         };
 
         this._internal_perform_transaction(transaction_data);
@@ -1436,7 +1410,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
      */
 
     private _internal_perform_transaction(transactionData: TransactionData) {
-        assert(_.isFunction(transactionData.callback));
+        assert(typeof transactionData.callback === "function");
 
         if (!this._transport) {
             setTimeout(() => {
@@ -1470,7 +1444,12 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
         /* istanbul ignore next */
         if (doTraceMessage) {
-            console.log(chalk.cyan(timestamp(), "   >>>>>>                     "), requestHandle, request.schema.name);
+            console.log(
+                chalk.cyan(timestamp(), "   >>>>>>                     "),
+                requestHandle,
+                request.schema.name.padEnd(30),
+                this.channelId
+            );
         }
 
         const requestData: RequestData = {
@@ -1489,7 +1468,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             _tick4: 0,
             key: "",
 
-            chunk_count: 0,
+            chunk_count: 0
         };
 
         this._requests[requestHandle] = requestData;
@@ -1556,7 +1535,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
                 securityHeader = new AsymmetricAlgorithmSecurityHeader({
                     receiverCertificateThumbprint: thumbprint, // thumbprint of the public key used to encrypt the message
                     securityPolicyUri: toURI(this.securityPolicy),
-                    senderCertificate: this.getCertificateChain(), // certificate of the private key used to sign the message
+                    senderCertificate: this.getCertificateChain() // certificate of the private key used to sign the message
                 });
 
                 if (dumpSecurityHeader) {
@@ -1592,7 +1571,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         }
 
         assert(cryptoFactory, "expecting a cryptoFactory");
-        assert(_.isFunction(cryptoFactory.asymmetricSign));
+        assert(typeof cryptoFactory.asymmetricSign === "function");
 
         const options: any = {};
 
@@ -1646,7 +1625,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             cipherBlockSize: 0,
             plainBlockSize: 0,
             sequenceHeaderSize: 0,
-            signatureLength: 0,
+            signatureLength: 0
         };
 
         // use chunk size that has been negotiated by the transport layer
@@ -1682,8 +1661,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             console.log(request.toString());
         }
 
-        const security_options =
-            msgType === "OPN" ? this._get_security_options_for_OPN() : this._get_security_options_for_MSG();
+        const security_options = msgType === "OPN" ? this._get_security_options_for_OPN() : this._get_security_options_for_MSG();
         _.extend(options, security_options);
 
         /**

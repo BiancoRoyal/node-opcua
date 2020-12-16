@@ -1,9 +1,6 @@
 /**
  * @module node-opcua-variant
  */
-
-import * as _ from "underscore";
-
 import { assert } from "node-opcua-assert";
 import { NodeId } from "node-opcua-nodeid";
 import {
@@ -31,7 +28,6 @@ import {
     buildStructuredType,
     findBuiltInType,
     initialize_field,
-    initialize_field_array,
     registerSpecialVariantEncoder,
     StructuredTypeSchema,
     registerType
@@ -40,7 +36,6 @@ import {
 import * as utils from "node-opcua-utils";
 
 import { BinaryStream, OutputBinaryStream } from "node-opcua-binary-stream";
-import { ExtensionObject } from "node-opcua-extension-object";
 import { _enumerationDataType, DataType } from "./DataType_enum";
 import { _enumerationVariantArrayType, VariantArrayType } from "./VariantArrayType_enum";
 // tslint:disable:no-bitwise
@@ -49,7 +44,7 @@ const schemaVariant: StructuredTypeSchema = buildStructuredType({
     baseType: "BaseUAObject",
     fields: [
         {
-            defaultValue: () => DataType.Null,
+            defaultValue: DataType.Null,
             documentation: "the variant type.",
             fieldType: "DataType",
             name: "dataType"
@@ -77,7 +72,6 @@ const schemaVariant: StructuredTypeSchema = buildStructuredType({
 
 function _coerceVariant(variantLike: VariantOptions | Variant): Variant {
     const value = variantLike instanceof Variant ? variantLike : new Variant(variantLike);
-    assert(value instanceof Variant);
     return value;
 }
 
@@ -86,6 +80,13 @@ export interface VariantOptions {
     arrayType?: VariantArrayType | string;
     value?: any;
     dimensions?: number[] | null;
+}
+
+export interface VariantOptions2 {
+    dataType: DataType;
+    arrayType: VariantArrayType;
+    value: any;
+    dimensions: number[] | null;
 }
 
 export class Variant extends BaseUAObject {
@@ -97,80 +98,49 @@ export class Variant extends BaseUAObject {
     public value: any;
     public dimensions: number[] | null;
 
-    constructor(options?: VariantOptions) {
+    constructor(options?: VariantOptions | null) {
         super();
-        options = constructHook(options) as any;
-        options = options ? options : {};
+
+        if (options === null) {
+            this.dataType = DataType.Null;
+            this.arrayType = VariantArrayType.Scalar;
+            this.value = null;
+            this.dimensions = null;
+            return;
+        }
+        const options2 = constructHook(options || {});
 
         this.dataType = DataType.Null;
         this.arrayType = VariantArrayType.Scalar;
 
         const schema = schemaVariant;
-        /**
-         * the variant type.
-         * @property dataType
-         * @type {DataType}
-         * @default  0
-         */
-        this.setDataType(initialize_field(schema.fields[0], options.dataType));
+        this.dataType = options2.dataType;
+        this.arrayType = options2.arrayType;
+        this.value = initialize_field(schema.fields[2], options2.value);
+        this.dimensions = options2.dimensions || null;
 
-        /**
-         * @property arrayType
-         * @type {VariantArrayType}
-         * @default  0
-         */
-        this.setArrayType(initialize_field(schema.fields[1], options.arrayType));
-
-        /**
-         * @property value
-         * @default  null
-         */
-        this.value = initialize_field(schema.fields[2], options.value);
-
-        /**
-         * the matrix dimensions
-         * @property dimensions
-         * @type {UInt32[]}
-         * @default  null
-         */
-        this.dimensions = initialize_field_array(schema.fields[3], options.dimensions);
-
-        if (options.dataType === DataType.ExtensionObject) {
+        if (this.dataType === DataType.ExtensionObject) {
             if (this.arrayType === VariantArrayType.Scalar) {
                 /* istanbul ignore next */
                 if (this.value && !(this.value instanceof BaseUAObject)) {
-                    throw new Error("A variant with DataType.ExtensionObject must have a ExtensionObject value");
+                    throw new Error(
+                        `A variant with DataType.ExtensionObject must have a ExtensionObject value.\nMake sure that you specify a valid ExtensionObject to the value options in the Variant Constructor`
+                    );
                 }
             } else {
-                for (const e of this.value) {
-                    /* istanbul ignore next */
-                    if (e && !(e instanceof BaseUAObject)) {
-                        throw new Error("A variant with DataType.ExtensionObject must have a ExtensionObject value");
+                if (this.value) {
+                    for (const e of this.value) {
+                        /* istanbul ignore next */
+                        if (e && !(e instanceof BaseUAObject)) {
+                            throw new Error(
+                                "A variant with DataType.ExtensionObject must have a ExtensionObject value\nMake sure that you specify a valid ExtensionObject for all element of the value array passed to the  Variant Constructor`"
+                            );
+                        }
                     }
                 }
             }
         }
     }
-
-    // Define Enumeration setters
-    public setDataType(value: any) {
-        const coercedValue = _enumerationDataType.get(value);
-        /* istanbul ignore next */
-        if (coercedValue === undefined || coercedValue === null) {
-            throw new Error("value cannot be coerced to DataType: " + value);
-        }
-        this.dataType = coercedValue.value as DataType;
-    }
-
-    public setArrayType(value: any) {
-        const coercedValue = _enumerationVariantArrayType.get(value);
-        /* istanbul ignore next */
-        if (coercedValue === undefined || coercedValue === null) {
-            throw new Error("value cannot be coerced to VariantArrayType: " + value);
-        }
-        this.arrayType = coercedValue.value as VariantArrayType;
-    }
-
     public encode(stream: OutputBinaryStream) {
         encodeVariant(this, stream);
     }
@@ -236,7 +206,7 @@ function variantToString(self: Variant, options?: any) {
             data += ", null";
         } else {
             const a = [];
-            assert(_.isArray(self.value) || self.value.buffer instanceof ArrayBuffer);
+            assert(Array.isArray(self.value) || self.value.buffer instanceof ArrayBuffer);
             for (let i = 0; i < Math.min(10, self.value.length); i++) {
                 a[i] = self.value[i];
             }
@@ -369,24 +339,23 @@ function internalDecodeVariant(self: Variant, stream: BinaryStream) {
 /***
  * @private
  */
-export function decodeVariant(stream: BinaryStream): Variant {
-    const value = new Variant({});
+export function decodeVariant(stream: BinaryStream, value?: Variant): Variant {
+    value = value || new Variant(null);
     value.decode(stream);
     return value;
 }
 
-function constructHook(options: any): any {
-    options = options || {};
-
+function constructHook(options: VariantOptions | Variant): VariantOptions2 {
     let isArrayTypeUnspecified = options.arrayType === undefined;
 
-    if (options.constructor.name === "Variant") {
-        const opts = {
+    if (options instanceof Variant) {
+        const opts: VariantOptions2 = {
             arrayType: options.arrayType,
             dataType: options.dataType,
             dimensions: options.dimensions,
             value: options.value
         };
+
         if (opts.dataType === DataType.ExtensionObject) {
             if (opts.arrayType === VariantArrayType.Scalar) {
                 if (opts.value && opts.value.constructor) {
@@ -401,11 +370,10 @@ function constructHook(options: any): any {
                 });
             }
         } else if (opts.arrayType !== VariantArrayType.Scalar) {
-            opts.value = coerceVariantArray(options.dataType, options.value);
+            opts.value = coerceVariantArray(opts.dataType, options.value);
         }
         return opts;
     }
-    assert(options);
     options.dataType = options.dataType || DataType.Null;
 
     // dataType could be a string
@@ -425,15 +393,15 @@ function constructHook(options: any): any {
 
     // array type could be a string
     if (typeof options.arrayType === "string") {
-        const at = VariantArrayType[options.arrayType];
+        const at: VariantArrayType | undefined = (VariantArrayType as any)[options.arrayType];
         /* istanbul ignore next */
-        if (utils.isNullOrUndefined(at)) {
+        if (at === undefined) {
             throw new Error("ArrayType: invalid " + options.arrayType);
         }
         options.arrayType = at;
     }
 
-    if (isArrayTypeUnspecified && _.isArray(options.value)) {
+    if (isArrayTypeUnspecified && Array.isArray(options.value)) {
         // when using UInt64 ou Int64 arrayType must be specified , as automatic detection cannot be made
 
         /* istanbul ignore next */
@@ -441,7 +409,7 @@ function constructHook(options: any): any {
             // we do nothing here ....
             throw new Error(
                 "Variant#constructor : when using UInt64 ou Int64" +
-                    " arrayType must be specified , as automatic detection cannot be made"
+                " arrayType must be specified , as automatic detection cannot be made"
             );
         } else {
             options.arrayType = VariantArrayType.Array;
@@ -453,9 +421,8 @@ function constructHook(options: any): any {
         assert(options.arrayType === VariantArrayType.Array || options.arrayType === VariantArrayType.Matrix);
         /* istanbul ignore else */
         if (options.arrayType === VariantArrayType.Array) {
-            options.value = options.value || [];
             const value1 = coerceVariantArray(options.dataType, options.value);
-            assert(value1 !== options.value);
+            assert(value1 === null || value1 !== options.value);
             options.value = value1;
         } else {
             assert(options.arrayType === VariantArrayType.Matrix);
@@ -471,11 +438,11 @@ function constructHook(options: any): any {
             if (options.value.length !== calculate_product(options.dimensions)) {
                 throw new Error(
                     "Matrix Variant : invalid value size = options.value.length " +
-                        options.value.length +
-                        "!=" +
-                        calculate_product(options.dimensions) +
-                        " => " +
-                        JSON.stringify(options.dimensions)
+                    options.value.length +
+                    "!=" +
+                    calculate_product(options.dimensions) +
+                    " => " +
+                    JSON.stringify(options.dimensions)
                 );
             }
         }
@@ -490,20 +457,21 @@ function constructHook(options: any): any {
         if (!isValidVariant(options.arrayType, options.dataType, options.value, null)) {
             throw new Error(
                 "Invalid variant arrayType: " +
-                    options.arrayType.toString() +
-                    "  dataType: " +
-                    options.dataType.toString() +
-                    " value:" +
-                    options.value +
-                    " type= " +
-                    typeof options.value
+                VariantArrayType[options.arrayType] +
+                "  dataType: " +
+                DataType[options.dataType] +
+                " value:" +
+                options.value +
+                " (javascript type = " +
+                typeof options.value +
+                " )"
             );
         }
     }
     if (options.dimensions) {
         assert(options.arrayType === VariantArrayType.Matrix, "dimension can only provided if variant is a matrix");
     }
-    return options;
+    return options as VariantOptions2;
 }
 
 function calculate_product(array: number[] | null): number {
@@ -551,13 +519,13 @@ export type BufferedArray2 =
 
 interface BufferedArrayConstructor {
     BYTES_PER_ELEMENT: number;
-    new (buffer: any): any;
+    new(buffer: any): any;
 }
 
 function convertTo(dataType: DataType, arrayTypeConstructor: BufferedArrayConstructor | null, value: any) {
     // istanbul ignore next
     if (value === undefined || value === null) {
-        value = [];
+        return null;
     }
 
     if (arrayTypeConstructor && value instanceof arrayTypeConstructor) {
@@ -626,28 +594,22 @@ function encodeTypedArray(arrayTypeConstructor: BufferedArrayConstructor, stream
     stream.writeArrayBuffer(value.buffer, value.byteOffset, value.byteLength);
 }
 
-function encodeGeneralArray(dataType: DataType, stream: OutputBinaryStream, value: any) {
-    const arr = value || [];
-    assert(arr instanceof Array);
-    assert(_.isFinite(arr.length));
-    encodeUInt32(arr.length, stream);
+function encodeGeneralArray(dataType: DataType, stream: OutputBinaryStream, value: any[] | null) {
+    if (!value) {
+        assert(value === null);
+        encodeUInt32(0xffffffff, stream);
+        return;
+    }
+    encodeUInt32(value.length, stream);
     const encode = get_encoder(dataType);
-    let i;
-    const n = arr.length;
-    for (i = 0; i < n; i++) {
-        encode(arr[i], stream);
+    for (const e of value) {
+        encode(e, stream);
     }
 }
 
 function encodeVariantArray(dataType: DataType, stream: OutputBinaryStream, value: any) {
-    if (value.buffer) {
-        try {
-            return _getHelper(dataType).encode(stream, value);
-        } catch (err) {
-            /* istanbul ignore next */
-            // tslint:disable-next-line:no-console
-            console.log("encodeVariantArray error : DATATYPE", dataType, "\nvalue", value.length);
-        }
+    if (value && value.buffer) {
+        return _getHelper(dataType).encode(stream, value);
     }
     return encodeGeneralArray(dataType, stream, value);
 }
@@ -715,7 +677,12 @@ function _decodeVariantArrayDebug(stream: BinaryStream, decode: any, tracer: any
 
     let i;
     let element;
-    tracer.trace("start_array", "Variant", length, cursorBefore, stream.length);
+    tracer.trace("start_array", "Variant", -1, cursorBefore, stream.length);
+    if (length === 0xFFFFFFFF) {
+        // empty array
+        tracer.trace("end_array", "Variant", stream.length);
+        return;
+    }
 
     const n1 = Math.min(10, length);
 
@@ -798,7 +765,7 @@ export function coerceVariantType(dataType: DataType, value: any): any {
                 value = parseInt(value, 10);
             }
             /* istanbul ignore next */
-            if (!_.isFinite(value)) {
+            if (!isFinite(value)) {
                 // xx console.log("xxx ", value, ttt);
                 throw new Error("expecting a number " + value);
             }
@@ -838,10 +805,10 @@ export function coerceVariantType(dataType: DataType, value: any): any {
 function isValidScalarVariant(dataType: DataType, value: any): boolean {
     assert(
         value === null ||
-            DataType.Int64 === dataType ||
-            DataType.ByteString === dataType ||
-            DataType.UInt64 === dataType ||
-            !(value instanceof Array)
+        DataType.Int64 === dataType ||
+        DataType.ByteString === dataType ||
+        DataType.UInt64 === dataType ||
+        !(value instanceof Array)
     );
     assert(value === null || !(value instanceof Int32Array));
     assert(value === null || !(value instanceof Uint32Array));
@@ -876,6 +843,9 @@ function isValidScalarVariant(dataType: DataType, value: any): boolean {
 }
 
 function isValidArrayVariant(dataType: DataType, value: any): boolean {
+    if (value === null) {
+        return true;
+    }
     if (dataType === DataType.Float && value instanceof Float32Array) {
         return true;
     } else if (dataType === DataType.Double && value instanceof Float64Array) {
@@ -894,7 +864,7 @@ function isValidArrayVariant(dataType: DataType, value: any): boolean {
         return true;
     }
     // array values can be store in Buffer, Float32Array
-    assert(_.isArray(value));
+    assert(Array.isArray(value));
     for (const valueItem of value) {
         if (!isValidScalarVariant(dataType, valueItem)) {
             return false;
@@ -967,6 +937,49 @@ export function buildVariantArray(dataType: DataType, nbElements: number, defaul
 // old version of nodejs do not provide a Buffer#equals test
 const oldNodeVersion = process.versions.node && process.versions.node.substring(0, 1) === "0";
 
+function __type(a: any): string {
+    return Object.prototype.toString.call(a);
+}
+function __check_same_object(o1: any, o2: any): boolean {
+    if (o1 === o2) return true;
+    if ((!o1 && o2) || (!o2 && o1)) return false;
+    const t1 = __type(o1);
+    const t2 = __type(o2);
+    if (t1 !== t2) return false;
+    switch (t1) {
+        case "[object Array]":
+            return __check_same_array(o1, o2);
+        case "[object Object]":
+            if (o1.constructor?.name !== o2.constructor?.name) {
+                return false;
+            }
+            const keys1 = Object.keys(o1);
+            const keys2 = Object.keys(o2);
+            // istanbul ignore next
+            if (keys1.length !== keys2.length) {
+                return false;
+            }
+            for (const k of Object.keys(o1)) {
+                if (!__check_same_object(o1[k], o2[k])) {
+                    return false;
+                }
+            }
+            return true;
+        case "[object Float32Array]":
+        case "[object Float64Array]":
+        case "[object Int32Array]":
+        case "[object Int16Array]":
+        case "[object Int8Array]":
+        case "[object Uint32Array]":
+        case "[object Uint16Array]":
+        case "[object Uint8Array]":
+            const b1 = Buffer.from(o1.buffer, o1.byteOffset, o1.byteLength);
+            const b2 = Buffer.from(o2.buffer, o2.byteOffset, o2.byteLength);
+            return b1.equals(b2);
+        default:
+            return o1 === o2;
+    }
+}
 function __check_same_array(arr1: any, arr2: any) {
     if (!arr1 || !arr2) {
         return !arr1 && !arr2;
@@ -980,7 +993,7 @@ function __check_same_array(arr1: any, arr2: any) {
     if (!oldNodeVersion && arr1.buffer) {
         // v1 and v2 are TypedArray (such as Int32Array...)
         // this is the most efficient way to compare 2 buffers but it doesn't work with node <= 0.12
-        assert(arr2.buffer);
+        assert(arr2.buffer && __type(arr2.buffer) === "[object ArrayBuffer]");
         // compare byte by byte
         const b1 = Buffer.from(arr1.buffer, arr1.byteOffset, arr1.byteLength);
         const b2 = Buffer.from(arr2.buffer, arr2.byteOffset, arr2.byteLength);
@@ -988,7 +1001,7 @@ function __check_same_array(arr1: any, arr2: any) {
     }
     const n = arr1.length;
     for (let i = 0; i < n; i++) {
-        if (!_.isEqual(arr1[i], arr2[i])) {
+        if (!__check_same_object(arr1[i], arr2[i])) {
             return false;
         }
     }
@@ -1019,7 +1032,7 @@ export function sameVariant(v1: Variant, v2: Variant): boolean {
     if (v1.arrayType === VariantArrayType.Scalar) {
         if (v1.dataType === DataType.ExtensionObject) {
             // compare two extension objects
-            return _.isEqual(v1.value, v2.value);
+            return __check_same_object(v1.value, v2.value);
         }
         if (Array.isArray(v1.value) && Array.isArray(v2.value)) {
             return __check_same_array(v1.value, v2.value);
@@ -1059,7 +1072,10 @@ export declare type VariantDouble = VariantT<number, DataType.Double>;
 registerType({
     name: "Variant",
     subType: "",
+
     coerce: _coerceVariant,
+
     encode: encodeVariant,
+
     decode: decodeVariant
 });

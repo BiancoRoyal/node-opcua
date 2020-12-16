@@ -229,7 +229,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
         options.port = options.port || 0;
 
         this.port = parseInt(options.port.toString(), 10);
-        assert(_.isNumber(this.port));
+        assert(typeof this.port === "number");
 
         this._certificateChain = options.certificateChain;
         this._privateKey = options.privateKey;
@@ -256,7 +256,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
         this.securityTokenCountOldChannels = 0;
 
         this.serverInfo = options.serverInfo;
-        assert(_.isObject(this.serverInfo));
+        assert(this.serverInfo !== null && typeof this.serverInfo === "object");
     }
 
     public dispose() {
@@ -335,12 +335,12 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
     public getEndpointDescription(
         securityMode: MessageSecurityMode,
         securityPolicy: SecurityPolicy,
-        endpointUrl?: string
+        endpointUrl: string | null
     ): EndpointDescription | null {
         const endpoints = this.endpointDescriptions();
         const arr = _.filter(endpoints, matching_endpoint.bind(this, securityMode, securityPolicy, endpointUrl));
 
-        if (!(arr.length === 0 || arr.length === 1)) {
+        if (endpointUrl && endpointUrl.length > 0 && !(arr.length === 0 || arr.length === 1)) {
             errorLog("Several matching endpoints have been found : ");
             for (const a of arr) {
                 errorLog("   ", a.endpointUrl, MessageSecurityMode[securityMode], securityPolicy);
@@ -469,7 +469,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
      * @async
      */
     public listen(callback: (err?: Error) => void) {
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
         assert(!this._started, "OPCUAServerEndPoint is already listening");
 
         this._listen_callback = callback;
@@ -574,7 +574,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
      * @param callback
      */
     public start(callback: (err?: Error) => void): void {
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
         this.listen(callback);
     }
 
@@ -765,7 +765,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
         }
 
         delete this._channels[channel.hashKey];
-        assert(_.isFunction((channel as any)._unpreregisterChannelEvent));
+        assert(typeof (channel as any)._unpreregisterChannelEvent === "function");
         channel.removeListener("abort", (channel as any)._unpreregisterChannelEvent);
         (channel as any)._unpreregisterChannelEvent = null;
     }
@@ -834,7 +834,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
     }
 
     private _end_listen(err?: Error) {
-        assert(_.isFunction(this._listen_callback));
+        assert(typeof this._listen_callback === "function");
         this._listen_callback(err);
         this._listen_callback = null;
     }
@@ -845,7 +845,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
      * @param inner_callback
      */
     private shutdown_channel(channel: ServerSecureChannelLayer, inner_callback: (err?: Error) => void) {
-        assert(_.isFunction(inner_callback));
+        assert(typeof inner_callback === "function");
         channel.once("close", () => {
             // xx console.log(" ON CLOSED !!!!");
         });
@@ -981,21 +981,21 @@ function estimateSecurityLevel(securityMode: MessageSecurityMode, securityPolicy
  * @private
  */
 function _makeEndpointDescription(options: MakeEndpointDescriptionOptions): EndpointDescriptionEx {
-    assert(_.isFinite(options.port), "expecting a valid port number");
+    assert(isFinite(options.port), "expecting a valid port number");
     assert(options.hasOwnProperty("serverCertificateChain"));
     assert(!options.hasOwnProperty("serverCertificate"));
     assert(!!options.securityMode); // s.MessageSecurityMode
     assert(!!options.securityPolicy);
-    assert(_.isObject(options.server));
+    assert(options.server !== null && typeof options.server === "object");
     assert(!!options.hostname && typeof options.hostname === "string");
-    assert(_.isBoolean(options.restricted));
+    assert(typeof options.restricted === "boolean");
 
     const u = (n: string) => getUniqueName(n, options.collection);
     options.securityLevel =
         options.securityLevel === undefined
             ? estimateSecurityLevel(options.securityMode, options.securityPolicy)
             : options.securityLevel;
-    assert(_.isFinite(options.securityLevel), "expecting a valid securityLevel");
+    assert(isFinite(options.securityLevel), "expecting a valid securityLevel");
 
     const securityPolicyUri = toURI(options.securityPolicy);
 
@@ -1129,7 +1129,7 @@ function _makeEndpointDescription(options: MakeEndpointDescriptionOptions): Endp
 function matching_endpoint(
     securityMode: MessageSecurityMode,
     securityPolicy: SecurityPolicy,
-    endpointUrl: string | undefined,
+    endpointUrl: string | null,
     endpoint: EndpointDescription
 ): boolean {
     assert(endpoint instanceof EndpointDescription);

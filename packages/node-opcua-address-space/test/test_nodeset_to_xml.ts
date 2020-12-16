@@ -1,27 +1,17 @@
 // tslint:disable:no-console
 // tslint:disable:max-line-length
 import * as fs from "fs";
-import * as mocha from "mocha";
 import * as should from "should";
 
-import { getTempFilename } from "node-opcua-debug";
-import { DataType } from "node-opcua-variant";
+import { getTempFilename } from "node-opcua-debug/nodeJS";
+import { DataType, VariantArrayType } from "node-opcua-variant";
 import { Variant } from "node-opcua-variant";
+import { nodesets } from "node-opcua-nodesets";
+import { coerceLocalizedText, coerceQualifiedName, makeAccessLevelFlag } from "node-opcua-data-model";
 
-import {
-    AddressSpace,
-    createBoilerType,
-    dumpXml,
-    generateAddressSpace,
-    getMiniAddressSpace,
-    Namespace,
-    RootFolder,
-    UAVariable,
-} from "..";
-
-import * as nodesets from "node-opcua-nodesets";
-import { randomGuid } from "node-opcua-basic-types";
-import { coerceLocalizedText, makeAccessLevelFlag } from "../../node-opcua-data-model/dist";
+import { AddressSpace, dumpXml, Namespace, RootFolder, UAVariable } from "..";
+import { createBoilerType, getMiniAddressSpace } from "../testHelpers";
+import { generateAddressSpace } from "../nodeJS";
 
 const doDebug = process.env.DEBUGTEST || false;
 
@@ -67,7 +57,7 @@ describe("testing nodeset to xml", () => {
     it("€€€ should output a custom Enum node to xml (MyEnumType) - Form1( with EnumStrings )", () => {
         const myEnumType = namespace.addEnumerationType({
             browseName: "MyEnumTypeForm1",
-            enumeration: ["RUNNING", "STOPPED"],
+            enumeration: ["RUNNING", "STOPPED"]
         });
 
         const enumStringNode = myEnumType.getChildByName("EnumStrings")! as UAVariable;
@@ -89,8 +79,8 @@ describe("testing nodeset to xml", () => {
             browseName: "MyEnumType",
             enumeration: [
                 { displayName: "RUNNING", value: 10, description: "the device is running" },
-                { displayName: "STOPPED", value: 20, description: "the device is stopped" },
-            ],
+                { displayName: "STOPPED", value: 20, description: "the device is stopped" }
+            ]
         });
 
         myEnumType.browseName.toString().should.eql("1:MyEnumType");
@@ -122,7 +112,7 @@ describe("testing nodeset to xml", () => {
             dataType: "Double",
             description: "the temperature value of the sensor in Celsius <�C>",
             modellingRule: "Mandatory",
-            value: new Variant({ dataType: DataType.Double, value: 19.5 }),
+            value: new Variant({ dataType: DataType.Double, value: 19.5 })
         });
 
         const parentFolder = addressSpace.findNode("RootFolder")! as RootFolder;
@@ -131,13 +121,13 @@ describe("testing nodeset to xml", () => {
         // variation 1
         const temperatureSensor = temperatureSensorType.instantiate({
             browseName: "MyTemperatureSensor",
-            organizedBy: parentFolder,
+            organizedBy: parentFolder
         });
 
         // variation 2
         const temperatureSensor2 = temperatureSensorType.instantiate({
             browseName: "MyTemperatureSensor",
-            organizedBy: "RootFolder",
+            organizedBy: "RootFolder"
         });
 
         const str = dumpXml(temperatureSensor, {});
@@ -154,7 +144,7 @@ describe("testing nodeset to xml", () => {
 
         const camera1 = cameraType.instantiate({
             browseName: "Camera1",
-            organizedBy: "RootFolder",
+            organizedBy: "RootFolder"
         });
         const str = dumpXml(camera1, {});
         if (doDebug) {
@@ -184,7 +174,7 @@ describe("testing nodeset to xml", () => {
         const ownNamespace = addressSpace.getOwnNamespace();
         const referenceType = ownNamespace.addReferenceType({
             browseName: "HasStuff",
-            inverseName: "StuffOf",
+            inverseName: "StuffOf"
         });
 
         const str = dumpXml(referenceType, {});
@@ -203,7 +193,7 @@ describe("testing nodeset to xml", () => {
 
         const obj1 = ownNamespace.addObject({
             browseName: "Object",
-            organizedBy: rootFolder.objects,
+            organizedBy: rootFolder.objects
         });
         ownNamespace.addMethod(obj1, {
             browseName: "Trigger",
@@ -211,17 +201,17 @@ describe("testing nodeset to xml", () => {
                 {
                     dataType: DataType.UInt32,
                     description: { text: "specifies the number of seconds to wait before the picture is taken " },
-                    name: "ShutterLag",
-                },
+                    name: "ShutterLag"
+                }
             ],
             modellingRule: "Mandatory",
             outputArguments: [
                 {
                     dataType: "Image",
                     description: { text: "the generated image" },
-                    name: "Image",
-                },
-            ],
+                    name: "Image"
+                }
+            ]
         });
         let str = dumpXml(obj1, {});
 
@@ -343,7 +333,7 @@ describe("Namespace to NodeSet2.xml", () => {
         namespace.addReferenceType({
             browseName: "HasCousin",
             inverseName: "IsCousinOf",
-            subtypeOf: "HasChild",
+            subtypeOf: "HasChild"
         });
 
         const nodeIds = namespace.getStandardsNodeIds();
@@ -380,7 +370,7 @@ describe("Namespace to NodeSet2.xml", () => {
     it("should produce a XML file from a namespace - a new UAObjectType", () => {
         namespace.addObjectType({
             browseName: "MyObjectType",
-            subtypeOf: "BaseObjectType",
+            subtypeOf: "BaseObjectType"
         });
 
         const nodeIds = namespace.getStandardsNodeIds();
@@ -419,13 +409,13 @@ describe("Namespace to NodeSet2.xml", () => {
         const myObjectBaseType = namespace.addObjectType({
             browseName: "MyObjectBaseType",
             isAbstract: true,
-            subtypeOf: "BaseObjectType",
+            subtypeOf: "BaseObjectType"
         });
 
         const myObjectType = namespace.addObjectType({
             browseName: "MyObjectType",
             isAbstract: false,
-            subtypeOf: myObjectBaseType,
+            subtypeOf: myObjectBaseType
         });
 
         const nodeIds = namespace.getStandardsNodeIds();
@@ -475,7 +465,7 @@ describe("Namespace to NodeSet2.xml", () => {
             accessLevel: accessLevelFlag,
             browseName: "MyVariable",
             dataType: DataType.Double,
-            typeDefinition: "BaseVariableType",
+            typeDefinition: "BaseVariableType"
         });
 
         myVariable.accessLevel.should.eql(accessLevelFlag);
@@ -517,7 +507,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
     beforeEach(async () => {
         addressSpace = AddressSpace.create();
 
-        const xml_files = [nodesets.standard_nodeset_file, nodesets.di_nodeset_filename];
+        const xml_files = [nodesets.standard, nodesets.di];
         fs.existsSync(xml_files[0]).should.be.eql(true);
         fs.existsSync(xml_files[1]).should.be.eql(true);
 
@@ -534,7 +524,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
             .should.eql([
                 "http://opcfoundation.org/UA/", // 0
                 "ServerNamespaceURI", // 1
-                "http://opcfoundation.org/UA/DI/", // 2
+                "http://opcfoundation.org/UA/DI/" // 2
             ]);
 
         namespace = addressSpace.getOwnNamespace();
@@ -547,7 +537,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
 
     async function reloadedNodeSet(tmpFilename: string) {
         /// Xx console.log(xml);
-        const theNodesets = [nodesets.standard_nodeset_file, nodesets.di_nodeset_filename, tmpFilename];
+        const theNodesets = [nodesets.standard, nodesets.di, tmpFilename];
         // now reload the file as part of a addressSpace;
         const reloadedAddressSpace = AddressSpace.create();
         await generateAddressSpace(reloadedAddressSpace, theNodesets);
@@ -583,8 +573,8 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
             organizedBy: addressSpace.rootFolder.objects,
             value: {
                 dataType: DataType.Guid,
-                value: "AFCFB362-73BD-D408-20FA-94E9567BCC27", // randomGuid("000")
-            },
+                value: "AFCFB362-73BD-D408-20FA-94E9567BCC27" // randomGuid("000")
+            }
         });
 
         const xml = namespace.toNodeset2XML();
@@ -597,14 +587,29 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         // console.log(xml);
     });
     it("NSXML2 should output an XML file - with Variant LocalizedText", async () => {
-        const v = namespace.addVariable({
-            browseName: "Test",
-            dataType: "Guid",
+        const v1 = namespace.addVariable({
+            browseName: "TestLocalizedText",
+            dataType: DataType.LocalizedText,
             organizedBy: addressSpace.rootFolder.objects,
             value: {
                 dataType: DataType.LocalizedText,
-                value: coerceLocalizedText("Hello"),
-            },
+                value: coerceLocalizedText("Hello")
+            }
+        });
+
+        const v2 = namespace.addVariable({
+            browseName: "TestLocalizedTextArray",
+            dataType: DataType.LocalizedText,
+            valueRank: 1,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.LocalizedText,
+                arrayType: VariantArrayType.Array,
+                value: [
+                    coerceLocalizedText("Hello"),
+                    coerceLocalizedText("World"),
+                ]
+            }
         });
 
         const xml = namespace.toNodeset2XML();
@@ -616,10 +621,109 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         r_xml2.split("\n").should.eql(xml2.split("\n"));
 
         // console.log(xml);
+        r_xml2.should.match(/<LocalizedText/);
+        r_xml2.should.match(/<ListOfLocalizedText.*>/);
+        r_xml2.should.match(/<\/LocalizedText>/);
+        r_xml2.should.match(/<\/ListOfLocalizedText>/);
+
     });
-    it("NSXML3 should output an XML file - with Variant Matrix UAVariable", async () => {
+    it("NSXML3 should output an XML file - with Variant XmlElement", async () => {
+        const v1 = namespace.addVariable({
+            browseName: "TestXmlElement",
+            dataType: DataType.XmlElement,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.XmlElement,
+                value: "<tag>value</tag>"
+            }
+        });
+
+        const v2 = namespace.addVariable({
+            browseName: "TestXmlElementArray",
+            dataType: DataType.XmlElement,
+            valueRank: 1,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.XmlElement,
+                arrayType: VariantArrayType.Array,
+                value: [
+                    "<tag>Hello</tag>",
+                    "<tag>World</tag>"
+                ]
+            }
+        });
+
+        const xml = namespace.toNodeset2XML();
+        const xml2 = xml.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
+        const tmpFilename = getTempFilename("__generated_node_set_version1.xml");
+        fs.writeFileSync(tmpFilename, xml);
+
+        const r_xml2 = await reloadedNodeSet(tmpFilename);
+        r_xml2.split("\n").should.eql(xml2.split("\n"));
+
+        // console.log(xml);
+        r_xml2.should.match(/<XmlElement/);
+        r_xml2.should.match(/<ListOfXmlElement.*>/);
+        r_xml2.should.match(/<\/XmlElement>/);
+        r_xml2.should.match(/<\/ListOfXmlElement>/);
+
+    });
+    it("NSXML4 should output an XML file - with Variant QualifiedName", async () => {
+
+        const v1 = namespace.addVariable({
+            browseName: "TestQualifiedName",
+            dataType: DataType.QualifiedName,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.QualifiedName,
+                value: coerceQualifiedName("Hello")
+            }
+        });
+        const v2 = namespace.addVariable({
+            browseName: "TestQualifiedName2",
+            dataType: DataType.QualifiedName,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.QualifiedName,
+                value: coerceQualifiedName({ name: "Hello", namespaceIndex: 1 })
+            }
+        });
+
+        const v3 = namespace.addVariable({
+            browseName: "TestQualifiedNameArray",
+            dataType: DataType.QualifiedName,
+            arrayDimensions: [2],
+            valueRank: 1,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                arrayType: VariantArrayType.Array,
+                dataType: DataType.QualifiedName,
+                value: [
+                    coerceQualifiedName({ name: "Hello", namespaceIndex: 1 }),
+                    coerceQualifiedName({ name: "World", namespaceIndex: 1 }),
+                ]
+            }
+        });
+
+        const xml = namespace.toNodeset2XML();
+        // console.log(xml);
+
+        const xml2 = xml.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
+        const tmpFilename = getTempFilename("__generated_node_set_qn_version1.xml");
+        fs.writeFileSync(tmpFilename, xml);
+
+        const r_xml2 = await reloadedNodeSet(tmpFilename);
+        r_xml2.split("\n").should.eql(xml2.split("\n"));
+
+        r_xml2.should.match(/<QualifiedName/);
+        r_xml2.should.match(/<ListOfQualifiedName.*>/);
+        r_xml2.should.match(/<\/QualifiedName>/);
+        r_xml2.should.match(/<\/ListOfQualifiedName>/);
+
+    });
+    it("NSXML5 should output an XML file - with Variant Matrix UAVariable", async () => {
         const v = namespace.addVariable({
-            browseName: "Test",
+            browseName: "TestUInt32Matrix",
             dataType: "UInt32",
 
             arrayDimensions: [1, 2],
@@ -628,8 +732,8 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
             organizedBy: addressSpace.rootFolder.objects,
             value: {
                 dataType: DataType.UInt32,
-                value: [1, 2, 3, 4],
-            },
+                value: [1, 2, 3, 4]
+            }
         });
 
         const xml = namespace.toNodeset2XML();
@@ -645,7 +749,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
 
         // console.log(xml);
     });
-    it("NSXML3 should output an XML file - with Variant Matrix UAVariableType", async () => {
+    it("NSXML6 should output an XML file - with Variant Matrix UAVariableType", async () => {
         const v = namespace.addVariableType({
             browseName: "TestVariableType",
             dataType: "UInt32",
@@ -656,8 +760,8 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
             organizedBy: addressSpace.rootFolder.objects,
             value: {
                 dataType: DataType.UInt32,
-                value: [1, 2, 3, 4],
-            },
+                value: [1, 2, 3, 4]
+            }
         });
 
         const xml = namespace.toNodeset2XML();
@@ -672,5 +776,26 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         r_xml2.should.match(/ArrayDimensions=\"1,2\"/);
 
         // console.log(xml);
+    });
+    it("NSXML7 - empty buffer #861 ", async () => {
+        const v = namespace.addVariable({
+            browseName: "TestVariable",
+            dataType: DataType.ByteString,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.ByteString,
+                value: Buffer.alloc(0)
+            }
+        });
+
+        const xml = namespace.toNodeset2XML();
+        const xml2 = xml.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
+        const tmpFilename = getTempFilename("__generated_node_set_version_x.xml");
+        fs.writeFileSync(tmpFilename, xml);
+
+        const r_xml2 = await reloadedNodeSet(tmpFilename);
+        r_xml2.split("\n").should.eql(xml2.split("\n"));
+
+        //  console.log(xml);
     });
 });

@@ -2,7 +2,6 @@
 "use strict";
 
 const { assert } = require("node-opcua-assert");
-const _ = require("underscore");
 
 const path = require("path");
 const fs = require("fs");
@@ -14,10 +13,6 @@ const {
     AddressSpace
 } = require("node-opcua-address-space");
 
-const {
-    normalize_require_file,
-    LineFile
-} = require("node-opcua-utils");
 const {
     lowerFirstLetter
 } = require("node-opcua-utils");
@@ -127,7 +122,7 @@ function makeEnumeration(dataType, bForce) {
     assert(dataType);
     assert(dataType.browseName);
     assert(dataType.browseName instanceof QualifiedName);
-    assert(_.isArray(dataType.definition));
+    assert(Array.isArray(dataType.definition));
 
     const dataTypeName = dataType.browseName.name.toString();
     if (hasEnumeration(dataTypeName)) {
@@ -251,7 +246,7 @@ function makeStructure(dataType/*: UADataType*/, bForce/*: boolean*/, schema_fol
     const relative_filename = normalize_require_file(__dirname, filename);
 
     const constructor = require(relative_filename)[schema.name];
-    assert(_.isFunction(constructor), "expecting a constructor here");
+    assert(typeof constructor === "function", "expecting a constructor here");
 
     return constructor;
 }

@@ -1,7 +1,6 @@
 "use strict";
 const should = require("should");
 
-const _ = require("underscore");
 const BinaryStream = require("node-opcua-binary-stream").BinaryStream;
 
 const date_time = require("..");
@@ -17,14 +16,14 @@ const getCurrentClock = require("..").getCurrentClock;
 
 
 function isValidUInt32(value) {
-    if (!_.isFinite(value)) {
+    if (!isFinite(value)) {
         return false;
     }
     return value >= 0 && value <= 0xFFFFFFFF;
 }
 function isValidInt32(value) {
 
-    if (!_.isFinite(value)) {
+    if (!isFinite(value)) {
         return false;
     }
     value.should.be.greaterThan(-Math.pow(2, 31) - 1);
@@ -180,6 +179,8 @@ function bn_hundredNanoSecondFrom1601ToDate_big_number(high, low) {
 const Benchmarker = require("node-opcua-benchmarker").Benchmarker;
 
 describe("Benchmarking Date conversion routines", function() {
+
+    this.timeout(20000);
 
     it("should check that slow and fast method produce same result", function() {
 

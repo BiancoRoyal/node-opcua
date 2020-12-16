@@ -3,7 +3,7 @@
  */
 import * as chalk from "chalk";
 import { EventEmitter } from "events";
-import * as _ from "underscore";
+import { isEqual } from "lodash";
 
 import { assert } from "node-opcua-assert";
 import { UInt32 } from "node-opcua-basic-types";
@@ -18,7 +18,7 @@ import {
     makeNodeClassMask,
     NodeClass,
     QualifiedName,
-    QualifiedNameLike,
+    QualifiedNameLike
 } from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
 import { dumpIf } from "node-opcua-debug";
@@ -48,8 +48,9 @@ import {
     UAVariable as UAVariablePublic,
     UAVariableT,
     UAVariableType as UAVariableTypePublic,
-    XmlWriter,
+    XmlWriter
 } from "../source";
+import { UAStateVariable } from "../source/interfaces/state_machine/ua_state_variable";
 import * as cetools from "./address_space_change_event_tools";
 import { AddressSpacePrivate } from "./address_space_private";
 import {
@@ -62,9 +63,10 @@ import {
     BaseNode_removePrivate,
     BaseNode_toString,
     getSubtypeIndex,
-    ToStringBuilder,
+    ToStringBuilder
 } from "./base_node_private";
 import { MinimalistAddressSpace, Reference } from "./reference";
+import { UAReferenceType } from "./ua_reference_type";
 
 // tslint:disable:no-var-requires
 // tslint:disable:no-bitwise
@@ -129,7 +131,7 @@ export function makeAttributeEventName(attributeId: AttributeIds) {
  * {{#crossLink "Reference"}}{{/crossLink}},
  * {{#crossLink "UAMethod"}}{{/crossLink}},
  * {{#crossLink "UAView"}}{{/crossLink}},
- * {{#crossLink "UAObjecType"}}{{/crossLink}},
+ * {{#crossLink "UAObjectType"}}{{/crossLink}},
  * {{#crossLink "UADataType"}}{{/crossLink}},
  * {{#crossLink "UAVariableType"}}{{/crossLink}},
  *
@@ -304,7 +306,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
 
         // user defined filter function for browsing
         const _browseFilter = options.browseFilter || defaultBrowseFilterFunc;
-        assert(_.isFunction(_browseFilter));
+        assert(typeof _browseFilter === "function");
 
         _private._browseFilter = _browseFilter;
 
@@ -367,7 +369,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         const references: Reference[] = [];
 
         function process(referenceIdx: any) {
-            const referenceTypes = _.values(referenceIdx);
+            const referenceTypes = Object.values<any>(referenceIdx);
             for (const ref of referenceTypes) {
                 const h = ref.referenceType.toString();
                 if (ref.isForward === isForward && keys[h]) {
@@ -399,14 +401,11 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
      * @param  [isForward]  default=true
      * @return an array with references
      */
-    public findReferences(
-        referenceType: string | NodeId | UAReferenceTypePublic,
-        isForward?: boolean
-    ): UAReferencePublic[] {
+    public findReferences(referenceType: string | NodeId | UAReferenceTypePublic, isForward?: boolean): UAReferencePublic[] {
         const _private = BaseNode_getPrivate(this);
 
         isForward = utils.isNullOrUndefined(isForward) ? true : !!isForward;
-        assert(_.isBoolean(isForward));
+        assert(typeof isForward === "boolean");
 
         const referenceTypeNode = this._coerceReferenceType(referenceType);
 
@@ -421,21 +420,21 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         }
 
         const result: Reference[] = [];
-        _.forEach(_private._referenceIdx, (ref: Reference) => {
+        for (const ref of Object.values(_private._referenceIdx) as Reference[]) {
             if (ref.isForward === isForward) {
                 if (sameNodeId(ref.referenceType, referenceTypeNode.nodeId)) {
                     result.push(ref);
                 }
             }
-        });
+        }
 
-        _.forEach(_private._back_referenceIdx, (ref: Reference) => {
+        for (const ref of Object.values(_private._back_referenceIdx) as Reference[]) {
             if (ref.isForward === isForward) {
                 if (sameNodeId(ref.referenceType, referenceTypeNode.nodeId)) {
                     result.push(ref);
                 }
             }
-        });
+        }
 
         _private._cache[hash] = result;
         return result;
@@ -536,10 +535,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
     /**
      * retrieve a component by name
      */
-    public getComponentByName(
-        browseName: QualifiedNameLike,
-        namespaceIndex?: number
-    ): UAVariablePublic | UAObjectPublic | null {
+    public getComponentByName(browseName: QualifiedNameLike, namespaceIndex?: number): UAVariablePublic | UAObjectPublic | null {
         const components = this.getComponents();
         const select = _filter_by_browse_name(components, browseName, namespaceIndex);
         assert(select.length <= 1, "BaseNode#getComponentByName found duplicated reference");
@@ -564,7 +560,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         const select = _filter_by_browse_name(properties, browseName, namespaceIndex);
         assert(select.length <= 1, "BaseNode#getPropertyByName found duplicated reference");
         if (select.length === 1 && select[0].nodeClass !== NodeClass.Variable) {
-            throw new Error("Expecting a proprerty to be of TypeVariable");
+            throw new Error("Expecting a property to be of TypeVariable");
         }
         return select.length === 1 ? ((select[0] as any) as UAVariablePublic) : null;
     }
@@ -608,7 +604,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
      */
     public getMethodById(nodeId: NodeId): UAMethodPublic | null {
         const methods = this.getMethods();
-        const found = _.find(methods, (m: UAMethodPublic) => m.nodeId.toString() === nodeId.toString());
+        const found = methods.find((m: UAMethodPublic) => m.nodeId.toString() === nodeId.toString());
         return found || null;
     }
 
@@ -643,7 +639,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
                 break;
 
             case AttributeIds.NodeClass: // NodeClass
-                assert(_.isFinite(this.nodeClass));
+                assert(isFinite(this.nodeClass));
                 options.value = { dataType: DataType.Int32, value: this.nodeClass };
                 break;
 
@@ -683,7 +679,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         callback: (err: Error | null, statusCode?: StatusCode) => void
     ) {
         assert(context instanceof SessionContext);
-        assert(_.isFunction(callback));
+        assert(typeof callback === "function");
 
         if (writeValue.attributeId <= 0 || writeValue.attributeId > AttributeIds.UserExecutable) {
             return callback(null, StatusCodes.BadAttributeIdInvalid);
@@ -709,7 +705,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
 
     public ownReferences(): Reference[] {
         const _private = BaseNode_getPrivate(this);
-        return _.map(_private._referenceIdx, (r: Reference) => r);
+        return Object.values(_private._referenceIdx);
     }
 
     /**
@@ -788,7 +784,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
                 throw new Error(" cannot find node with id " + reference.nodeId.toString());
             }
 
-            if (_.isEqual(obj.browseName, relativePathElement.targetName)) {
+            if (isEqual(obj.browseName, relativePathElement.targetName)) {
                 // compare QualifiedName
 
                 const key = obj.nodeId.toString();
@@ -799,10 +795,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
             }
         }
 
-        if (
-            nodeIds.length === 0 &&
-            (this.nodeClass === NodeClass.ObjectType || this.nodeClass === NodeClass.VariableType)
-        ) {
+        if (nodeIds.length === 0 && (this.nodeClass === NodeClass.ObjectType || this.nodeClass === NodeClass.VariableType)) {
             const nodeType = (this as any) as UAVariableTypePublic;
 
             if (nodeType.subtypeOf) {
@@ -823,8 +816,8 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
      * @return an array with reference descriptions
      */
     public browseNode(browseDescription: BrowseDescription, context?: SessionContext): ReferenceDescription[] {
-        assert(_.isFinite(browseDescription.nodeClassMask));
-        assert(_.isFinite(browseDescription.browseDirection));
+        assert(isFinite(browseDescription.nodeClassMask));
+        assert(isFinite(browseDescription.browseDirection));
 
         const do_debug = false;
 
@@ -855,15 +848,11 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
 
         references = _filter_by_direction(references, browseDirection);
 
-        references = _filter_by_nodeclass.call(this, references, browseDescription.nodeClassMask);
+        references = _filter_by_nodeClass.call(this, references, browseDescription.nodeClassMask);
 
         references = _filter_by_userFilter.call(this, references, context);
 
-        const referenceDescriptions = _constructReferenceDescription(
-            addressSpace,
-            references,
-            browseDescription.resultMask
-        );
+        const referenceDescriptions = _constructReferenceDescription(addressSpace, references, browseDescription.resultMask);
 
         /* istanbul ignore next */
         if (do_debug) {
@@ -912,18 +901,18 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         cetools._handle_add_reference_change_event(this, referenceNode.nodeId);
     }
 
-    public removeReference(referencOpts: AddReferenceOpts): void {
+    public removeReference(referenceOpts: AddReferenceOpts): void {
         const _private = BaseNode_getPrivate(this);
 
-        assert(referencOpts.hasOwnProperty("referenceType"));
+        assert(referenceOpts.hasOwnProperty("referenceType"));
         // xx isForward is optional : assert(reference.hasOwnProperty("isForward"));
-        assert(referencOpts.hasOwnProperty("nodeId"));
+        assert(referenceOpts.hasOwnProperty("nodeId"));
 
         const addressSpace: AddressSpacePrivate = this.addressSpace;
         if (!addressSpace) {
             console.log(" Where is addressSpace ?");
         }
-        const reference = addressSpace.normalizeReferenceTypes([referencOpts!])![0];
+        const reference = addressSpace.normalizeReferenceTypes([referenceOpts!])![0];
         const h = reference.hash;
 
         const relatedNode = addressSpace.findNode(reference.nodeId)!;
@@ -931,7 +920,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         const invReference = new Reference({
             isForward: !reference.isForward,
             nodeId: this.nodeId,
-            referenceType: reference.referenceType,
+            referenceType: reference.referenceType
         });
 
         if (_private._referenceIdx[h]) {
@@ -1011,7 +1000,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         }
 
         Object.defineProperty(this, name, {
-            value: undefined,
+            value: undefined
         });
     }
 
@@ -1051,18 +1040,18 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
 
     /**
      * @method getFalseSubStates
-     * @return {BaseNode[]} return an array with the SubStates of this object.
+     * @return {UAStateVariable[]} return an array with the SubStates of this object.
      */
-    public getFalseSubStates(): BaseNode[] {
-        return this.findReferencesAsObject("HasFalseSubState");
+    public getFalseSubStates(): UAStateVariable[] {
+        return (this.findReferencesAsObject("HasFalseSubState") as unknown) as UAStateVariable[];
     }
 
     /**
      * @method getTrueSubStates
-     * @return {BaseNode[]} return an array with the SubStates of this object.
+     * @return {UAStateVariable[]} return an array with the SubStates of this object.
      */
-    public getTrueSubStates(): BaseNode[] {
-        return this.findReferencesAsObject("HasTrueSubState");
+    public getTrueSubStates(): UAStateVariable[] {
+        return (this.findReferencesAsObject("HasTrueSubState") as unknown) as UAStateVariable[];
     }
 
     public findHierarchicalReferences(): UAReference[] {
@@ -1150,8 +1139,8 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
         this.removeAllListeners();
         this._clear_caches();
 
-        _.forEach(_private._back_referenceIdx, (ref: Reference) => ref.dispose());
-        _.forEach(_private._referenceIdx, (ref: Reference) => ref.dispose());
+        (Object.values(_private._back_referenceIdx) as Reference[]).forEach((ref: Reference) => ref.dispose());
+        (Object.values(_private._referenceIdx) as Reference[]).forEach((ref: Reference) => ref.dispose());
         _private._cache = {};
         _private.__address_space = null;
         _private._back_referenceIdx = null;
@@ -1175,18 +1164,13 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
 
         const addressSpace = this.addressSpace;
 
-        _.forEach(_private._referenceIdx, (reference: UAReference) => {
+        for (const reference of Object.values(_private._referenceIdx) as UAReference[]) {
             // filter out non  Hierarchical References
             const referenceType = resolveReferenceType(addressSpace, reference);
 
             // istanbul ignore next
             if (!referenceType) {
-                console.error(
-                    chalk.red(" ERROR"),
-                    " cannot find reference ",
-                    reference.referenceType,
-                    reference.toString()
-                );
+                console.error(chalk.red(" ERROR"), " cannot find reference ", reference.referenceType, reference.toString());
             }
 
             const related_node = resolveReferenceNode(addressSpace, reference) as BaseNode;
@@ -1197,11 +1181,11 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
                     new Reference({
                         isForward: !reference.isForward,
                         nodeId: this.nodeId,
-                        referenceType: reference.referenceType,
+                        referenceType: reference.referenceType
                     })
                 );
             } // else addressSpace may be incomplete
-        });
+        }
     }
 
     public installPostInstallFunc(f: any): void {
@@ -1276,7 +1260,7 @@ export class BaseNode extends EventEmitter implements BaseNodePublic {
     }
 
     private _setDisplayName(displayName: LocalizedTextLike | LocalizedTextLike[]) {
-        const displayNames: LocalizedTextLike[] = _.isArray(displayName) ? displayName : [displayName];
+        const displayNames: LocalizedTextLike[] = Array.isArray(displayName) ? displayName : [displayName];
         const _displayNames = displayNames.map(coerceLocalizedText) as LocalizedText[];
         const _private = BaseNode_getPrivate(this);
         _private._displayName = _displayNames;
@@ -1311,7 +1295,7 @@ function toString_ReferenceDescription(ref: Reference, options: { addressSpace: 
     const r = new Reference({
         isForward: ref.isForward,
         nodeId: ref.nodeId,
-        referenceType: refNode.browseName.toString(),
+        referenceType: refNode.browseName.toString()
     });
     const str = r.toString(options);
     r.dispose();
@@ -1320,11 +1304,7 @@ function toString_ReferenceDescription(ref: Reference, options: { addressSpace: 
 
 /* jshint latedef: false */
 function _setup_parent_item(this: BaseNode, references: { [key: string]: any }): BaseNodePublic | null {
-    references = _.map(references, (x: Reference) => x) as Reference[];
-
-    /* jshint validthis: true */
-    assert(this instanceof BaseNode);
-    assert(_.isArray(references));
+    references = Object.values(references);
 
     const _private = BaseNode_getPrivate(this);
     assert(!_private._parent, "_setup_parent_item has been already called");
@@ -1346,9 +1326,7 @@ function _setup_parent_item(this: BaseNode, references: { [key: string]: any }):
                     // tslint:disable-next-line:no-console
                     console.warn("    browseResults:");
                     // tslint:disable-next-line:no-console
-                    console.warn(
-                        references.map((f: Reference) => toString_ReferenceDescription(f, options)).join("\n")
-                    );
+                    console.warn(references.map((f: Reference) => toString_ReferenceDescription(f, options)).join("\n"));
                     // tslint:disable-next-line:no-console
                     console.warn("    first one will be used as parent");
                     // xx assert(browseResults.length === 1);
@@ -1435,11 +1413,7 @@ function _propagate_ref(this: BaseNode, addressSpace: MinimalistAddressSpace, re
             // istanbul ignore next
             if (displayWarningReferencePointingToItSelf) {
                 // this could happen with method
-                console.warn(
-                    "  Warning: a Reference is pointing to itthis ",
-                    this.nodeId.toString(),
-                    this.browseName.toString()
-                );
+                console.warn("  Warning: a Reference is pointing to itthis ", this.nodeId.toString(), this.browseName.toString());
                 displayWarningReferencePointingToItSelf = false;
             }
         }
@@ -1460,7 +1434,7 @@ function _propagate_ref(this: BaseNode, addressSpace: MinimalistAddressSpace, re
                 isForward: !reference.isForward,
                 node: this,
                 nodeId: this.nodeId,
-                referenceType: reference.referenceType,
+                referenceType: reference.referenceType
             })
         );
     } // else addressSpace may be incomplete and under construction (while loading a nodeset.xml file for instance)
@@ -1558,8 +1532,8 @@ function _filter_by_direction(references: Reference[], browseDirection: BrowseDi
     }
 }
 
-function _filter_by_nodeclass(this: BaseNode, references: Reference[], nodeClassMask: number): Reference[] {
-    assert(_.isFinite(nodeClassMask));
+function _filter_by_nodeClass(this: BaseNode, references: Reference[], nodeClassMask: number): Reference[] {
+    assert(isFinite(nodeClassMask));
     if (nodeClassMask === 0) {
         return references;
     }
@@ -1603,7 +1577,7 @@ const reservedNames = {
     displayName: 0,
     nodeClass: 0,
     nodeId: 0,
-    typeDefinition: 0,
+    typeDefinition: 0
 };
 
 /*
@@ -1629,9 +1603,7 @@ function install_components_as_object_properties(parentObj: BaseNode) {
 
         if (reservedNames.hasOwnProperty(name)) {
             if (doDebug) {
-                console.log(
-                    chalk.bgWhite.red("Ignoring reserved keyword                                               " + name)
-                );
+                console.log(chalk.bgWhite.red("Ignoring reserved keyword                                               " + name));
             }
             continue;
         }
@@ -1651,7 +1623,7 @@ function install_components_as_object_properties(parentObj: BaseNode) {
             // xx writable: false,
             get() {
                 return child;
-            },
+            }
             // value: child
         });
     }

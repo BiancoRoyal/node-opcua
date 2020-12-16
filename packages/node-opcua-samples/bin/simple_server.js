@@ -191,8 +191,8 @@ const paths = envPaths(productUri);
     maxConnectionsPerEndpoint: maxConnectionsPerEndpoint,
 
     nodeset_filename: [
-      nodesets.standard_nodeset_file,
-      nodesets.di_nodeset_filename
+      nodesets.standard,
+      nodesets.di
     ],
 
     serverInfo: {
@@ -546,20 +546,19 @@ const paths = envPaths(productUri);
 
     if (argv.silent) { return; }
     if (isIn(response, servicesToTrace)) {
+      console.log(t(response.responseHeader.timestamp), response.responseHeader.requestHandle,
+        response.schema.name.padEnd(30, " "), " status = ", response.responseHeader.serviceResult.toString());
       console.log(response.constructor.name, response.toString());
     }
-    console.log(t(response.responseHeader.timestamp), response.responseHeader.requestHandle,
-      response.schema.name.padEnd(30, " "), " status = ", response.responseHeader.serviceResult.toString());
-
   });
 
   server.on("request", function(request, channel) {
     if (argv.silent) { return; }
     if (isIn(request, servicesToTrace)) {
+      console.log(t(request.requestHeader.timestamp), request.requestHeader.requestHandle,
+        request.schema.name.padEnd(30, " "), " ID =", channel.channelId.toString());
       console.log(request.constructor.name, request.toString());
     }
-    console.log(t(request.requestHeader.timestamp), request.requestHeader.requestHandle,
-      request.schema.name.padEnd(30, " "), " ID =", channel.channelId.toString());
   });
 
   process.on("SIGINT", function() {
