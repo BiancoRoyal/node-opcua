@@ -111,7 +111,7 @@ describe("Testing bug #635", () => {
         // console.log("variable 2 = ", variableNode2.nodeId.toString());
     }
 
-    const port = 2222;
+    const port = 2223;
     let server: OPCUAServer;
     let endpointUrl: string;
     before(async () => {
@@ -131,7 +131,7 @@ describe("Testing bug #635", () => {
         // user1/password1
 
         const client = OPCUAClient.create({
-            endpoint_must_exist: false,
+            endpointMustExist: false,
             requestedSessionTimeout: 60000
         });
 

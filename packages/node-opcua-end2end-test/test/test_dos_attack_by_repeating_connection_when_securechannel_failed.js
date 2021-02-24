@@ -11,8 +11,9 @@ const { readCertificate, readCertificateRevocationList, exploreCertificateInfo }
 
 require("should");
 
-const debugLog = require("node-opcua-debug").make_debugLog(__filename);
-const doDebug = require("node-opcua-debug").checkDebugFlag(__filename) || !!process.env.DEBUG;
+const { make_debugLog, checkDebugFlag} = require("node-opcua-debug");
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
 
 const {
     is_valid_endpointUrl,
@@ -28,13 +29,16 @@ const {
 const fail_fast_connectionStrategy = {
     maxRetry: 0  // << NO RETRY !!
 };
+
+const certificateFolder = path.join(__dirname, "../../node-opcua-samples/certificates");
+
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("testing Server resilience to DDOS attacks 2", function() {
 
 
-    const invalidCertificateFile = path.join(__dirname, "../certificates/client_cert_2048_outofdate.pem");
-    const validCertificate = path.join(__dirname, "../certificates/client_cert_2048.pem");
-    const privateKeyFile = path.join(__dirname, "../certificates/client_key_2048.pem");
+    const invalidCertificateFile = path.join(certificateFolder,"client_cert_2048_outofdate.pem");
+    const validCertificate = path.join(certificateFolder,"client_cert_2048.pem");
+    const privateKeyFile = path.join(certificateFolder,"client_key_2048.pem");
 
     let server;
     let endpointUrl;
@@ -45,7 +49,7 @@ describe("testing Server resilience to DDOS attacks 2", function() {
     let sessions = [];
     let rejected_connections = 0;
 
-    let port = 2000;
+    const port = 2019;
 
     this.timeout(Math.max(30000000, this.timeout()));
     const remotePorts = {
@@ -68,8 +72,6 @@ describe("testing Server resilience to DDOS attacks 2", function() {
     });
     beforeEach(async () => {
 
-        port += 1;
-
         console.log(" server port = ", port);
         clients = [];
         sessions = [];
@@ -77,7 +79,7 @@ describe("testing Server resilience to DDOS attacks 2", function() {
 
 
         const serverCertificateManager = new OPCUACertificateManager({
-            rootFolder: path.join(__dirname, "../certificates/tmp_pki")
+            rootFolder: path.join(certificateFolder,"tmp_pki")
         });
         await serverCertificateManager.initialize();
 
@@ -85,7 +87,7 @@ describe("testing Server resilience to DDOS attacks 2", function() {
         await serverCertificateManager.trustCertificate(cert);
 
         server = new OPCUAServer({
-            port: port,
+            port,
             maxConnectionsPerEndpoint: maxConnectionsPerEndpoint,
             maxAllowedSessionNumber: maxAllowedSessionNumber,
             //xx nodeset_filename: empty_nodeset_filename
@@ -94,8 +96,8 @@ describe("testing Server resilience to DDOS attacks 2", function() {
         console.log("RootFolder = ", server.serverCertificateManager.rootFolder);
 
         // make sure "that certificate issuer in th*
-        const issuerCertificateFile = path.join(__dirname, "../certificates/CA/public/cacert.pem");
-        const revokeListFile = path.join(__dirname, "../certificates/CA/crl/revocation_list.crl");
+        const issuerCertificateFile = path.join(certificateFolder,"CA/public/cacert.pem");
+        const revokeListFile = path.join(certificateFolder,"CA/crl/revocation_list.crl");
 
         const issuerCertificate = await readCertificate(issuerCertificateFile);
         const a = exploreCertificateInfo(issuerCertificate);
@@ -155,7 +157,7 @@ describe("testing Server resilience to DDOS attacks 2", function() {
     });
 
     it("ZCCC1 should ban client that constantly reconnect", async () => {
-
+        console.log("done")
     });
 
     it("ZCCC2 should ban client that constantly reconnect", async () => {
@@ -172,7 +174,7 @@ describe("testing Server resilience to DDOS attacks 2", function() {
             try {
                 const client = OPCUAClient.create({
 
-                    endpoint_must_exist: false,
+                    endpointMustExist: false,
 
                     connectionStrategy: fail_fast_connectionStrategy,
 
@@ -215,7 +217,7 @@ describe("testing Server resilience to DDOS attacks 2", function() {
         try {
             const client = OPCUAClient.create({
 
-                endpoint_must_exist: false,
+                endpointMustExist: false,
 
                 connectionStrategy: fail_fast_connectionStrategy,
 

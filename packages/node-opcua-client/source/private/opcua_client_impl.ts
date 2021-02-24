@@ -8,39 +8,24 @@
 import * as async from "async";
 import * as chalk from "chalk";
 import * as crypto from "crypto";
-import * as _ from "underscore";
 import { callbackify } from "util";
 
 import { assert } from "node-opcua-assert";
 import { createFastUninitializedBuffer } from "node-opcua-buffer-utils";
-import { makeApplicationUrn } from "node-opcua-common";
 import {
     Certificate,
     exploreCertificate,
     extractPublicKeyFromCertificateSync,
     Nonce,
-    PrivateKey,
     PrivateKeyPEM,
     toPem
 } from "node-opcua-crypto";
+
 import { LocalizedText } from "node-opcua-data-model";
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
-import { extractFullyQualifiedDomainName, getFullyQualifiedDomainName, resolveFullyQualifiedDomainName } from "node-opcua-hostname";
-import {
-    ClientSecureChannelLayer,
-    computeSignature,
-    ConnectionStrategyOptions,
-    fromURI,
-    getCryptoFactory,
-    SecurityPolicy
-} from "node-opcua-secure-channel";
-import {
-    ApplicationDescription,
-    ApplicationDescriptionOptions,
-    ApplicationType,
-    EndpointDescription,
-    UserTokenType
-} from "node-opcua-service-endpoints";
+import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
+import { extractFullyQualifiedDomainName, getHostname, resolveFullyQualifiedDomainName } from "node-opcua-hostname";
+import { ClientSecureChannelLayer, computeSignature, fromURI, getCryptoFactory, SecurityPolicy } from "node-opcua-secure-channel";
+import { ApplicationDescriptionOptions, ApplicationType, EndpointDescription, UserTokenType } from "node-opcua-service-endpoints";
 import { MessageSecurityMode, UserTokenPolicy } from "node-opcua-service-secure-channel";
 import {
     ActivateSessionRequest,
@@ -83,9 +68,9 @@ interface TokenAndSignature {
     userTokenSignature: SignatureDataOptions;
 }
 
-const debugLog = make_debugLog(__filename);
 const doDebug = checkDebugFlag(__filename);
-const errorLog = debugLog;
+const debugLog = make_debugLog(__filename);
+const errorLog = make_errorLog(__filename);
 
 function validateServerNonce(serverNonce: Nonce | null): boolean {
     return !(serverNonce && serverNonce.length < 32) || (serverNonce && serverNonce.length === 0);
@@ -112,8 +97,7 @@ function verifyEndpointDescriptionMatches(client: OPCUAClientImpl, responseServe
 
 function findUserTokenPolicy(endpointDescription: EndpointDescription, userTokenType: UserTokenType) {
     endpointDescription.userIdentityTokens = endpointDescription.userIdentityTokens || [];
-    const r = _.filter(
-        endpointDescription.userIdentityTokens,
+    const r = endpointDescription.userIdentityTokens.filter(
         (userIdentity: UserTokenPolicy) => userIdentity.tokenType === userTokenType
     );
     return r.length === 0 ? null : r[0];
@@ -313,19 +297,6 @@ function createUserNameIdentityToken(
 }
 
 /***
- *
- * @class OPCUAClientImpl
- * @extends ClientBaseImpl
- * @param options
- * @param [options.securityMode=MessageSecurityMode.None] {MessageSecurityMode} the default security mode.
- * @param [options.securityPolicy =SecurityPolicy.None] {SecurityPolicy} the security mode.
- * @param [options.requestedSessionTimeout= 60000]            {Number} the requested session time out in CreateSession
- * @param [options.applicationName="NodeOPCUA-Client"]        {string} the client application name
- * @param [options.endpoint_must_exist=true] {Boolean} set to false if the client should accept server endpoint mismatch
- * @param [options.keepSessionAlive=false]{Boolean}
- * @param [options.certificateFile="certificates/client_selfsigned_cert_2048.pem"] {String} client certificate pem file.
- * @param [options.privateKeyFile="certificates/client_key_2048.pem"] {String} client private key pem file.
- * @param [options.clientName=""] {String} a client name string that will be used to generate session names.
  * @constructor
  * @internal
  */
@@ -336,7 +307,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 
     public endpoint?: EndpointDescription;
 
-    private endpoint_must_exist: boolean;
+    private endpointMustExist: boolean;
     private requestedSessionTimeout: number;
     private ___sessionName_counter: number;
     private userIdentityInfo: UserIdentityInfo;
@@ -347,11 +318,20 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         options = options || {};
         super(options);
 
-        // @property endpoint_must_exist {Boolean}
+        // @property endpointMustExist {Boolean}
         // if set to true , create Session will only accept connection from server which endpoint_url has been reported
         // by GetEndpointsRequest.
         // By default, the client is strict.
-        this.endpoint_must_exist = isNullOrUndefined(options.endpoint_must_exist) ? true : !!options.endpoint_must_exist;
+        if (options.hasOwnProperty("endpoint_must_exist")) {
+            if (options.hasOwnProperty("endpointMustExist")) {
+                throw new Error(
+                    "endpoint_must_exist is deprecated! you must now use endpointMustExist instead of endpoint_must_exist "
+                );
+            }
+            // later : console.log("Warning: endpoint_must_exist is now deprecated, use endpointMustExist instead");
+            options.endpointMustExist = options.endpoint_must_exist;
+        }
+        this.endpointMustExist = isNullOrUndefined(options.endpointMustExist) ? true : !!options.endpointMustExist;
 
         this.requestedSessionTimeout = options.requestedSessionTimeout || 60000; // 1 minute
 
@@ -474,7 +454,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
             this._removeSession(session);
             session.dispose();
 
-            assert(!_.contains(this._sessions, session));
+            assert(this._sessions.indexOf(session) === -1);
             assert(session._closed, "session must indicate it is closed");
 
             callback(err ? err : undefined);
@@ -729,13 +709,13 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
                     // remove session from old client:
                     if (old_client) {
                         old_client._removeSession(internalSession);
-                        assert(!_.contains(old_client._sessions, internalSession));
+                        assert(old_client._sessions.indexOf(internalSession) === -1);
                     }
 
                     this._addSession(internalSession);
                     assert(internalSession._client === this);
                     assert(!internalSession._closed, "session should not vbe closed");
-                    assert(_.contains(this._sessions, internalSession));
+                    assert(this._sessions.indexOf(internalSession) !== -1);
                 }
                 callback!();
             } else {
@@ -782,7 +762,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         if (!this._secureChannel) {
             throw new Error("Invalid channel");
         }
-        assert(this.serverUri !== undefined, " must have a valid server URI");
+        assert(this.serverUri !== undefined, " must have a valid server URI " + this.serverUri);
         assert(this.endpointUrl !== undefined, " must have a valid server endpointUrl");
         assert(this.endpoint);
 
@@ -1012,18 +992,17 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         let applicationUri: string;
         if (certificate) {
             const e = exploreCertificate(certificate);
-            if (e.tbsCertificate.extensions !== null) {
+            if (e.tbsCertificate.extensions?.subjectAltName?.uniformResourceIdentifier) {
                 applicationUri = e.tbsCertificate.extensions.subjectAltName.uniformResourceIdentifier[0];
             } else {
-                errorLog("Certificate has no extension");
+                errorLog("Certificate has no extensions.subjectAltName.uniformResourceIdentifier, ");
                 errorLog(toPem(certificate, "CERTIFICATE"));
-                applicationUri = makeApplicationUrn(getFullyQualifiedDomainName(), this.applicationName);
+                applicationUri = this._getBuiltApplicationUri();
             }
         } else {
-            errorLog("client has no certificate");
-            applicationUri = makeApplicationUrn(getFullyQualifiedDomainName(), this.applicationName);
+            applicationUri = this._getBuiltApplicationUri();
         }
-        return resolveFullyQualifiedDomainName(applicationUri);
+        return applicationUri;
     }
 
     /**
@@ -1042,9 +1021,9 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         //   Client  shall report the difference and may close the  SecureChannel.
 
         if (!this.endpoint) {
-            if (this.endpoint_must_exist) {
+            if (this.endpointMustExist) {
                 debugLog(
-                    "OPCUAClientImpl#endpoint_must_exist = true and endpoint with url ",
+                    "OPCUAClientImpl#endpointMustExist = true and endpoint with url ",
                     this._secureChannel!.endpointUrl,
                     " cannot be found"
                 );
@@ -1220,8 +1199,6 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 // tslint:disable:no-var-requires
 // tslint:disable:max-line-length
 const thenify = require("thenify");
-OPCUAClientImpl.prototype.connect = thenify.withCallback(OPCUAClientImpl.prototype.connect);
-OPCUAClientImpl.prototype.disconnect = thenify.withCallback(OPCUAClientImpl.prototype.disconnect);
 /**
  * @method createSession
  * @async

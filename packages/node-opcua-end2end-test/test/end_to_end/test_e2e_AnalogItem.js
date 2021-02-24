@@ -2,7 +2,6 @@
 const chalk = require("chalk");
 const should = require("should");
 const async = require("async");
-const _ = require("underscore");
 
 const opcua = require("node-opcua");
 const OPCUAClient = opcua.OPCUAClient;
@@ -12,14 +11,15 @@ const AttributeIds = opcua.AttributeIds;
 const BrowseDirection = opcua.BrowseDirection;
 const readUAAnalogItem = opcua.readUAAnalogItem;
 
-const debugLog = require("node-opcua-debug").make_debugLog(__filename);
+const { make_debugLog, checkDebugFlag} = require("node-opcua-debug");
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
 
-const port = 2000;
+const port = 2009;
 
-const build_server_with_temperature_device = require("../../test_helpers/build_server_with_temperature_device").build_server_with_temperature_device;
+const { build_server_with_temperature_device } = require("../../test_helpers/build_server_with_temperature_device");
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
-
 describe("testing AnalogItem on client side", function() {
 
     let server, client, temperatureVariableId, endpointUrl;
@@ -29,9 +29,9 @@ describe("testing AnalogItem on client side", function() {
     let g_session = null;
     before(function(done) {
 
-        server = build_server_with_temperature_device({ port: port }, function(err) {
+        server = build_server_with_temperature_device({ port }, function(err) {
             if (err) return done(err);
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             temperatureVariableId = server.temperatureVariableId;
             done(err);
         });
@@ -128,9 +128,8 @@ describe("testing AnalogItem on client side", function() {
                 return callback(null, null);
             }
 
-            let tmp = _.filter(result.references, function(e) {
-                return e.browseName.name === browseName;
-            });
+            let tmp = result.references.filter((e) =>  e.browseName.name === browseName);
+
             tmp = tmp.map(function(e) {
                 return e.nodeId;
             });

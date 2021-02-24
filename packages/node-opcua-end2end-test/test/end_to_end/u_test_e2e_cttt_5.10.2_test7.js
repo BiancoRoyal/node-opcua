@@ -5,11 +5,12 @@
 
 
 const opcua = require("node-opcua");
-const _ = require("underscore");
 
 const OPCUAClient = opcua.OPCUAClient;
 
 const { perform_operation_on_subscription } = require("../../test_helpers/perform_operation_on_client_session");
+
+const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 
 module.exports = function(test) {
 
@@ -36,7 +37,7 @@ module.exports = function(test) {
 
         }
         it("1. Server should revise PublishingInterval the value to a value it support when RequestedPublishingInterval is NaN ", function(done) {
-            _.isNaN(NaN).should.eql(true);
+            Number.isNaN(NaN).should.eql(true);
             performTestWithValue(NaN, done);
         });
         it("2. Server should revise PublishingInterval the value to a value it support when RequestedPublishingInterval is Infinity ", function(done) {

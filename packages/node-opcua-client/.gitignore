@@ -2,4 +2,4 @@ certificates
 out*
 tsconfig.json
 tsconfig.tsbuildinfo
-test
+dist2/

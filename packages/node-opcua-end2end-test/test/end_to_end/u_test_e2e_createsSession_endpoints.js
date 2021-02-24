@@ -9,7 +9,7 @@ const { reject } = require("underscore");
 async function testCreateSessionResponse(endpointUrl) {
 
     const client1 = OPCUAClient.create({
-        endpoint_must_exist: false,
+        endpointMustExist: false,
         connectionStrategy: {
             maxRetry: 1
         }
@@ -52,6 +52,8 @@ async function testCreateSessionResponse(endpointUrl) {
     return{ createSessionResponse};
 
 }
+const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
+
 module.exports = function(test) {
 
     describe("PP1 CreateSessionResponse endpoints", function() {
@@ -68,7 +70,10 @@ module.exports = function(test) {
         });
         it("should receive server endpoint in CreateSessionResponse when endpointUrl used by the client doesn't match a valid endpoint", async () => {
 
-            const endpointUrl = "opc.tcp://localhost:2002";
+            const match = test.endpointUrl.match(/\:([0-9]*)$/);
+            const port = parseInt(match[1],10);
+            const endpointUrl = `opc.tcp://localhost:${port}`;
+            // console.log(endpointUrl);
             const { createSessionResponse, err }= await testCreateSessionResponse(endpointUrl);
             should.not.exist(err);
             createSessionResponse.serverEndpoints.length.should.eql(7);

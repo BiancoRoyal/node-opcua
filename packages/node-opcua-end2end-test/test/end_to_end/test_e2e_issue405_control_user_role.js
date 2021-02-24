@@ -6,9 +6,9 @@ const opcua = require("node-opcua");
 const OPCUAClient = opcua.OPCUAClient;
 const StatusCodes = opcua.StatusCodes;
 
-const build_server_with_temperature_device = require("../../test_helpers/build_server_with_temperature_device").build_server_with_temperature_device;
+const { build_server_with_temperature_device } = require("../../test_helpers/build_server_with_temperature_device");
 
-const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
+const { perform_operation_on_client_session } = require("../../test_helpers/perform_operation_on_client_session");
 
 
 const users = [
@@ -53,18 +53,19 @@ const userManager = {
 
 };
 
+const port = 2225;
+
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("testing Client-Server with UserName/Password identity token", function() {
 
     let server, client, endpointUrl;
     let node1;
 
-    const port = 2002;
 
     before(function(done) {
 
         const options = {
-            port: port,
+            port,
             //xx            allowAnonymous: false
         };
 
@@ -75,7 +76,7 @@ describe("testing Client-Server with UserName/Password identity token", function
                 CurrentWrite: ["!*", "admin"]  // deny all except admin, so 'operator' should be denied
             };
 
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             // replace user manager with our custom one
             server.userManager = userManager;
 

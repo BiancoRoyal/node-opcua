@@ -9,12 +9,14 @@ const {
 const doDebug = false;
 const debugLog = require("node-opcua-debug").make_debugLog("TEST");
 let server_data = null;
+const port = 2016;
 
 function start_external_opcua_server(callback) {
 
     const options = {
+        silent: !doDebug,
         server_sourcefile: path.join(__dirname, "../../test_helpers/bin/simple_server_with_custom_extension_objects.js"),
-        port: 2223
+        port
     };
 
     start_simple_server(options, function(err, data) {
@@ -56,7 +58,7 @@ function start_active_client(connectionStrategy, callback) {
 
     client = opcua.OPCUAClient.create({
         connectionStrategy,
-        endpoint_must_exist: false,
+        endpointMustExist: false,
         keepSessionAlive: true,
         requestedSessionTimeout: 60000
     });

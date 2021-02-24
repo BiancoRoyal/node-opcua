@@ -5,7 +5,7 @@ const opcua = require("node-opcua");
 const os = require("os");
 const OPCUAClient = opcua.OPCUAClient;
 
-const build_server_with_temperature_device = require("../../test_helpers/build_server_with_temperature_device").build_server_with_temperature_device;
+const { build_server_with_temperature_device } = require("../../test_helpers/build_server_with_temperature_device");
 
 
 const userManager = {
@@ -33,14 +33,13 @@ describe("testing Client-Server with UserName/Password identity token", function
 
     let server, client, endpointUrl;
 
-    let port = 2002;
+    const port = 2239;
     before(function (done) {
         // we use a different port for each tests to make sure that there is
         // no left over in the tcp pipe that could generate an error
-        port += 1;
 
         const options = {
-            port: port,
+            port,
             allowAnonymous: false
         };
 
@@ -49,7 +48,7 @@ describe("testing Client-Server with UserName/Password identity token", function
             // replace user manager with our custom one
             server.userManager = userManager;
 
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
 
             done(err);
         });
@@ -200,7 +199,7 @@ describe("testing Client-Server with UserName/Password identity token", function
         const userName = "username";
         const password = "p@ssw0rd";
         const options = {
-            endpoint_must_exist: false,
+            endpointMustExist: false,
             securityMode: opcua.MessageSecurityMode.Sign,
             securityPolicy: opcua.SecurityPolicy.Basic128Rsa15
         };

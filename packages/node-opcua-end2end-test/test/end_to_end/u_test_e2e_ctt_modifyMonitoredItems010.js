@@ -111,6 +111,8 @@ const itemsToMonitor2 = [
     { nodeId: "ns=2;s=UInt64MultiStateValueDiscrete", attributeId: AttributeIds.Value },
 ];
 
+const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
+
 module.exports = function(test) {
 
     describe("Testing ctt 010  - Modify the samplingInterval of multiple nodes, where the first half are set to 1000 msec and the latter half 3000 msec", function() {
@@ -136,7 +138,7 @@ module.exports = function(test) {
                 const subscription = ClientSubscription.create(session, {
                     requestedPublishingInterval: 200,
                     requestedLifetimeCount: 10 * 60 * 1000,
-                    requestedMaxKeepAliveCount: 60000,
+                    requestedMaxKeepAliveCount: 60,
                     maxNotificationsPerPublish: 0,
                     publishingEnabled: true,
                     priority: 6

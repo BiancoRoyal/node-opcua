@@ -2,26 +2,26 @@
     "name": "node-opcua-nodeid",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
-    "version": "2.28.0",
+    "version": "2.31.0",
     "description": "pure nodejs OPCUA SDK - module -nodeid",
     "scripts": {
         "build": "tsc -b",
         "lint": "tslint source/**/*.ts",
         "clean": "node -e \"require('rimraf').sync('dist');\"",
-        "test": "mocha test"
+        "test": "mocha"
     },
     "dependencies": {
-        "@types/lodash": "4.14.162",
+        "@types/lodash": "4.14.168",
         "chalk": "^4.1.0",
         "lodash": "4.17.20",
-        "node-opcua-assert": "2.22.0",
-        "node-opcua-constants": "2.22.0",
-        "node-opcua-enum": "2.28.0",
-        "node-opcua-guid": "2.22.0"
+        "node-opcua-assert": "2.29.0",
+        "node-opcua-constants": "2.29.0",
+        "node-opcua-enum": "2.29.0",
+        "node-opcua-guid": "2.29.0"
     },
     "devDependencies": {
-        "node-opcua-benchmarker": "2.28.0",
-        "node-opcua-debug": "2.28.0",
+        "node-opcua-benchmarker": "2.29.0",
+        "node-opcua-debug": "2.31.0",
         "should": "^13.2.3",
         "source-map-support": "^0.5.19"
     },

@@ -19,10 +19,15 @@ const rootFolder = path.join(__dirname, "../../..");
 
 const port = parseInt(argv.port, 10) || 26555;
 
+// tslint:disable-next-line: no-var-requires
+const envPaths = require("env-paths");
+const config = envPaths("node-opcua-default").config;
+const pkiFolder = path.join(config, "PKI");
+
 const certificateManager = new OPCUACertificateManager({
     automaticallyAcceptUnknownCertificate: true,
-
-    rootFolder: path.join(__dirname, "certificate")
+    name: "PKI",
+    rootFolder: pkiFolder
 });
 
 const server_options = {
@@ -56,7 +61,9 @@ async function main() {
 
         installPushCertificateManagement(addressSpace, {
             applicationGroup: server.serverCertificateManager,
-            userTokenGroup: server.userCertificateManager
+            userTokenGroup: server.userCertificateManager,
+
+            applicationUri: server.serverInfo.applicationUri!
         });
 
         console.log("Certificate rejected folder ", server.serverCertificateManager.rejectedFolder);
@@ -69,7 +76,7 @@ async function main() {
         process.exit(-3);
     }
 
-    const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl!;
+    const endpointUrl = server.getEndpointUrl()!;
 
     console.log(chalk.yellow("  server on port      :"), chalk.cyan(server.endpoints[0].port.toString()));
     console.log(chalk.yellow("  endpointUrl         :"), chalk.cyan(endpointUrl));

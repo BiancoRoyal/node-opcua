@@ -6,8 +6,6 @@
 // tslint:disable:max-line-length
 
 import { assert } from "node-opcua-assert";
-import { Enum } from "node-opcua-enum";
-import * as  _ from "underscore";
 
 import { MessageSecurityMode, SignatureData } from "node-opcua-service-secure-channel";
 
@@ -16,7 +14,6 @@ import {
     computeDerivedKeys as computeDerivedKeys_ext,
     DerivedKeys,
     encryptBufferWithDerivedKeys,
-    exploreCertificate,
     exploreCertificateInfo,
     makeMessageChunkSignature,
     makeMessageChunkSignatureWithDerivedKeys,
@@ -29,11 +26,12 @@ import {
     RSA_PKCS1_OAEP_PADDING,
     RSA_PKCS1_PADDING,
     Signature,
+    split_der,
     toPem,
     verifyMessageChunkSignature,
 
 } from "node-opcua-crypto";
-import { SecureMessageChunkManagerOptions } from "./secure_message_chunk_manager";
+import { EncryptBufferFunc, SignBufferFunc } from "node-opcua-chunkmanager";
 
 // tslint:disable:no-empty
 function errorLog(...args: any[]) {
@@ -440,12 +438,15 @@ export function computeSignature(
         return undefined;
     }
 
+    // Verify that senderCertifiate is not a chain
+    const chain = split_der(senderCertificate);
+
     const cryptoFactory = getCryptoFactory(securityPolicy);
     if (!cryptoFactory) {
         return undefined;
     }
     // This parameter is calculated by appending the clientNonce to the clientCertificate
-    const dataToSign = Buffer.concat([senderCertificate, senderNonce]);
+    const dataToSign = Buffer.concat([chain[0], senderNonce]);
 
     // ... and signing the resulting sequence of bytes.
     const signature = cryptoFactory.asymmetricSign(dataToSign, receiverPrivateKey);
@@ -480,31 +481,44 @@ export function verifySignature(
         // no signature provided
         return false;
     }
+    // Verify that senderCertifiate is not a chain
+    const chain = split_der(receiverCertificate);
 
+        
     assert(signature.signature instanceof Buffer);
     // This parameter is calculated by appending the clientNonce to the clientCertificate
-    const dataToVerify = Buffer.concat([receiverCertificate, receiverNonce]);
+    const dataToVerify = Buffer.concat([chain[0], receiverNonce]);
     return cryptoFactory.asymmetricVerify(dataToVerify, signature.signature, senderCertificate);
 }
 
+export interface SecureMessageChunkManagerOptionsPartial {
+    cipherBlockSize?: number;
+    encryptBufferFunc?: EncryptBufferFunc;
+    plainBlockSize?: number;
+
+    signBufferFunc: SignBufferFunc;
+    signatureLength: number;
+
+}
 export function getOptionsForSymmetricSignAndEncrypt(
   securityMode: MessageSecurityMode,
   derivedKeys: DerivedKeys
-): SecureMessageChunkManagerOptions {
+): SecureMessageChunkManagerOptionsPartial {
 
     assert(derivedKeys.hasOwnProperty("signatureLength"));
     assert(securityMode !== MessageSecurityMode.None && securityMode !== MessageSecurityMode.Invalid);
 
-    let options = {
+    let options: SecureMessageChunkManagerOptionsPartial = {
         signBufferFunc: (chunk: Buffer) => makeMessageChunkSignatureWithDerivedKeys(chunk, derivedKeys),
         signatureLength: derivedKeys.signatureLength,
     };
     if (securityMode === MessageSecurityMode.SignAndEncrypt) {
-        options = _.extend(options, {
+        options = {
+            ...options, 
             cipherBlockSize: derivedKeys.encryptingBlockSize,
             encryptBufferFunc: (chunk: Buffer) => encryptBufferWithDerivedKeys(chunk, derivedKeys),
             plainBlockSize: derivedKeys.encryptingBlockSize,
-        });
+        }
     }
-    return options as SecureMessageChunkManagerOptions;
+    return options;
 }

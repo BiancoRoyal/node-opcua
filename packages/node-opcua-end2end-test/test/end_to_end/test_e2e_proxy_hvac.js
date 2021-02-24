@@ -9,12 +9,14 @@ const async = require("async");
 const opcua = require("node-opcua");
 const OPCUAClient = opcua.OPCUAClient;
 
-const build_server_with_temperature_device = require("../../test_helpers/build_server_with_temperature_device").build_server_with_temperature_device;
-const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
+const { build_server_with_temperature_device } = require("../../test_helpers/build_server_with_temperature_device");
+const { perform_operation_on_client_session } = require("../../test_helpers/perform_operation_on_client_session");
 
 const DataType = opcua.DataType;
 
-const UAProxyManager = require("node-opcua-client-proxy").UAProxyManager;
+const { UAProxyManager } = require("node-opcua-client-proxy");
+
+const port = 2229;
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("testing client Proxy", function() {
@@ -25,16 +27,14 @@ describe("testing client Proxy", function() {
 
     let HVAC_on_server = null;
 
-    let port = 2000;
     before(function(done) {
-        port += 1;
 
-        server = build_server_with_temperature_device({ port: port }, function(err) {
+        server = build_server_with_temperature_device({ port }, function(err) {
 
             if (err) {
                 return done(err);
             }
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             temperatureVariableId = server.temperatureVariableId;
 
             HVAC_on_server = createHVACSystem(server.engine.addressSpace);
@@ -78,12 +78,10 @@ describe("testing client Proxy", function() {
                         if (!err) {
 
                             hvac = data;
-                            //xx console.log("xXXXXX",hvac);
-
-                            console.log("Interior temperature", hvac.interiorTemperature.value);
-
+                            
+                            // console.log("Interior temperature", hvac.interiorTemperature.value);
                             hvac.interiorTemperature.readValue(function(err, value) {
-                                console.log(" Interior temperature updated ...", value.toString());
+                                // console.log(" Interior temperature updated ...", value.toString());
                                 callback(err);
                             });
 
@@ -238,13 +236,13 @@ describe("testing client Proxy", function() {
                             hvac.setTargetTemperature.outputArguments.length.should.eql(0);
 
 
-                            //                          console.log("Interior temperature",hvac.interiorTemperature.dataValue);
+                            //  console.log("Interior temperature",hvac.interiorTemperature.dataValue);
 
                             hvac.interiorTemperature.on("value_changed", function(value) {
-                                console.log(chalk.yellow("  EVENT: interiorTemperature has changed to "), value.value.toString());
+                               // console.log(chalk.yellow("  EVENT: interiorTemperature has changed to "), value.value.toString());
                             });
                             hvac.targetTemperature.on("value_changed", function(value) {
-                                console.log(chalk.cyan("  EVENT: targetTemperature has changed to "), value.value.toString());
+                               // console.log(chalk.cyan("  EVENT: targetTemperature has changed to "), value.value.toString());
                             });
 
 
@@ -256,7 +254,7 @@ describe("testing client Proxy", function() {
                 function(callback) {
 
                     hvac.interiorTemperature.readValue(function(err, value) {
-                        console.log(" reading Interior temperature, got = ...", value.toString());
+                        // console.log"(" reading Interior temperature, got = ...", value.toString());
                         callback(err);
                     });
                 },
@@ -377,8 +375,8 @@ describe("testing client Proxy", function() {
                     session.createSubscription({
                         requestedPublishingInterval: 100, // Duration
                         requestedLifetimeCount: 6000, // Counter
-                        requestedMaxKeepAliveCount: 1000, // Counter
-                        maxNotificationsPerPublish: 10, // Counter
+                        requestedMaxKeepAliveCount: 10, // Counter
+                        maxNotificationsPerPublish: 100, // Counter
                         publishingEnabled: true, // Boolean
                         priority: 14 // Byte
                     }, function(err, response) {

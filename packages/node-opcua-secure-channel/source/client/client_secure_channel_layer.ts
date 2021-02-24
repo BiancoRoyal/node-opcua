@@ -4,21 +4,12 @@
 // tslint:disable:variable-name
 // tslint:disable:object-literal-shorthand
 // tslint:disable:no-console
-// tslint:disable:no-var-requires
-// tslint:disable:max-line-length
 import * as chalk from "chalk";
 import { randomBytes } from "crypto";
 import { EventEmitter } from "events";
-import * as _ from "underscore";
+import * as async from "async";
 
-import {
-    Certificate,
-    extractPublicKeyFromCertificate,
-    makeSHA1Thumbprint,
-    PrivateKeyPEM,
-    PublicKeyPEM,
-    rsa_length
-} from "node-opcua-crypto";
+import { Certificate, extractPublicKeyFromCertificate, PrivateKeyPEM, PublicKeyPEM, rsa_length } from "node-opcua-crypto";
 
 import { assert } from "node-opcua-assert";
 
@@ -26,13 +17,13 @@ import { BinaryStream } from "node-opcua-binary-stream";
 import { get_clock_tick, timestamp } from "node-opcua-utils";
 
 import { readMessageHeader, verify_message_chunk } from "node-opcua-chunkmanager";
-import { checkDebugFlag, hexDump, make_debugLog, make_errorLog } from "node-opcua-debug";
+import { checkDebugFlag, hexDump, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
 import { coerceMessageSecurityMode, MessageSecurityMode } from "node-opcua-service-secure-channel";
 import { StatusCodes } from "node-opcua-status-code";
 import { ClientTCP_transport } from "node-opcua-transport";
 import { ErrorCallback } from "node-opcua-status-code";
-
 import { BaseUAObject } from "node-opcua-factory";
+
 import { MessageBuilder, SecurityToken } from "../message_builder";
 import { ChunkMessageOptions, MessageChunker } from "../message_chunker";
 import { messageHeaderToString } from "../message_header_to_string";
@@ -55,23 +46,28 @@ import {
 } from "../services";
 
 // import * as backoff from "backoff";
+// tslint:disable-next-line: no-var-requires
 const backoff = require("backoff");
 
 const debugLog = make_debugLog(__filename);
 const errorLog = make_errorLog(__filename);
 const doDebug = checkDebugFlag(__filename);
+const warningLog = make_warningLog(__filename);
 const checkChunks = doDebug && false;
 const doDebug1 = false;
 
-const doTraceMessage = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("TRACE") >= 0;
-const doTraceRequestContent = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("REQUEST") >= 0;
-const doTraceResponseContent = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("RESPONSE") >= 0;
-const doTraceStatistics = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("STATS") >= 0;
-const doPerfMonitoring = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("PERF") >= 0;
-const dumpSecurityHeader = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("SECURITY") >= 0;
-
-import { ICertificateKeyPairProvider, Request, Response } from "../common";
-import * as async from "async";
+import { extractFirstCertificateInChain, getThumbprint, ICertificateKeyPairProvider, Request, Response } from "../common";
+import {
+    ClientTransactionStatistics,
+    doPerfMonitoring,
+    doTraceClientMessage,
+    doTraceClientRequestContent,
+    doTraceStatistics,
+    dumpSecurityHeader,
+    traceClientRequestMessage,
+    traceClientResponseMessage,
+    _dump_client_transaction_statistics
+} from "../utils";
 
 export const requestHandleNotSetValue = 0xdeadbeef;
 
@@ -133,48 +129,6 @@ function process_request_callback(requestData: RequestData, err?: Error | null, 
     requestData.callback = undefined;
 
     theCallbackFunction(err, !err && response !== null ? response : undefined);
-}
-
-interface ClientTransactionStatistics {
-    dump: () => void;
-    request: Request;
-    response: Response;
-    bytesRead: number;
-    bytesWritten: number;
-    lap_transaction: number;
-    lap_sending_request: number;
-    lap_waiting_response: number;
-    lap_receiving_response: number;
-    lap_processing_response: number;
-}
-
-function _dump_transaction_statistics(stats: ClientTransactionStatistics) {
-    function w(str: string | number) {
-        return ("                  " + str).substr(-12);
-    }
-
-    console.log(chalk.green.bold("--------------------------------------------------------------------->> Stats"));
-    console.log(
-        "   request                   : ",
-        chalk.yellow(stats.request.schema.name.toString()),
-        " / ",
-        chalk.yellow(stats.response.schema.name.toString()),
-        " - ",
-        stats.request.requestHeader.requestHandle,
-        "/",
-        stats.response.responseHeader.requestHandle,
-        stats.response.responseHeader.serviceResult.toString()
-    );
-    console.log("   Bytes Read                : ", w(stats.bytesRead), " bytes");
-    console.log("   Bytes Written             : ", w(stats.bytesWritten), " bytes");
-    if (doPerfMonitoring) {
-        console.log("   transaction duration      : ", w(stats.lap_transaction.toFixed(3)), " milliseconds");
-        console.log("   time to send request      : ", w(stats.lap_sending_request.toFixed(3)), " milliseconds");
-        console.log("   time waiting for response : ", w(stats.lap_waiting_response.toFixed(3)), " milliseconds");
-        console.log("   time to receive response  : ", w(stats.lap_receiving_response.toFixed(3)), " milliseconds");
-        console.log("   time processing response  : ", w(stats.lap_processing_response.toFixed(3)), " milliseconds");
-    }
-    console.log(chalk.green.bold("---------------------------------------------------------------------<< Stats"));
 }
 
 export interface ConnectionStrategyOptions {
@@ -268,6 +222,9 @@ export interface ClientSecureChannelLayerOptions {
  * a ClientSecureChannelLayer represents the client side of the OPCUA secure channel.
  */
 export class ClientSecureChannelLayer extends EventEmitter {
+    private static g_counter: number = 0;
+    private _counter: number = ClientSecureChannelLayer.g_counter++;
+
     public static minTransactionTimeout = 10 * 1000; // 10 sec
     public static defaultTransactionTimeout = 60 * 1000; // 1 minute
 
@@ -372,7 +329,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
         this.securityPolicy = coerceSecurityPolicy(options.securityPolicy);
 
-        this.serverCertificate = options.serverCertificate ? options.serverCertificate : null;
+        this.serverCertificate = extractFirstCertificateInChain(options.serverCertificate);
 
         if (this.securityMode !== MessageSecurityMode.None) {
             assert(
@@ -380,6 +337,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
                 "Expecting a valid certificate when security mode is not None"
             );
             assert(this.securityPolicy !== SecurityPolicy.None, "Security Policy None is not a valid choice");
+            // make sure that we do not have a chain here ...
         }
 
         this.messageBuilder = new MessageBuilder({
@@ -411,7 +369,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
                 if (!requestData) {
                     requestData = this._requests[requestId + 1];
-                    if (doTraceRequestContent) {
+                    if (doTraceClientRequestContent) {
                         console.log(" message was 2:", requestData ? requestData.request.toString() : "<null>");
                     }
                 }
@@ -437,6 +395,9 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
     public getCertificateChain(): Certificate | null {
         return this.parent ? this.parent.getCertificateChain() : null;
+    }
+    public getCertificate(): Certificate | null {
+        return this.parent ? this.parent.getCertificate() : null;
     }
 
     public toString(): string {
@@ -494,9 +455,10 @@ export class ClientSecureChannelLayer extends EventEmitter {
         assert(typeof callback === "function");
 
         if (this.securityMode !== MessageSecurityMode.None) {
+            // istanbul ignore next
             if (!this.serverCertificate) {
                 return callback(
-                    new Error("ClientSecureChannelLayer#create : expecting a  server certificate when securityMode is not None")
+                    new Error("ClientSecureChannelLayer#create : expecting a server certificate when securityMode is not None")
                 );
             }
 
@@ -591,7 +553,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
                     });
                 }
             ],
-            (err?: Error | null) => {
+            () => {
                 callback();
             }
         );
@@ -723,7 +685,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         /* istanbul ignore next */
         if (doTraceStatistics) {
             // dump some statistics about transaction ( time and sizes )
-            _dump_transaction_statistics(transactionStatistics);
+            _dump_client_transaction_statistics(transactionStatistics);
         }
         this.emit("end_transaction", transactionStatistics);
     }
@@ -744,14 +706,8 @@ export class ClientSecureChannelLayer extends EventEmitter {
         }
 
         /* istanbul ignore next */
-        if (doTraceMessage) {
-            console.log(
-                chalk.cyan.bold(timestamp(), "  <<<<<< _on_message_received "),
-                requestId,
-                response.schema.name.padStart(30),
-                response.responseHeader.serviceResult.toString(),
-                this.channelId
-            );
+        if (doTraceClientMessage) {
+            traceClientResponseMessage(response, this.channelId, this._counter);
         }
 
         const requestData = this._requests[requestId];
@@ -850,7 +806,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         };
 
         if (doTraceStatistics) {
-            _dump_transaction_statistics(this.last_transaction_stats);
+            _dump_client_transaction_statistics(this.last_transaction_stats);
         }
     }
 
@@ -1005,7 +961,11 @@ export class ClientSecureChannelLayer extends EventEmitter {
         this._performMessageTransaction(msgType, msg, (err?: Error | null, response?: Response) => {
             // istanbul ignore next
             if (response && response.responseHeader && response.responseHeader.serviceResult !== StatusCodes.Good) {
-                console.log("xxxxx => response.responseHeader.serviceResult", response.responseHeader.serviceResult.toString());
+                warningLog(
+                    "xxxxx => response.responseHeader.serviceResult ",
+                    response.constructor.name,
+                    response.responseHeader.serviceResult.toString()
+                );
                 err = new Error(response.responseHeader.serviceResult.toString());
             }
             if (!err && response) {
@@ -1128,7 +1088,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
         const on_connect = (err?: Error) => {
             debugLog("Connection => err", err ? err.message : "null");
-            // force Backoff to fail if err is not ECONNRESET or ECONNREFUSE
+            // force Backoff to fail if err is not ECONNRESET or ECONNREFUSED
             // this mean that the connection to the server has succeeded but for some reason
             // the server has denied the connection
             // the cause could be:
@@ -1336,7 +1296,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
                     this.securityToken ? this.securityToken!.tokenId : "x"
                 );
             }
-            if (response && doTraceResponseContent) {
+            if (response && doTraceClientRequestContent) {
                 console.log(response.toString());
             }
 
@@ -1443,13 +1403,8 @@ export class ClientSecureChannelLayer extends EventEmitter {
         request.requestHeader.requestHandle = requestHandle;
 
         /* istanbul ignore next */
-        if (doTraceMessage) {
-            console.log(
-                chalk.cyan(timestamp(), "   >>>>>>                     "),
-                requestHandle,
-                request.schema.name.padEnd(30),
-                this.channelId
-            );
+        if (doTraceClientMessage) {
+            traceClientRequestMessage(request, this.channelId, this._counter);
         }
 
         const requestData: RequestData = {
@@ -1521,20 +1476,36 @@ export class ClientSecureChannelLayer extends EventEmitter {
     }
 
     private _construct_security_header() {
-        assert(this.hasOwnProperty("securityMode"));
-        assert(this.hasOwnProperty("securityPolicy"));
         this.receiverCertificate = this.serverCertificate ? Buffer.from(this.serverCertificate) : null;
-
         let securityHeader = null;
         switch (this.securityMode) {
             case MessageSecurityMode.Sign:
             case MessageSecurityMode.SignAndEncrypt: {
                 assert(this.securityPolicy !== SecurityPolicy.None);
                 // get the thumbprint of the client certificate
-                const thumbprint = this.receiverCertificate ? makeSHA1Thumbprint(this.receiverCertificate) : null;
+                const receiverCertificateThumbprint = getThumbprint(this.receiverCertificate);
+
                 securityHeader = new AsymmetricAlgorithmSecurityHeader({
-                    receiverCertificateThumbprint: thumbprint, // thumbprint of the public key used to encrypt the message
+                    receiverCertificateThumbprint, // thumbprint of the public key used to encrypt the message
                     securityPolicyUri: toURI(this.securityPolicy),
+
+                    /**
+                     * The X.509 v3 Certificate assigned to the sending application Instance.
+                     *  This is a DER encoded blob.
+                     * The structure of an X.509 v3 Certificate is defined in X.509 v3.
+                     * The DER format for a Certificate is defined in X690
+                     * This indicates what Private Key was used to sign the MessageChunk.
+                     * The Stack shall close the channel and report an error to the application if the SenderCertificate is too large for the buffer size supported by the transport layer.
+                     * This field shall be null if the Message is not signed.
+                     * If the Certificate is signed by a CA, the DER encoded CA Certificate may be
+                     * appended after the Certificate in the byte array. If the CA Certificate is also
+                     * signed by another CA this process is repeated until the entire Certificate chain
+                     *  is in the buffer or if MaxSenderCertificateSize limit is reached (the process
+                     * stops after the last whole Certificate that can be added without exceeding
+                     * the MaxSenderCertificateSize limit).
+                     * Receivers can extract the Certificates from the byte array by using the Certificate
+                     *  size contained in DER header (see X.509 v3).
+                     */
                     senderCertificate: this.getCertificateChain() // certificate of the private key used to sign the message
                 });
 
@@ -1583,6 +1554,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
             return s;
         };
 
+        // istanbul ignore next
         if (!this.receiverPublicKey) {
             throw new Error(" invalid receiverPublicKey");
         }
@@ -1602,6 +1574,8 @@ export class ClientSecureChannelLayer extends EventEmitter {
         if (this.securityMode === MessageSecurityMode.None) {
             return null;
         }
+
+        // istanbul ignore next
         if (!this.derivedKeys || !this.derivedKeys.derivedClientKeys) {
             throw new Error("internal error expecting valid derivedKeys");
         }
@@ -1616,7 +1590,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
 
         // assert(this.channelId !== 0 , "channel Id cannot be null");
 
-        const options: ChunkMessageOptions = {
+        let options: ChunkMessageOptions = {
             channelId: this.channelId,
             chunkSize: 0,
             requestId,
@@ -1645,7 +1619,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         request.requestHeader.returnDiagnostics = 0x0;
 
         /* istanbul ignore next */
-        if (doTraceRequestContent) {
+        if (doTraceClientRequestContent) {
             console.log(
                 chalk.yellow.bold("------------------------------------- Client Sending a request  "),
                 request.constructor.name,
@@ -1657,12 +1631,17 @@ export class ClientSecureChannelLayer extends EventEmitter {
                 this.securityToken! ? this.securityToken!.tokenId : "x"
             );
         }
-        if (doTraceRequestContent) {
+        if (doTraceClientRequestContent) {
             console.log(request.toString());
         }
 
         const security_options = msgType === "OPN" ? this._get_security_options_for_OPN() : this._get_security_options_for_MSG();
-        _.extend(options, security_options);
+        if (security_options) {
+            options = {
+                ...options,
+                ...security_options
+            };
+        }
 
         /**
          * notify the observer that a client request is being sent the server

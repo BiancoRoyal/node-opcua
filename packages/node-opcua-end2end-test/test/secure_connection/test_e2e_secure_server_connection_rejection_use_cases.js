@@ -12,9 +12,9 @@ const OPCUAClientBase = opcua.OPCUAClientBase;
 
 const StatusCodes = opcua.StatusCodes;
 
-const SignatureData = require("node-opcua-service-secure-channel").SignatureData;
+const { SignatureData  } = require("node-opcua-service-secure-channel");
 
-const port = 2000;
+const port = 2237;
 
 const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
 
@@ -30,7 +30,7 @@ describe("testing the server ability to deny client session request (server with
     before(function(done) {
 
         server = new OPCUAServer({
-            port: port,
+            port,
             nodeset_filename: empty_nodeset_filename
         });
         const serverCertificate = server.getCertificateChain();
@@ -47,7 +47,7 @@ describe("testing the server ability to deny client session request (server with
             OPCUAServer.registry.count().should.eql(1);
             OPCUAClientBase.registry.count().should.eql(0);
 
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             done(err);
         });
 
@@ -175,7 +175,7 @@ describe("testing the server ability to deny client session request (server with
             return crypto.randomBytes(31); //<< instead of 32  !!!
         };
         const options = {
-            endpoint_must_exist: true
+            endpointMustExist: true
         };
         const client = OPCUAClient.create(options);
         test_connection(client, function(err) {
@@ -193,7 +193,7 @@ describe("testing the server ability to deny client session request (server with
         async.series([
 
             function(callback) {
-                client.endpoint_must_exist = true;
+                client.endpointMustExist = true;
                 client.connect(endpointUrl, callback);
             },
 
@@ -231,7 +231,7 @@ describe("testing the server ability to deny client session request (server with
 
             function(callback) {
                 should(client.serverCertificate).eql(null);
-                client.endpoint_must_exist = true;
+                client.endpointMustExist = true;
                 client.connect(endpointUrl, callback);
             },
 

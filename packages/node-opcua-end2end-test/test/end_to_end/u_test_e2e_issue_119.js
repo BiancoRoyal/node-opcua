@@ -17,9 +17,10 @@ const DataType = opcua.DataType;
 const makeNodeId = opcua.makeNodeId;
 const VariableIds = opcua.VariableIds;
 
-const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
+const { perform_operation_on_client_session } = require("../../test_helpers/perform_operation_on_client_session");
 
 // bug : server reported to many datavalue changed when client monitored a UAVariable consructed with variation 1");
+const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 
 module.exports = function(test) {
     describe("Testing bug #119 - Verify that monitored item only reports expected value change notifications :", function() {
@@ -29,7 +30,7 @@ module.exports = function(test) {
         beforeEach(function(done) {
             client = OPCUAClient.create({
                 keepSessionAlive: true,
-                requestedSessionTimeout: 120 * 1000
+                requestedSessionTimeout: 40 * 60 * 1000
             });
             endpointUrl = test.endpointUrl;
             done();
@@ -48,7 +49,7 @@ module.exports = function(test) {
                 const subscription = ClientSubscription.create(session, {
                     requestedPublishingInterval: 150,
                     requestedLifetimeCount: 6000,// make sure subscription will not timeout
-                    requestedMaxKeepAliveCount: 1000,// make sure we won't received spurious KeepAlive PublishResponse
+                    requestedMaxKeepAliveCount: 100,// make sure we won't received spurious KeepAlive PublishResponse
                     maxNotificationsPerPublish: 20,
                     publishingEnabled: true,
                     priority: 6
@@ -205,10 +206,6 @@ module.exports = function(test) {
                         ]);
                     });
                 }, done);
-
             });
-
     });
-
-
 };

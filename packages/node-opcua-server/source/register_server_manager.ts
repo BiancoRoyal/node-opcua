@@ -7,9 +7,16 @@ import * as chalk from "chalk";
 import { EventEmitter } from "events";
 
 import { assert } from "node-opcua-assert";
-import { UAString } from "node-opcua-basic-types";
-import { OPCUAClientBase, OPCUAClientBaseOptions, ResponseCallback } from "node-opcua-client";
-import { make_debugLog, checkDebugFlag } from "node-opcua-debug";
+import { ErrorCallback, UAString } from "node-opcua-basic-types";
+import {
+    coerceLocalizedText,
+    LocalizedTextLike,
+    LocalizedTextOptions,
+    OPCUAClientBase,
+    OPCUAClientBaseOptions,
+    ResponseCallback
+} from "node-opcua-client";
+import { make_debugLog, checkDebugFlag, make_warningLog } from "node-opcua-debug";
 import { resolveFullyQualifiedDomainName } from "node-opcua-hostname";
 import { coerceSecurityPolicy, MessageSecurityMode, SecurityPolicy } from "node-opcua-secure-channel";
 import {
@@ -18,15 +25,14 @@ import {
     RegisterServerRequest,
     RegisterServerResponse
 } from "node-opcua-service-discovery";
-import { EndpointDescription, MdnsDiscoveryConfiguration, RegisteredServerOptions } from "node-opcua-types";
-import { OPCUABaseServer } from "./base_server";
-import { IRegisterServerManager } from "./I_register_server_manager";
-import { exploreCertificateInfo, exploreCertificate } from "node-opcua-crypto";
-
-export type EmptyCallback = (err?: Error) => void;
+import { ApplicationType, EndpointDescription, MdnsDiscoveryConfiguration, RegisteredServerOptions } from "node-opcua-types";
+import { IRegisterServerManager } from "./i_register_server_manager";
+import { exploreCertificate } from "node-opcua-crypto";
+import { OPCUACertificateManager } from "node-opcua-certificate-manager";
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
+const warningLog = make_warningLog(__filename);
 
 export enum RegisterServerManagerStatus {
     INACTIVE = 1,
@@ -104,7 +110,7 @@ function findSecureEndpoint(endpoints: EndpointDescription[]): EndpointDescripti
     return endpoints[0];
 }
 
-function constructRegisteredServer(server: OPCUABaseServer, isOnline: boolean): RegisteredServerOptions {
+function constructRegisteredServer(server: IPartialServer, isOnline: boolean): RegisteredServerOptions {
     const discoveryUrls = server.getDiscoveryUrls();
     assert(!isOnline || discoveryUrls.length >= 1, "expecting some discoveryUrls if we go online ....");
 
@@ -114,11 +120,17 @@ function constructRegisteredServer(server: OPCUABaseServer, isOnline: boolean): 
     const serverUri = info.tbsCertificate.extensions?.subjectAltName.uniformResourceIdentifier[0];
     // istanbul ignore next
     if (serverUri !== server.serverInfo.applicationUri) {
-        console.log("Warning certificate uniformResourceIdentifier doesn't match serverInfo.applicationUri");
-        console.log("subjectKeyIdentifier : ", info.tbsCertificate.extensions?.subjectKeyIdentifier);
-        console.log("subjectAltName       : ", info.tbsCertificate.extensions?.subjectAltName);
-        console.log("commonName           : ", info.tbsCertificate.subject.commonName!);
-        console.log("applicationUri       : ", server.serverInfo.applicationUri);
+        warningLog(
+            chalk.yellow("Warning certificate uniformResourceIdentifier doesn't match serverInfo.applicationUri"),
+            "\n subjectKeyIdentifier      : ",
+            info.tbsCertificate.extensions?.subjectKeyIdentifier,
+            "\n subjectAltName            : ",
+            info.tbsCertificate.extensions?.subjectAltName,
+            "\n commonName                : ",
+            info.tbsCertificate.subject.commonName!,
+            "\n serverInfo.applicationUri : ",
+            server.serverInfo.applicationUri
+        );
     }
 
     // istanbul ignore next
@@ -133,7 +145,12 @@ function constructRegisteredServer(server: OPCUABaseServer, isOnline: boolean): 
         // The globally unique identifier for the Server product.
         productUri: server.serverInfo.productUri,
 
-        serverNames: [{ locale: "en-US", text: server.serverInfo.applicationName.text }],
+        serverNames: [
+            {
+                locale: "en-US",
+                text: server.serverInfo.applicationName.text
+            }
+        ],
         serverType: server.serverType,
 
         discoveryUrls,
@@ -143,14 +160,14 @@ function constructRegisteredServer(server: OPCUABaseServer, isOnline: boolean): 
     };
     return s;
 }
-function constructRegisterServerRequest(serverB: OPCUABaseServer, isOnline: boolean): RegisterServerRequest {
+function constructRegisterServerRequest(serverB: IPartialServer, isOnline: boolean): RegisterServerRequest {
     const server = constructRegisteredServer(serverB, isOnline);
     return new RegisterServerRequest({
         server
     });
 }
 
-function constructRegisterServer2Request(serverB: OPCUABaseServer, isOnline: boolean): RegisterServer2Request {
+function constructRegisterServer2Request(serverB: IPartialServer, isOnline: boolean): RegisterServer2Request {
     const server = constructRegisteredServer(serverB, isOnline);
 
     return new RegisterServer2Request({
@@ -184,7 +201,7 @@ interface ClientBaseEx extends OPCUAClientBase {
     performMessageTransaction(request: RegisterServerRequest, callback: ResponseCallback<RegisterServerResponse>): void;
 }
 
-function sendRegisterServerRequest(server: OPCUABaseServer, client: ClientBaseEx, isOnline: boolean, callback: EmptyCallback) {
+function sendRegisterServerRequest(server: IPartialServer, client: ClientBaseEx, isOnline: boolean, callback: ErrorCallback) {
     // try to send a RegisterServer2Request
     const request = constructRegisterServer2Request(server, isOnline);
 
@@ -199,7 +216,6 @@ function sendRegisterServerRequest(server: OPCUABaseServer, client: ClientBaseEx
             debugLog("RegisterServerManager#_registerServer" + " falling back to using sendRegisterServerRequest instead");
             // fall back to
             const request1 = constructRegisterServerRequest(server, isOnline);
-            // xx console.log("request",request.toString());
             client.performMessageTransaction(request1, (err1: Error | null, response1?: RegisterServerResponse) => {
                 if (!err1) {
                     debugLog(
@@ -221,8 +237,22 @@ function sendRegisterServerRequest(server: OPCUABaseServer, client: ClientBaseEx
     });
 }
 
+export interface IPartialServer {
+    serverCertificateManager: OPCUACertificateManager;
+    certificateFile: string;
+    privateKeyFile: string;
+    serverType: ApplicationType;
+    serverInfo: {
+        applicationUri: UAString;
+        applicationName: LocalizedTextOptions;
+        productUri: UAString;
+    };
+    capabilitiesForMDNS: string[];
+    getDiscoveryUrls(): string[];
+    getCertificate(): Buffer;
+}
 export interface RegisterServerManagerOptions {
-    server: OPCUABaseServer;
+    server: IPartialServer;
     discoveryServerEndpointUrl: string;
 }
 /**
@@ -262,8 +292,9 @@ export interface RegisterServerManagerOptions {
  */
 export class RegisterServerManager extends EventEmitter implements IRegisterServerManager {
     public discoveryServerEndpointUrl: string;
-    private server: OPCUABaseServer | null;
-    private readonly timeout: number;
+    public timeout: number;
+
+    private server: IPartialServer | null;
     private _registrationTimerId: NodeJS.Timer | null;
     private state: RegisterServerManagerStatus = RegisterServerManagerStatus.INACTIVE;
     private _registration_client: OPCUAClientBase | null = null;
@@ -307,7 +338,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         this.state = status;
     }
 
-    public start(callback: (err?: Error) => void) {
+    public start(callback: ErrorCallback) {
         debugLog("RegisterServerManager#start");
         if (this.state !== RegisterServerManagerStatus.INACTIVE) {
             return callback(new Error("RegisterServer process already started")); // already started
@@ -316,7 +347,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         this.discoveryServerEndpointUrl = resolveFullyQualifiedDomainName(this.discoveryServerEndpointUrl);
 
         // perform initial registration + automatic renewal
-        this._establish_initial_connection((err?: Error) => {
+        this._establish_initial_connection((err?: Error | null) => {
             if (err) {
                 debugLog("RegisterServerManager#start => _establish_initial_connection has failed");
                 return callback(err);
@@ -324,7 +355,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
 
             this._setState(RegisterServerManagerStatus.REGISTERING);
 
-            this._registerServer(true, (err1?: Error) => {
+            this._registerServer(true, (err1?: Error | null) => {
                 if (this.state !== RegisterServerManagerStatus.REGISTERING) {
                     debugLog("RegisterServerManager#start )=> Registration has been cancelled");
                     return callback(new Error("Registration has been cancelled"));
@@ -346,7 +377,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         });
     }
 
-    public _establish_initial_connection(outer_callback: EmptyCallback) {
+    public _establish_initial_connection(outer_callback: ErrorCallback) {
         if (!this.server) {
             throw new Error("Internal Error");
         }
@@ -359,10 +390,19 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         this.selectedEndpoint = undefined;
 
         // Retry Strategy must be set
+        this.server.serverCertificateManager.referenceCounter++;
         const client = OPCUAClientBase.create({
-            certificateFile: this.server.certificateFile,
-            clientName: "RegistrationClient-1",
+            clientName: this.server.serverInfo.applicationUri!,
+
+            applicationName: coerceLocalizedText(this.server.serverInfo.applicationName!)?.toString() || undefined,
+
+            applicationUri: this.server.serverInfo.applicationUri!,
+
             connectionStrategy: infinite_connectivity_strategy,
+
+            clientCertificateManager: this.server.serverCertificateManager,
+
+            certificateFile: this.server.certificateFile,
             privateKeyFile: this.server.privateKeyFile
         }) as ClientBaseEx;
 
@@ -370,7 +410,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
 
         client.on("backoff", (nbRetry: number, delay: number) => {
             debugLog("RegisterServerManager - received backoff");
-            console.log(
+            warningLog(
                 chalk.bgWhite.cyan("contacting discovery server backoff "),
                 this.discoveryServerEndpointUrl,
                 " attempt #",
@@ -385,7 +425,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         async.series(
             [
                 //  do_initial_connection_with_discovery_server
-                (callback: EmptyCallback) => {
+                (callback: ErrorCallback) => {
                     client.connect(this.discoveryServerEndpointUrl, (err?: Error) => {
                         if (err) {
                             debugLog(
@@ -398,7 +438,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                 },
 
                 // getEndpoints_on_discovery_server
-                (callback: EmptyCallback) => {
+                (callback: ErrorCallback) => {
                     client.getEndpoints((err: Error | null, endpoints?: EndpointDescription[]) => {
                         if (!err) {
                             const endpoint = findSecureEndpoint(endpoints!);
@@ -421,7 +461,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                     });
                 },
                 // function closing_discovery_server_connection
-                (callback: EmptyCallback) => {
+                (callback: ErrorCallback) => {
                     this._serverEndpoints = client._serverEndpoints;
 
                     client.disconnect((err?: Error) => {
@@ -430,7 +470,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                     });
                 },
                 // function wait_a_little_bit
-                (callback: EmptyCallback) => {
+                (callback: ErrorCallback) => {
                     setTimeout(callback, 100);
                 }
             ],
@@ -499,7 +539,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             this._registrationTimerId = null;
 
             debugLog("RegisterServerManager#_trigger_next : renewing RegisterServer");
-            this._registerServer(true, (err?: Error) => {
+            this._registerServer(true, (err?: Error | null) => {
                 if (
                     this.state !== RegisterServerManagerStatus.INACTIVE &&
                     this.state !== RegisterServerManagerStatus.UNREGISTERING
@@ -513,7 +553,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         }, this.timeout);
     }
 
-    public stop(outer_callback: EmptyCallback) {
+    public stop(outer_callback: ErrorCallback) {
         debugLog("RegisterServerManager#stop");
 
         if (this._registrationTimerId) {
@@ -522,7 +562,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             this._registrationTimerId = null;
         }
 
-        this._cancel_pending_client_if_any((err?: Error) => {
+        this._cancel_pending_client_if_any((err?: Error | null) => {
             debugLog("RegisterServerManager#stop  _cancel_pending_client_if_any done ", this.state);
 
             if (!this.selectedEndpoint || this.state === RegisterServerManagerStatus.INACTIVE) {
@@ -538,7 +578,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             this._registerServer(false, () => {
                 this._setState(RegisterServerManagerStatus.INACTIVE);
                 this._emitEvent("serverUnregistered");
-                outer_callback(err);
+                outer_callback(err!);
             });
         });
     }
@@ -548,7 +588,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
      * @param outer_callback
      * @private
      */
-    public _registerServer(isOnline: boolean, outer_callback: EmptyCallback) {
+    public _registerServer(isOnline: boolean, outer_callback: ErrorCallback) {
         assert(typeof outer_callback === "function");
 
         debugLog(
@@ -567,19 +607,27 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         const selectedEndpoint = this.selectedEndpoint;
 
         if (!selectedEndpoint) {
-            console.log("Warning : cannot register server - no endpoint available");
+            warningLog("Warning : cannot register server - no endpoint available");
             return outer_callback(new Error("Cannot registerServer"));
         }
 
+        server.serverCertificateManager.referenceCounter++;
         const options: OPCUAClientBaseOptions = {
             securityMode: selectedEndpoint.securityMode,
             securityPolicy: coerceSecurityPolicy(selectedEndpoint.securityPolicyUri),
             serverCertificate: selectedEndpoint.serverCertificate,
 
+            clientCertificateManager: server.serverCertificateManager,
+
             certificateFile: server.certificateFile,
             privateKeyFile: server.privateKeyFile,
 
-            clientName: "RegistrationClient-2",
+            // xx clientName: server.serverInfo.applicationUri!,
+
+            applicationName: coerceLocalizedText(server.serverInfo.applicationName!)?.toString() || undefined,
+
+            applicationUri: server.serverInfo.applicationUri!,
+
             connectionStrategy: no_reconnect_connectivity_strategy
         };
 
@@ -599,7 +647,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         async.series(
             [
                 // establish_connection_with_lds
-                (callback: EmptyCallback) => {
+                (callback: ErrorCallback) => {
                     client.connect(selectedEndpoint?.endpointUrl!, (err?: Error) => {
                         debugLog("establish_connection_with_lds => err = ", err);
                         if (err) {
@@ -608,14 +656,17 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                                 "RegisterServerManager#_registerServer  " +
                                     "=> please check that you server certificate is trusted by the LDS"
                             );
-                            console.log(
+                            warningLog(
                                 "RegisterServer to the LDS  has failed during secure connection  " +
-                                    "=> please check that you server certificate is trusted by the LDS. err: " +
-                                    err.message
+                                    "=> please check that you server certificate is trusted by the LDS.",
+                                "\nerr: " + err.message,
+                                "\nLDS endpoint    :",
+                                selectedEndpoint?.endpointUrl!,
+                                "\nsecurity mode   :",
+                                MessageSecurityMode[selectedEndpoint.securityMode],
+                                "\nsecurity policy :",
+                                coerceSecurityPolicy(selectedEndpoint.securityPolicyUri)
                             );
-                            console.log("LDS endpoint    :", selectedEndpoint?.endpointUrl!);
-                            console.log("security mode   :", MessageSecurityMode[selectedEndpoint.securityMode]);
-                            console.log("security policy :", coerceSecurityPolicy(selectedEndpoint.securityPolicyUri));
                             // xx debugLog(options);
                             client.disconnect(() => {
                                 debugLog("RegisterServerManager#_registerServer client disconnected");
@@ -663,13 +714,13 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                         }
                     });
                 },
-                (callback: EmptyCallback) => {
-                    sendRegisterServerRequest(this.server!, client as ClientBaseEx, isOnline, (err?: Error) => {
+                (callback: ErrorCallback) => {
+                    sendRegisterServerRequest(this.server!, client as ClientBaseEx, isOnline, (err?: Error | null) => {
                         callback(err!);
                     });
                 },
                 // close_connection_with_lds
-                (callback: EmptyCallback) => {
+                (callback: ErrorCallback) => {
                     client.disconnect(callback);
                 }
             ],

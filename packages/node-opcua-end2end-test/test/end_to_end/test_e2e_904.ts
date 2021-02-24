@@ -10,11 +10,11 @@ import {
     Request
 } from "node-opcua";
 import * as should from "should";
-const port = 2020;
+const port = 2008;
 const doDebug = false;
 
 function geEndpoint(server: OPCUAServer): string {
-    return server.endpoints[0].endpointDescriptions()[0].endpointUrl!;
+    return server.getEndpointUrl()!;
 }
 
 let serverNonce: undefined | null | Buffer;
@@ -55,7 +55,6 @@ async function startServer(): Promise<OPCUAServer> {
 }
 // tslint:disable-next-line:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
-
 describe("#904 - Client should connect to server that do not provide ServerNonce", () => {
     let server: OPCUAServer;
     before(async () => {
@@ -71,7 +70,7 @@ describe("#904 - Client should connect to server that do not provide ServerNonce
     let serverNonceWasNullOrEmptyBuffer: undefined | boolean = undefined;
     beforeEach(async () => {
         serverNonceWasNullOrEmptyBuffer = undefined;
-        client = OPCUAClient.create({ endpoint_must_exist: false });
+        client = OPCUAClient.create({ endpointMustExist: false });
         client.on("backoff", () => console.log("keep trying", endpointUri));
 
         const endpointUri = geEndpoint(server);

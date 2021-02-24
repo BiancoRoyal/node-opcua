@@ -4,7 +4,6 @@
 "use strict";
 const path = require("path");
 const fs = require("fs");
-const _ = require("underscore");
 const assert = require("assert");
 const chalk = require("chalk");
 const yargs = require("yargs/yargs");
@@ -27,10 +26,6 @@ const {
 } = require("node-opcua");
 
 Error.stackTraceLimit = Infinity;
-
-function constructFilename(filename) {
-  return path.join(__dirname, "../", filename);
-}
 
 
 const argv = yargs(process.argv)
@@ -125,8 +120,7 @@ const userManager = {
 
 const keySize = argv.keySize;
 
-const productUri = argv.applicationName || "NodeOPCUA-Server";
-//const applicationUri = "NODEOPCUA-DemoServer";
+const productUri = argv.applicationName || "NodeOPCUASample-Simple-Server";
 
 const paths = envPaths(productUri);
 
@@ -138,28 +132,25 @@ const paths = envPaths(productUri);
   const applicationUri = makeApplicationUrn(fqdn, productUri);
   // -----------------------------------------------
   const configFolder = paths.config;
-  const pkiFolder = path.join(configFolder, "pki");
-  const userPkiFolder = path.join(configFolder, "userPki");
+  const pkiFolder = path.join(configFolder, "PKI");
+  const userPkiFolder = path.join(configFolder, "UserPKI");
 
   const userCertificateManager = new OPCUACertificateManager({
     automaticallyAcceptUnknownCertificate: true,
-    name: "userPki",
+    name: "UserPKI",
     rootFolder: userPkiFolder,
   });
   await userCertificateManager.initialize();
 
   const serverCertificateManager = new OPCUACertificateManager({
     automaticallyAcceptUnknownCertificate: true,
-    name: "pki",
+    name: "PKI",
     rootFolder: pkiFolder,
   });
 
   await serverCertificateManager.initialize();
 
   const certificateFile = path.join(pkiFolder, `server_certificate1.pem`);
-  const privateKeyFile = serverCertificateManager.privateKey;
-  assert(fs.existsSync(privateKeyFile), "expecting private key");
-
   if (!fs.existsSync(certificateFile)) {
 
     console.log("Creating self-signed certificate");
@@ -180,12 +171,12 @@ const paths = envPaths(productUri);
   const server_options = {
 
     serverCertificateManager,
+    certificateFile,
+
     userCertificateManager,
 
-    certificateFile,
-    privateKeyFile,
 
-    port: port,
+    port,
 
     maxAllowedSessionNumber: maxAllowedSessionNumber,
     maxConnectionsPerEndpoint: maxConnectionsPerEndpoint,
@@ -457,15 +448,14 @@ const paths = envPaths(productUri);
   post_initialize();
 
 
-  function dumpObject(obj) {
+  function dumpObject(node) {
     function w(str, width) {
       const tmp = str + "                                        ";
       return tmp.substr(0, width);
     }
-
-    return _.map(obj, function(value, key) {
-      return "      " + w(key, 30) + "  : " + ((value === null) ? null : value.toString());
-    }).join("\n");
+    return Object.entries(node).map((key, value) =>
+      "      " + w(key, 30) + "  : " + ((value === null) ? null : value.toString())
+    ).join("\n");
   }
 
 
@@ -477,7 +467,7 @@ const paths = envPaths(productUri);
 
   console.log(chalk.yellow("\nregistering server to :") + server.discoveryServerEndpointUrl);
 
-  const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+  const endpointUrl = server.getEndpointUrl();
 
   console.log(chalk.yellow("  server on port      :"), server.endpoints[0].port.toString());
   console.log(chalk.yellow("  endpointUrl         :"), endpointUrl);

@@ -1,6 +1,4 @@
-/*global require,describe,it,before,beforeEach,after,afterEach*/
 "use strict";
-
 
 const should = require("should");
 const sinon = require("sinon");
@@ -61,7 +59,6 @@ function install_spying_samplingFunc() {
         if (!dataSourceFrozen) {
             sample_value++;
         }
-        //xx console.log(" OOOOO ----- OOOOOOO");
         const dataValue = new DataValue({ value: { dataType: DataType.UInt32, value: sample_value } });
         callback(null, dataValue);
     });
@@ -115,9 +112,9 @@ describe("Subscriptions and MonitoredItems", function() {
             done();
         });
     });
-    after(function() {
+    after(async () => {
         if (engine) {
-            engine.shutdown();
+            await engine.shutdown();
             engine.dispose();
             engine = null;
         }
@@ -158,8 +155,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
@@ -199,8 +196,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
@@ -238,8 +235,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
@@ -278,8 +275,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
@@ -319,8 +316,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
@@ -359,8 +356,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
@@ -399,8 +396,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
@@ -440,8 +437,8 @@ describe("Subscriptions and MonitoredItems", function() {
                     })
                 }
             });
-            const monitoredItemCreateResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
-            return monitoredItemCreateResult.statusCode;
+            const createResult = subscription.createMonitoredItem(addressSpace, TimestampsToReturn.Both, monitoredItemCreateRequest);
+            return createResult.statusCode;
         }
 
 
