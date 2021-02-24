@@ -1,8 +1,7 @@
 import { nodesets } from "node-opcua-nodesets";
 import { getFullyQualifiedDomainName } from "node-opcua-hostname";
 import { OPCUAServer } from "..";
-
-//const os = require("os");
+import "should";
 
 // tslint:disable:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
@@ -27,7 +26,6 @@ describe("OPCUAServerEndpoint#addEndpointDescription multiple hostname", () => {
 
         for (const e of server.endpoints) {
             for (const ed of e.endpointDescriptions()) {
-                // console.log("", ed.endpointUrl);
                 if (ed.endpointUrl!.match(/1\.2\.3\.4/)) {
                     matching1234Count++;
                 }
@@ -67,7 +65,6 @@ describe("OPCUAServerEndpoint#addEndpointDescription default hostname", () => {
 
         for (const e of server.endpoints) {
             for (const ed of e.endpointDescriptions()) {
-                // console.log("", ed.endpointUrl);
                 if (ed.endpointUrl!.match(defaultHostnameRegex)) {
                     matchingDefault++;
                 }
@@ -103,7 +100,6 @@ describe("OPCUAServerEndpoint#addEndpointDescription custom hostname", () => {
 
         for (const e of server.endpoints) {
             for (const ed of e.endpointDescriptions()) {
-                // console.log("", ed.endpointUrl);
                 if (ed.endpointUrl!.match(/my.test.website/)) {
                     matchingHostname++;
                 }

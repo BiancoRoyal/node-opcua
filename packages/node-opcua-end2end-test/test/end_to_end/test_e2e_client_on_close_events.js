@@ -4,33 +4,32 @@ const should = require("should");
 const async = require("async");
 const sinon = require("sinon");
 
-const opcua = require("node-opcua");
+const { OPCUAClient, OPCUAServer, get_empty_nodeset_filename} = require("node-opcua");
 
-const OPCUAClient = opcua.OPCUAClient;
-const OPCUAServer = opcua.OPCUAServer;
-const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
+const empty_nodeset_filename = get_empty_nodeset_filename();
 
-const doDebug = require("node-opcua-debug").checkDebugFlag(__filename);
-const debugLog = require("node-opcua-debug").make_debugLog(__filename);
+const { make_debugLog, checkDebugFlag } = require("node-opcua-debug");
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("testing Client-Server - Event", function() {
 
     this.timeout(Math.max(600000, this.timeout()));
 
-    const port = 2225;
+    const port = 2013;
     let server;
     let endpointUrl;
 
     function start_server(done) {
         server = new OPCUAServer({
-            port: port,
+            port,
             nodeset_filename: empty_nodeset_filename,
             maxAllowedSessionNumber: 10
         });
 
         server.start(function() {
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             done();
         });
     }

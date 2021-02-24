@@ -1,4 +1,3 @@
-// tslint:disable: no-console
 // tslint:disable:no-bitwise
 import * as fs from "fs";
 import * as path from "path";
@@ -13,6 +12,10 @@ import { DataType, Variant, VariantArrayType } from "node-opcua-variant";
 import { EnumDefinition } from "node-opcua-types";
 import { AddressSpace, UADataType, UAVariable } from "..";
 import { generateAddressSpace } from "../nodeJS";
+
+import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
 
 // tslint:disable-next-line:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
@@ -194,6 +197,19 @@ describe("testing NodeSet XML file loading", function (this: any) {
         addressSpace.rootFolder.objects.server.serverStatus.valueRank.should.eql(-1);
     });
 
+    it("VV0 should provide appropriate error when nodeset file doesn't exist", async () => {
+        const xml_file1 = path.join(__dirname, "../test_helpers/test_fixtures/minimalist_nodeset_with_models.xml");
+        const xml_files = [xml_file1, "./missing_xml_file.xml"];
+
+        let _err: Error | undefined;
+        try {
+            await generateAddressSpace(addressSpace, xml_files);
+        } catch (err) {
+            _err = err;
+        }
+        should.exists(_err);
+        _err!.message.should.match(/.*NODE-OPCUA-E.*/);
+    });
     it("VV1 should load a nodeset file with a Models section", async () => {
         const xml_file1 = path.join(__dirname, "../test_helpers/test_fixtures/minimalist_nodeset_with_models.xml");
         const xml_files = [xml_file1];
@@ -218,7 +234,7 @@ describe("testing NodeSet XML file loading", function (this: any) {
         const ns = addressSpace.getNamespaceIndex("http://yourorganisation.org/my_data_type/");
 
         const variableType1 = addressSpace.findVariableType("MyStructureType", ns)!;
-        // xx console.log(value.toString());
+        // xx debugLog(value.toString());
     });
 
     it("VV4 should parse a dataType made of bit sets", async () => {
@@ -265,12 +281,12 @@ describe("testing NodeSet XML file loading", function (this: any) {
         v.value.value[2].toString().should.eql("locale=null text=CHECK_FUNCTION");
         v.value.value[3].toString().should.eql("locale=null text=OFF_SPEC");
         v.value.value[4].toString().should.eql("locale=null text=MAINTENANCE_REQUIRED");
-        // console.log(v.value.toString());
+        // debugLog(v.value.toString());
 
         const namespace = addressSpace.getNamespace(1)!;
         const xml = namespace.toNodeset2XML();
 
-        // xx console.log(xml);
+        // xx debugLog(xml);
         xml.should.eql(
             `<?xml version="1.0"?>
 <UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
@@ -368,17 +384,15 @@ describe("testing NodeSet XML file loading", function (this: any) {
 
         // now construct some extension object based on this type....
         const frame = addressSpace.constructExtensionObject(dataType);
-        console.log("frame", frame.toString());
+        debugLog("frame", frame.toString());
     });
     it("VV7 ----------", async () => {
         const xml_file1 = path.join(__dirname, "../test_helpers/test_fixtures/dataType_with_structures.xml");
         const xml_file2 = path.join(__dirname, "../test_helpers/test_fixtures/dataType_in_separateNamespace.xml");
         const xml_files = [xml_file1, xml_file2];
         await generateAddressSpace(addressSpace, xml_files);
-
-        console.log("Loaded !");
-
         const dataType = addressSpace.findDataType("3DFrame", 0)!;
+        should.exist(dataType, " expected to find 3DFrame DataType in addressSpace");
     });
 
     it("VV8 ----------", async () => {
@@ -543,6 +557,6 @@ describe("@A@ Testing loading nodeset with custom basic types", function (this: 
             id: "Hello"
         });
         // tslint:disable-next-line: no-console
-        console.log(struct.toString());
+        debugLog(struct.toString());
     });
 });

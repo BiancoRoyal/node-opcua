@@ -5,6 +5,7 @@ import * as path from "path";
 
 import {
     get_empty_nodeset_filename,
+    OPCUACertificateManager,
     OPCUAClient,
     OPCUAServer,
 } from "node-opcua";
@@ -19,8 +20,11 @@ import { Certificate, PrivateKey, PrivateKeyPEM, readCertificate, readCertificat
 const empty_nodeset_filename = get_empty_nodeset_filename();
 
 const certificateFolder = path.join(__dirname, "../../../node-opcua-samples/certificates");
+fs.existsSync(certificateFolder).should.eql(true, "expecting certificate store at " + certificateFolder);
 
-const port = 5000;
+const tmpFolder= path.join(__dirname,"../../tmp");
+
+const port = 2231;
 
 let server: OPCUAServer;
 let endpointUrl: string;
@@ -28,8 +32,27 @@ let endpointUrl: string;
 //        -outform der -out example.der -subj "/CN=example.com" -days 3650
 async function startServer(): Promise<OPCUAServer> {
 
+    
+    const serverCertificateManager= new OPCUACertificateManager({
+        rootFolder: path.join(tmpFolder,"serverPKI"+port),
+        automaticallyAcceptUnknownCertificate: false,
+    });
+    await serverCertificateManager.initialize();
+
+
+    const userCertificateManager= new OPCUACertificateManager({
+        rootFolder: path.join(tmpFolder,"userPKI"+port),
+        automaticallyAcceptUnknownCertificate: false,
+    });
+    await userCertificateManager.initialize();
+
     server = new OPCUAServer({
+        userCertificateManager,
+
+        serverCertificateManager,
+
         maxAllowedSessionNumber: 10,
+        
         nodeset_filename: empty_nodeset_filename,
         port,
     });
@@ -38,6 +61,7 @@ async function startServer(): Promise<OPCUAServer> {
     const issuerCertificateFile = path.join(certificateFolder, "CA/public/cacert.pem");
 
     const issuerCertificate = readCertificate(issuerCertificateFile);
+    
     await server.userCertificateManager.addIssuer(issuerCertificate);
     await server.serverCertificateManager.addIssuer(issuerCertificate);
 
@@ -46,7 +70,7 @@ async function startServer(): Promise<OPCUAServer> {
     await server.userCertificateManager.addRevocationList(crl);
     await server.serverCertificateManager.addRevocationList(crl);
 
-    endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl!;
+    endpointUrl = server.getEndpointUrl()!;
     return server;
 }
 
@@ -55,6 +79,7 @@ async function endServer() {
         await server.shutdown(1);
     }
 }
+
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("Testing Session with user certificate", () => {
@@ -96,7 +121,9 @@ describe("Testing Session with user certificate", () => {
         client = null;
     });
 
-    it("should create a session with a valid client certificates", async () => {
+    it("should create a session with a trusted client certificate", async () => {
+
+        await server.userCertificateManager.trustCertificate(clientCertificate);
 
         const userIdentity: UserIdentityInfoX509 = {
             certificateData: clientCertificate,
@@ -126,6 +153,9 @@ describe("Testing Session with user certificate", () => {
             exceptionCaught = err;
         }
         should(exceptionCaught).not.be.null();
+
+        await server.userCertificateManager.trustCertificate(clientCertificate);
+
     });
 
 

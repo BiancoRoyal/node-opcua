@@ -1,3 +1,4 @@
+import "should";
 import {
     OPCUAClient,
     OPCUAServer,
@@ -9,6 +10,8 @@ import {
     HistoryReadValueIdOptions2,
     AggregateFunction,
 } from "node-opcua";
+
+
 import { addAggregateSupport  } from "node-opcua-aggregates";
 import {
     createHistorian1,
@@ -16,7 +19,10 @@ import {
     createHistorian3,
     createHistorian4
 } from "node-opcua-aggregates/test/helpers/create_historizing_variables";
-import { ClientSessionKeepAliveManagerEvents } from "node-opcua-client/dist/client_session_keepalive_manager";
+
+import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
 
 const year = 2018;
 const month = 10;
@@ -29,7 +35,7 @@ export function makeDate(time: string): Date {
 
 let h1NodeId: NodeId;
 
-const port = 2020;
+const port = 2232;
 
 async function startServerWithHA() {
 
@@ -58,9 +64,9 @@ describe("test readAggregateValue", () => {
     before(async () => {
         server = await startServerWithHA();
         await server.start();
-        endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl!;
+        endpointUrl = server.getEndpointUrl()!;
         // tslint:disable-next-line: no-console
-        console.log("endpointUrl = ", endpointUrl);
+        debugLog("endpointUrl = ", endpointUrl);
     });
     after(async () => {
         await server.shutdown();
@@ -69,7 +75,7 @@ describe("test readAggregateValue", () => {
     it("RHA should calculate average", async () => {
 
         const client = OPCUAClient.create({
-            endpoint_must_exist: false
+            endpointMustExist: false
         });
 
         const parameters = {};
@@ -106,7 +112,7 @@ describe("test readAggregateValue", () => {
                 processingInterval);
             resultAvg.statusCode.should.eql(StatusCodes.Good);
             // tslint:disable-next-line: no-console
-            console.log(resultAvg.toString());
+            debugLog(resultAvg.toString());
 
             const resultStdSample = await session.readAggregateValue(
                 nodeToRead,
@@ -122,7 +128,7 @@ describe("test readAggregateValue", () => {
     it("RHA should calculate aggregate(multi) of multiple nodeId", async () => {
 
         const client = OPCUAClient.create({
-            endpoint_must_exist: false
+            endpointMustExist: false
         });
 
         const parameters = {};
@@ -151,7 +157,7 @@ describe("test readAggregateValue", () => {
 
     it("RHV readHistoryValue - form 1", async () =>{
         const client = OPCUAClient.create({
-            endpoint_must_exist: false
+            endpointMustExist: false
         });
 
 
@@ -167,13 +173,13 @@ describe("test readAggregateValue", () => {
                 startTime,
                 endTime);
             // tslint:disable-next-line: no-console
-            console.log(result.toString());
+            debugLog(result.toString());
         });
     });
 
     it("RHV readHistoryValue - form 2", async () =>{
         const client = OPCUAClient.create({
-            endpoint_must_exist: false
+            endpointMustExist: false
         });
 
         await client.withSubscriptionAsync(endpointUrl, {}, async (session: ClientSession) => {
@@ -186,7 +192,7 @@ describe("test readAggregateValue", () => {
                 startTime,
                 endTime);
             // tslint:disable-next-line: no-console
-            console.log(result.toString());
+            debugLog(result.toString());
         }); 
     });
 

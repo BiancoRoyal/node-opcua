@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import {
     computeDerivedKeys,
-    DerivedKeys,
     encryptBufferWithDerivedKeys,
     makeMessageChunkSignature,
     makeMessageChunkSignatureWithDerivedKeys,
@@ -15,7 +14,7 @@ import { AsymmetricAlgorithmSecurityHeader, SymmetricAlgorithmSecurityHeader } f
 import { SecureMessageChunkManager, SequenceNumberGenerator } from "../source";
 
 // tslint:disable:no-var-requires
-const getFixture = require("node-opcua-test-fixtures").getFixture;
+const { getFixture } = require("node-opcua-test-fixtures");
 
 const senderCertificate = readCertificate(getFixture("certs/client_cert_1024.pem"));
 const senderPrivateKey = readKeyPem(getFixture("certs/client_key_1024.pem"));

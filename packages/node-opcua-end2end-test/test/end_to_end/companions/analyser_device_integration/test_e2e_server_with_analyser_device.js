@@ -2,8 +2,7 @@
 const should = require("should");
 const async = require("async");
 
-const opcua = require("node-opcua");
-const { OPCUAClient, makeResultMask, BrowseDescription, BrowseDirection } = opcua;
+const { OPCUAClient, makeResultMask, BrowseDescription, BrowseDirection, nodesets } = require("node-opcua");
 
 const { UAProxyManager, makeRefId } = require("node-opcua-client-proxy");
 
@@ -11,6 +10,12 @@ const { dumpStateMachineToGraphViz, dumpStateMachineToPlantUML } = require("node
 
 const { redirectToFile } = require("node-opcua-debug/nodeJS");
 const { promoteToStateMachine } = require("node-opcua-address-space");
+
+const { build_server_with_temperature_device  } = require("../../../../test_helpers/build_server_with_temperature_device");
+const { perform_operation_on_client_session } = require("../../../../test_helpers/perform_operation_on_client_session");
+const { StateMachine  }= require("node-opcua-address-space");
+
+const port = 2235;
 
 const doDebug = false;
 
@@ -43,9 +48,6 @@ function create_analyser_device(addressSpace) {
 }
 
 
-const build_server_with_temperature_device = require("../../../../test_helpers/build_server_with_temperature_device").build_server_with_temperature_device;
-const perform_operation_on_client_session = require("../../../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
-
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 
 describe("ADI - Testing a server that exposes Analyser Devices", function() {
@@ -55,22 +57,20 @@ describe("ADI - Testing a server that exposes Analyser Devices", function() {
     this.timeout(Math.max(50000, this.timeout()));
 
     const server_options = {
-        port: 2000,
+        port,
         nodeset_filename: [
-            opcua.nodesets.standard,
-            opcua.nodesets.di,
-            opcua.nodesets.adi
+            nodesets.standard,
+            nodesets.di,
+            nodesets.adi
         ]
     };
 
     let analyser_device;
-    let port = 2000;
 
     let addressSpace;
     before(function(done) {
-        port += 1;
         server = build_server_with_temperature_device(server_options, function(err) {
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
 
             addressSpace = server.engine.addressSpace;
 
@@ -352,7 +352,6 @@ describe("ADI - Testing a server that exposes Analyser Devices", function() {
 
         subStateMachineType.browseName.name.toString().should.eql("AnalyserChannel_OperatingModeSubStateMachineType");
 
-        const StateMachine = require("node-opcua-address-space").StateMachine;
 
         const sm = subStateMachineType.instantiate({ browseName: "MyStateMachine" });
 

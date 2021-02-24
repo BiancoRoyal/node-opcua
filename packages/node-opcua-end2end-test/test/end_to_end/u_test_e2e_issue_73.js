@@ -3,22 +3,23 @@
 const { assert } = require("node-opcua-assert");
 const should = require("should");
 const async = require("async");
-const _ = require("underscore");
 
-const opcua = require("node-opcua");
+const {
+    OPCUAClient,
+    ClientSession,
+    MessageSecurityMode,
+    SecurityPolicy,
+} = require("node-opcua");
+const securityMode = MessageSecurityMode.None;
+const securityPolicy = SecurityPolicy.None;
 
-const OPCUAClient = opcua.OPCUAClient;
-const ClientSession = opcua.ClientSession;
 
-const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
+const { perform_operation_on_client_session } = require("../../test_helpers/perform_operation_on_client_session");
 
-
-
-const securityMode = opcua.MessageSecurityMode.None;
-const securityPolicy = opcua.SecurityPolicy.None;
-
+const doDebug = false;
 // bug : server reported to many datavalue changed when client monitored a UAVariable consructed with variation 1");
 
+const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 module.exports = function(test) {
 
     describe("Testing bug #73 -  Server resets sequence number after secure channel renewal ", function() {
@@ -81,12 +82,13 @@ module.exports = function(test) {
 
                     // verify that Token has been renewed ...
                     // ( i.e we have received multiple OpenSecureChannel
-                    _.filter(messages, function(a) {
-                        return a === "OpenSecureChannelResponse"
-                    }).length.should.be.greaterThan(2, "number of security token renewal");
+                    messages.filter((a) => a === "OpenSecureChannelResponse")
+                        .length.should.be.greaterThan(2, "number of security token renewal");
 
                     // sequence number should be increasing monotonically
-                    console.log(sequenceNumbers);
+                    if (doDebug) {
+                        console.log(sequenceNumbers);
+                    }
 
                     for (let i = 1; i < sequenceNumbers.length; i++) {
                         sequenceNumbers[i].should.be.greaterThan(sequenceNumbers[i - 1]);

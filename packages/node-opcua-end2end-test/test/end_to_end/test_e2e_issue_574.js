@@ -2,8 +2,8 @@ const async = require("async");
 const should = require("should");
 const opcua = require("node-opcua");
 const OPCUAClient = opcua.OPCUAClient;
-const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
 const UserTokenPolicy = opcua.UserTokenPolicy;
+const { perform_operation_on_client_session } = require("../../test_helpers/perform_operation_on_client_session");
 // require("node-opcua-service-session").UserNameIdentityToken;
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
@@ -62,7 +62,7 @@ describe("Testing bug #574", function() {
         // user1/password1
 
         const client = opcua.OPCUAClient.create({
-            endpoint_must_exist: false,
+            endpointMustExist: false,
             requestedSessionTimeout: 60000
         });
 

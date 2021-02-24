@@ -8,12 +8,14 @@ import { DataType } from "node-opcua-variant";
 
 import { AddressSpace, Namespace, SessionContext, UAObject, UAObjectType } from "../..";
 import { UATwoStateDiscrete } from "../../dist/src/data_access/ua_two_state_discrete";
-import { generateAddressSpace } from "../../../playground/node_modules/node-opcua/dist";
 import { nodesets } from "node-opcua-nodesets";
 import { getTempFilename } from "node-opcua-debug/nodeJS";
 import { CallbackT, StatusCode, StatusCodes } from "node-opcua-status-code";
 import { DataValue } from "node-opcua-data-value";
 import { getCurrentClock } from "node-opcua-date-time";
+import { generateAddressSpace } from "../../source_nodejs";
+
+const doDebug = false;
 
 export function subtest_two_state_discrete_type(mainTest: { addressSpace: AddressSpace }) {
     describe("TwoStateDiscreteType", () => {
@@ -248,7 +250,9 @@ export function subtest_two_state_discrete_type(mainTest: { addressSpace: Addres
 
             const xmlString = namespace.toNodeset2XML();
 
-            console.log(xmlString);
+            if (doDebug) {
+                console.log(xmlString);
+            }
             fs.writeFileSync(xmlFile, xmlString);
 
             addressSpace.dispose();

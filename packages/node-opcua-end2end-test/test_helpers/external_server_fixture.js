@@ -5,14 +5,6 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const os = require("os");
-function constructFilename(p) {
-    const filename = path.join(__dirname, "..", p);
-    //xx console.log("fi = ",filename);
-    if (!fs.existsSync(filename)) {
-        throw new Error("Cannot find " + filename);
-    }
-    return filename;
-}
 
 /**
  * @method start_simple_server
@@ -60,10 +52,11 @@ function start_simple_server(options, callback) {
 
     const server_exec = spawn("node", [server_script, "-p", port], options);
 
-    const serverCertificateFilename = constructFilename("certificates/server_cert_2048.pem");
+    const serverCertificateFilename = path.join(__dirname,"../../node-opcua-samples/certificates/server_cert_2048.pem");
 
-    console.log(" node ", server_script);
-
+    if (process.env.DEBUG2 || process.env.DEBUG) {
+        console.log(" node ", server_script);
+    }
     function detect_early_termination(code, signal) {
         console.log("child process terminated due to receipt of signal " + signal);
         callback(new Error("Process has terminated unexpectedly with code=" + code + " signal=" + signal));

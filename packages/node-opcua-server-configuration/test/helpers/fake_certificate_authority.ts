@@ -6,7 +6,17 @@ import { promisify } from "util";
 import * as rimraf from "rimraf";
 import { should } from "should";
 
-import { Certificate, convertPEMtoDER, makeSHA1Thumbprint, PrivateKey, split_der, toPem } from "node-opcua-crypto";
+import {
+    Certificate,
+    CertificateRevocationList,
+    convertPEMtoDER,
+    makeSHA1Thumbprint,
+    PrivateKey,
+    readCertificate,
+    readCertificateRevocationList,
+    split_der,
+    toPem
+} from "node-opcua-crypto";
 import { getFullyQualifiedDomainName } from "node-opcua-hostname";
 import { CertificateAuthority, CertificateManager, g_config } from "node-opcua-pki";
 
@@ -28,7 +38,7 @@ export async function produceCertificateAndPrivateKey(): Promise<{ certificate: 
     await certificateManager.initialize();
 
     const certFile = path.join(_tempFolder, "tmpPKI/certificate.pem");
-    const fileExists: boolean = await promisify(fs.exists)(certFile);
+    const fileExists: boolean = fs.existsSync(certFile);
 
     await certificateManager.createSelfSignedCertificate({
         applicationUri: "applicationUri",
@@ -50,6 +60,17 @@ export async function produceCertificateAndPrivateKey(): Promise<{ certificate: 
     const privateKey = convertPEMtoDER(privateKeyPEM);
 
     return { certificate, privateKey };
+}
+
+export async function _getFakeAuthorityCertificate(): Promise<{ certificate: Certificate; crl: CertificateRevocationList }> {
+    const certificateAuthority = new CertificateAuthority({
+        keySize: 2048,
+        location: path.join(_tempFolder, "CA")
+    });
+    await certificateAuthority.initialize();
+    const certificate = readCertificate(certificateAuthority.caCertificate);
+    const crl = await readCertificateRevocationList(certificateAuthority.revocationList);
+    return { certificate, crl };
 }
 
 async function _produceCertificate(certificateSigningRequest: Buffer, startDate: Date, validity: number): Promise<Buffer> {

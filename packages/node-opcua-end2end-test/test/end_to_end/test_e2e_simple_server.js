@@ -2,21 +2,22 @@
 "use strict";
 const should = require("should");
 
-const opcua = require("node-opcua");
-const OPCUAServer = opcua.OPCUAServer;
-const OPCUAClient = opcua.OPCUAClient;
+const {OPCUAServer, OPCUAClient, get_empty_nodeset_filename, parseEndpointUrl} = require("node-opcua");
+const { getFullyQualifiedDomainName } = require("node-opcua-hostname");
 
-const getFullyQualifiedDomainName = require("node-opcua-hostname").getFullyQualifiedDomainName;
-const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
 
-const perform_operation_on_client_session = require("../../test_helpers/perform_operation_on_client_session").perform_operation_on_client_session;
+const empty_nodeset_filename = get_empty_nodeset_filename();
+
+const { perform_operation_on_client_session } = require("../../test_helpers/perform_operation_on_client_session");
+
+const port = 6789;
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("Testing a simple server from Server side", function () {
 
     it("should have at least one endpoint", function (done) {
 
-        const server = new OPCUAServer({port: 6789, nodeset_filename: empty_nodeset_filename});
+        const server = new OPCUAServer({port, nodeset_filename: empty_nodeset_filename});
 
         server.start(()=>{
 
@@ -24,7 +25,7 @@ describe("Testing a simple server from Server side", function () {
 
             const endPoint = server.endpoints[0];
 
-            const e = opcua.parseEndpointUrl(endPoint.endpointDescriptions()[0].endpointUrl);
+            const e = parseEndpointUrl(endPoint.endpointDescriptions()[0].endpointUrl);
 
             const expected_hostname = getFullyQualifiedDomainName();
             e.hostname.toLowerCase().should.be.match(new RegExp(expected_hostname.toLowerCase()));
@@ -39,7 +40,7 @@ describe("Testing a simple server from Server side", function () {
     it("OPCUAServer#getChannels", function (done) {
 
 
-        const server = new OPCUAServer({port: 1239, nodeset_filename: empty_nodeset_filename});
+        const server = new OPCUAServer({port, nodeset_filename: empty_nodeset_filename});
         server.getChannels().length.should.equal(0);
 
         server.start(function () {
@@ -47,7 +48,7 @@ describe("Testing a simple server from Server side", function () {
             server.getChannels().length.should.equal(0);
 
             // now make a simple connection
-            const endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            const endpointUrl = server.getEndpointUrl();
 
             const options = {};
             const client = OPCUAClient.create(options);
@@ -68,7 +69,7 @@ describe("Testing a simple server from Server side", function () {
 
     it("should start and shutdown", function (done) {
 
-        const server = new OPCUAServer({port: 6789, nodeset_filename: empty_nodeset_filename});
+        const server = new OPCUAServer({port, nodeset_filename: empty_nodeset_filename});
 
         server.start(function () {
             process.nextTick(function () {

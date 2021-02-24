@@ -6,11 +6,12 @@ const { DataValue } = require("..");
 const { Variant } = require("node-opcua-variant");
 const { DataType } = require("node-opcua-variant");
 const { StatusCode, StatusCodes } =require("node-opcua-status-code");
-
 require("should");
-function debugLog() {
-    // console.log.apply(null,arguments);
-}
+
+const { make_debugLog, checkDebugFlag } = require("node-opcua-debug");
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
+
 const encode_decode_round_trip_test = require("node-opcua-packet-analyzer/dist/test_helpers/encode_decode_round_trip_test").encode_decode_round_trip_test;
 
 describe("DataValue with Limit bits", function () {
@@ -87,7 +88,7 @@ describe("DataValue with Limit bits", function () {
 
         debugLog(" value in hexa = 0x",dataValue.statusCode.value.toString(16));
     });
-    xit("should handle a DataValue that has a undefined statusCode ", function () {
+    it("should handle a DataValue that has a undefined statusCode", function () {
 
         const dataValue = new DataValue({
             statusCode: StatusCode.makeStatusCode(StatusCodes.Good, 1024)
@@ -95,14 +96,12 @@ describe("DataValue with Limit bits", function () {
 
         dataValue.statusCode = undefined;
 
-        encode_decode_round_trip_test(dataValue, function (buffer/*, id*/) {
+        encode_decode_round_trip_test(dataValue,  (buffer/*, id*/)=> {
             buffer.length.should.equal(1);
             debugLog(buffer.toString("hex"));
         });
 
         debugLog(dataValue.toString());
-
-        debugLog(" value in hexa = 0x",dataValue.statusCode.value.toString(16));
     });
 
 });

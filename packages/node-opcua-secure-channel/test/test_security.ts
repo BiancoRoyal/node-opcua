@@ -2,6 +2,7 @@
 // or compile with  tsc  -t es2017 -m commonjs test\test_security.ts  --outdir toto
 import * as async from "async";
 import * as fs from "fs";
+import * as path from "path";
 import { Socket } from "net";
 import { OPCUACertificateManager } from "node-opcua-certificate-manager";
 import {
@@ -17,7 +18,6 @@ import {
 import { EndpointDescription } from "node-opcua-service-endpoints";
 import { StatusCode } from "node-opcua-status-code";
 import { DirectTransport } from "node-opcua-transport/dist/test_helpers";
-import * as path from "path";
 import * as should from "should";
 import {
     ClientSecureChannelLayer,
@@ -40,13 +40,17 @@ interface TestParam {
     shouldFailAtClientConnection?: boolean;
 }
 
-const certificateFolder = path.join(__dirname, "../../../packages/node-opcua-end2end-test/certificates");
+const certificateFolder = path.join(__dirname, "../../../packages/node-opcua-samples/certificates");
+fs.existsSync(certificateFolder).should.eql(true, "expecting certificate store at " + certificateFolder);
 
 // tslint:disable:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("Testing secure client and server connection", () => {
     const certificateManager = new OPCUACertificateManager({});
+
     before(async () => {
+        certificateManager.referenceCounter++;
+        await certificateManager.initialize();
         const issuerCertificateFile = path.join(certificateFolder, "CA/public/cacert.pem");
         const issuerCertificate = readCertificate(issuerCertificateFile);
         await certificateManager.addIssuer(issuerCertificate);
@@ -54,6 +58,11 @@ describe("Testing secure client and server connection", () => {
         const issuerCertificateRevocationListFile = path.join(certificateFolder, "CA/crl/revocation_list.der");
         const crl = await readCertificateRevocationList(issuerCertificateRevocationListFile);
         await certificateManager.addRevocationList(crl);
+    });
+
+    after(() => {
+        certificateManager.referenceCounter--;
+        certificateManager.dispose();
     });
 
     let directTransport: DirectTransport;

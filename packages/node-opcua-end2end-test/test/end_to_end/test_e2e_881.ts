@@ -2,6 +2,8 @@ import { get_mini_nodeset_filename, nodesets, OPCUAClient, OPCUAServer, UserToke
 import { networkInterfaces } from "os";
 
 const doDebug = false;
+
+
 function getIpAddresses() {
     const nets = networkInterfaces();
     const results: any = {};
@@ -22,7 +24,7 @@ function getIpAddresses() {
 
     return [].concat.apply([], Object.values(results));
 }
-const port = 2000;
+const port = 2007;
 const ip = getIpAddresses();
 
 async function startServer(): Promise<OPCUAServer> {
@@ -63,8 +65,12 @@ describe("building server with an AlternateName", () => {
         server.dispose();
     });
     it("should not confuse endpoints", async () => {
-        const client = OPCUAClient.create({ endpoint_must_exist: false });
-        client.on("backoff", () => console.log("keep trying", endpointUri));
+        const client = OPCUAClient.create({ endpointMustExist: false });
+        client.on("backoff", () => {
+            if (doDebug) {
+                console.log("keep trying", endpointUri);
+            }
+        });
 
         const endpointUri = `opc.tcp://${ip[0]}:${port}`;
         if (doDebug) {

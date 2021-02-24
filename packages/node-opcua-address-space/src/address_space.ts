@@ -3,6 +3,7 @@
  */
 
 import * as chalk from "chalk";
+import { randomBytes } from "crypto";
 
 import { assert } from "node-opcua-assert";
 import { ExtraDataTypeManager } from "node-opcua-client-dynamic-extension-object";
@@ -120,7 +121,12 @@ type ShutdownTask = (this: AddressSpace) => void;
  */
 export class AddressSpace implements AddressSpacePrivate {
     public get rootFolder(): RootFolder {
-        return (this.findNode(this.resolveNodeId("RootFolder")) as any) as RootFolder;
+        const rootFolder = this.findNode(this.resolveNodeId("RootFolder"));
+        if (!rootFolder) {
+            // throw new Error("AddressSpace doesn't contain rootFolder object");
+            return (null as unknown) as RootFolder;
+        }
+        return (rootFolder as unknown) as RootFolder;
     }
 
     public static isNonEmptyQualifiedName = isNonEmptyQualifiedName;
@@ -619,7 +625,7 @@ export class AddressSpace implements AddressSpacePrivate {
         const offset = 16;
         const self = this as any;
         if (!self._eventIdCounter) {
-            self._eventIdCounter = require("crypto").randomBytes(20);
+            self._eventIdCounter = randomBytes(20);
             self._eventIdCounter.writeInt32BE(0, offset);
         }
         self._eventIdCounter.writeInt32BE(self._eventIdCounter.readInt32BE(offset) + 1, offset);

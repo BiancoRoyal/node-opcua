@@ -3,17 +3,19 @@ const should = require("should");
 const async = require("async");
 
 
-const OPCUAServer = require("node-opcua-server").OPCUAServer;
-const OPCUAClient = require("node-opcua-client").OPCUAClient;
+const { OPCUAServer } = require("node-opcua-server");
+const { OPCUAClient } = require("node-opcua-client");
 
-const opcua = require("node-opcua");
-const ObjectIds = opcua.ObjectIds;
+const { get_empty_nodeset_filename, is_valid_endpointUrl} = require("node-opcua");
 
-const debugLog = require("node-opcua-debug").make_debugLog(__filename);
+const { make_debugLog, checkDebugFlag} = require("node-opcua-debug");
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
 
-const empty_nodeset_filename = opcua.get_empty_nodeset_filename();
+const empty_nodeset_filename = get_empty_nodeset_filename();
 
 
+const port = 1999;
 
 const ServerSideUnimplementedRequest = require("../test_helpers/unimplementedRequest").ServerSideUnimplementedRequest;
 
@@ -28,16 +30,16 @@ describe("testing Server resilience to unsupported request", function() {
 
     before(function(done) {
 
-        server = new OPCUAServer({ port: 2000, nodeset_filename: empty_nodeset_filename });
+        server = new OPCUAServer({ port, nodeset_filename: empty_nodeset_filename });
 
         client = OPCUAClient.create();
 
         server.start(function() {
 
             // we will connect to first server end point
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             debugLog("endpointUrl", endpointUrl);
-            opcua.is_valid_endpointUrl(endpointUrl).should.equal(true);
+            is_valid_endpointUrl(endpointUrl).should.equal(true);
 
             setImmediate(function() {
                 client.connect(endpointUrl, function(err) {
@@ -86,9 +88,9 @@ describe("testing Server resilience with bad internet connection", function() {
 
     before(function(done) {
 
-        server = new OPCUAServer({ port: 2000, nodeset_filename: empty_nodeset_filename });
+        server = new OPCUAServer({ port, nodeset_filename: empty_nodeset_filename });
         server.start((err) => {
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             done(err);
         });
     });

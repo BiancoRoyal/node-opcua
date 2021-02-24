@@ -4,6 +4,7 @@
 // tslint:disable:no-unused-expression
 import { EventEmitter } from "events";
 import { LocaleId } from "node-opcua-basic-types";
+import { OPCUACertificateManager } from "node-opcua-certificate-manager";
 import { OPCUASecureObject } from "node-opcua-common";
 import { Certificate, makeSHA1Thumbprint, Nonce, toPem } from "node-opcua-crypto";
 import { ObjectRegistry } from "node-opcua-object-registry";
@@ -44,6 +45,8 @@ export interface FindEndpointOptions {
     certificateFile: string;
     privateKeyFile: string;
     applicationName: string;
+    applicationUri: string;
+    clientCertificateManager: OPCUACertificateManager;
 }
 
 export interface FindEndpointResult {
@@ -59,6 +62,12 @@ export interface OPCUAClientBaseOptions {
      * @default "NodeOPCUA-Client"
      */
     applicationName?: string;
+
+    /**
+     * the application Uri
+     * @default: `urn:${hostname}:${applicationName}`
+     */
+    applicationUri?: string;
 
     connectionStrategy?: ConnectionStrategyOptions;
 
@@ -105,15 +114,21 @@ export interface OPCUAClientBaseOptions {
     keepSessionAlive?: boolean;
 
     /**
+     * certificate Manager
+     */
+    clientCertificateManager?: OPCUACertificateManager;
+
+    /**
      * client certificate pem file.
-     * @default "certificates/client_selfsigned_cert_2048.pem"
+     * @default `${clientCertificateManager/rootFolder}/own/certs/client_certificate.pem"
      */
     certificateFile?: string;
     /**
      * client private key pem file.
-     * @default "certificates/client_key_2048.pem"
+     * @default `${clientCertificateManager/rootFolder}/own/private/private_key.pem"
      */
     privateKeyFile?: string;
+
     /**
      * a client name string that will be used to generate session names.
      */
@@ -326,6 +341,7 @@ export class OPCUAClientBase {
 
     public static create(options: OPCUAClientBaseOptions): OPCUAClientBase {
         /* istanbul ignore next*/
+        options;
         throw new Error("Not Implemented");
     }
 }

@@ -14,9 +14,6 @@ const defer = require("delayed");
 const chalk = require("chalk");
 
 
-const debugLog = require("node-opcua-debug").make_debugLog(__filename);
-const doDebug = require("node-opcua-debug").checkDebugFlag(__filename);
-
 const {
     is_valid_endpointUrl,
     MessageSecurityMode,
@@ -25,6 +22,11 @@ const {
     OPCUAClient,
     ClientSecureChannelLayer
 } = require("node-opcua");
+
+const { make_debugLog, checkDebugFlag } = require("node-opcua-debug");
+const debugLog = make_debugLog("TEST");
+const doDebug = checkDebugFlag("TEST");
+
 
 const fail_fast_connectionStrategy = {
     maxRetry: 0  // << NO RETRY !!
@@ -42,13 +44,11 @@ describe("testing Server resilience to DDOS attacks", function() {
     let sessions = [];
     let rejected_connections = 0;
 
-    let port = 2000;
+    const port = 2001;
 
     this.timeout(Math.max(30000, this.timeout()));
 
     beforeEach(function(done) {
-
-        port += 1;
 
         console.log(" server port = ", port);
         clients = [];
@@ -56,7 +56,7 @@ describe("testing Server resilience to DDOS attacks", function() {
         rejected_connections = 0;
 
         server = new OPCUAServer({
-            port: port,
+            port,
             maxConnectionsPerEndpoint: maxConnectionsPerEndpoint,
             maxAllowedSessionNumber: maxAllowedSessionNumber
             //xx nodeset_filename: empty_nodeset_filename
@@ -64,7 +64,7 @@ describe("testing Server resilience to DDOS attacks", function() {
 
         server.start(function(err) {
             // we will connect to first server end point
-            endpointUrl = server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+            endpointUrl = server.getEndpointUrl();
             debugLog("endpointUrl", endpointUrl);
             is_valid_endpointUrl(endpointUrl).should.equal(true);
 
@@ -173,12 +173,10 @@ describe("testing Server resilience to DDOS attacks", function() {
         function step2_close_all_channels(callback) {
 
             async.eachLimit(channels, 1, function(channel, callback) {
-                //xxconsole.log(chalk.bgWhite.red(" CLOSING ======================================="),channel._transport.name);
                 channel.close(function(err) {
                     if (err) {
                         nbError++;
                     }
-                    //xxx console.log( "closing channel....",err,channel._transport.name);
                     callback();
                 });
             }, callback);
@@ -293,7 +291,7 @@ describe("testing Server resilience to DDOS attacks", function() {
 
         function step2_close_all_sessions(callback) {
             async.eachLimit(sessions, 2, function(session, callback) {
-                // some channel have been forcibly closed by the server, closing them will cause server to generate an errpr
+                // some channel have been forcibly closed by the server, closing them will cause server to generate an error
                 session.close(function(err) {
                     if (err) {
                         nbError++;
@@ -307,7 +305,7 @@ describe("testing Server resilience to DDOS attacks", function() {
         function step2_close_all_clients(callback) {
 
             async.eachLimit(clients, 1, function(client, callback) {
-                // some channel have been forcibly closed by the server, closing them will cause server to generate an errpr
+                // some channel have been forcibly closed by the server, closing them will cause server to generate an error
                 client.disconnect(function(err) {
                     if (err) {
                         nbError++;

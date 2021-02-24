@@ -258,10 +258,18 @@ export declare interface ClientSubscription {
 
     on(event: "error", eventHandler: (err: Error) => void): this;
 }
+export declare interface ClientSubscription {
+    _createMonitoredItem(
+        itemToMonitor: ReadValueIdOptions,
+        monitoringParameters: MonitoringParametersOptions,
+        timestampsToReturn: TimestampsToReturn
+    ): ClientMonitoredItem;
+}
 
 export class ClientSubscription {
     public static create(clientSession: ClientSession, options: ClientSubscriptionOptions): ClientSubscription {
         /* istanbul ignore next*/
         throw new Error("Not Implemented");
     }
+    public static ignoreNextWarning: boolean = false;
 }

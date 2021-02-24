@@ -5,11 +5,10 @@
 import * as async from "async";
 import * as chalk from "chalk";
 import { EventEmitter } from "events";
-import * as _ from "underscore";
 
 import { assert } from "node-opcua-assert";
 import { AttributeIds } from "node-opcua-data-model";
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+import { checkDebugFlag, make_debugLog, make_warningLog } from "node-opcua-debug";
 import { resolveNodeId } from "node-opcua-nodeid";
 
 import { ReadValueIdOptions, TimestampsToReturn } from "node-opcua-service-read";
@@ -44,10 +43,12 @@ import { ClientMonitoredItemGroupImpl } from "./client_monitored_item_group_impl
 import { ClientMonitoredItemImpl } from "./client_monitored_item_impl";
 import { ClientSidePublishEngine } from "./client_publish_engine";
 import { ClientSessionImpl } from "./client_session_impl";
+import { ClientMonitoredItem } from "../client_monitored_item";
+import { ClientMonitoredItemToolbox } from "../client_monitored_item_toolbox";
 
 const debugLog = make_debugLog(__filename);
 const doDebug = checkDebugFlag(__filename);
-const warningLog = debugLog;
+const warningLog = make_warningLog(__filename);
 
 const PENDING_SUBSCRIPTION_ID = 0xc0cac01a;
 const TERMINATED_SUBSCRIPTION_ID = 0xc0cac01b;
@@ -87,6 +88,61 @@ async function promoteOpaqueStructureInNotificationData(
     await promoteOpaqueStructure(session, dataValuesToPromote);
 }
 
+const minimumMaxKeepAliveCount = 3;
+
+function displayKeepAliveWarning(sessionTimeout: number, maxKeepAliveCount: number, publishingInterval: number): boolean {
+    const keepAliveInterval = maxKeepAliveCount * publishingInterval;
+
+    // istanbul ignore next
+    if (sessionTimeout < keepAliveInterval) {
+        warningLog(
+            chalk.yellowBright(
+                `[NODE-OPCUA-W09] The subscription parameters are not compatible with the session timeout !
+                  session timeout    = ${sessionTimeout}  milliseconds
+                  maxKeepAliveCount  = ${maxKeepAliveCount}
+                  publishingInterval = ${publishingInterval} milliseconds"
+
+                  It is important that the session timeout    ( ${chalk.red(sessionTimeout)} ms) is largely greater than :
+                      (maxKeepAliveCount*publishingInterval  =  ${chalk.red(keepAliveInterval)} ms),
+                  otherwise you may experience unexpected disconnection from the server if your monitored items are not
+                  changing frequently.`
+            )
+        );
+
+        if (sessionTimeout < 3000 && publishingInterval <= 1000) {
+            warningLog(`[NODE-OPCUA-W10] You'll need to increase your sessionTimeout significantly.`);
+        }
+        if (
+            sessionTimeout >= 3000 &&
+            sessionTimeout < publishingInterval * minimumMaxKeepAliveCount &&
+            maxKeepAliveCount <= minimumMaxKeepAliveCount + 2
+        ) {
+            warningLog(`[NODE-OPCUA-W11] your publishingInterval interval is probably too large, consider reducing it.`);
+        }
+
+        const idealMaxKeepAliveCount = Math.max(4, Math.floor((sessionTimeout * 0.8) / publishingInterval - 0.5));
+        const idealPublishingInternal = Math.min(publishingInterval, sessionTimeout / (idealMaxKeepAliveCount + 3));
+        const idealKeepAliveInterval = idealMaxKeepAliveCount * publishingInterval;
+        warningLog(
+            `[NODE-OPCUA-W12]  An ideal value for maxKeepAliveCount could be ${idealMaxKeepAliveCount}.
+                  An ideal value for publishingInterval could be ${idealPublishingInternal} ms.
+                  This will make  your subscription emit a keep alive signal every ${idealKeepAliveInterval} ms
+                  if no monitored items are generating notifications.
+                  for instance:
+                    const  client = OPCUAClient.create({
+                        requestedSessionTimeout: 30* 60* 1000, // 30 minutes
+                    });
+`
+        );
+
+        if (!ClientSubscription.ignoreNextWarning) {
+            throw new Error("[NODE-OPCUA-W09] The subscription parameters are not compatible with the session timeout ");
+        }
+        return true;
+    }
+    return false;
+}
+
 export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscription {
     /**
      * the associated session
@@ -121,11 +177,10 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
     public timeoutHint = 0;
     public publishEngine: ClientSidePublishEngine;
 
-    private lastSequenceNumber: number;
+    public lastSequenceNumber: number;
     private lastRequestSentTime: Date;
     private _nextClientHandle = 0;
     private hasTimedOut: boolean;
-    private pendingMonitoredItemsToRegister: ClientMonitoredItemBaseMap;
 
     constructor(session: ClientSession, options: ClientSubscriptionOptions) {
         super();
@@ -139,6 +194,26 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
         options.requestedPublishingInterval = options.requestedPublishingInterval || 100;
         options.requestedLifetimeCount = options.requestedLifetimeCount || 60;
         options.requestedMaxKeepAliveCount = options.requestedMaxKeepAliveCount || 10;
+        options.requestedMaxKeepAliveCount = Math.max(options.requestedMaxKeepAliveCount, minimumMaxKeepAliveCount);
+
+        // perform some verification
+        const warningEmitted = displayKeepAliveWarning(
+            session.timeout,
+            options.requestedMaxKeepAliveCount,
+            options.requestedPublishingInterval
+        );
+        // istanbul ignore next
+        if (warningEmitted) {
+            warningLog(
+                JSON.stringify(
+                    {
+                        ...options
+                    },
+                    null,
+                    " "
+                )
+            );
+        }
 
         options.maxNotificationsPerPublish = utils.isNullOrUndefined(options.maxNotificationsPerPublish)
             ? 0
@@ -168,8 +243,6 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
          * @type {boolean}
          */
         this.hasTimedOut = false;
-
-        this.pendingMonitoredItemsToRegister = {};
 
         setImmediate(() => {
             this.__create_subscription((err?: Error) => {
@@ -263,20 +336,18 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
 
         itemToMonitor.nodeId = resolveNodeId(itemToMonitor.nodeId!);
 
-        const monitoredItem = new ClientMonitoredItemImpl(this, itemToMonitor, requestedParameters, timestampsToReturn);
-
-        this._wait_for_subscription_to_be_ready((err?: Error) => {
-            if (err) {
-                return done(err);
-            }
-            monitoredItem._monitor((err1?: Error) => {
+        const monitoredItem = ClientMonitoredItem_create(
+            this,
+            itemToMonitor,
+            requestedParameters,
+            timestampsToReturn,
+            (err1?: Error | null, monitoredItem2?: ClientMonitoredItem) => {
                 if (err1) {
                     return done && done(err1);
                 }
-                done(err1 ? err1 : null, monitoredItem);
-            });
-        });
-        // xx return monitoredItem;
+                done(err1 || null, monitoredItem);
+            }
+        );
     }
 
     public async monitorItems(
@@ -394,14 +465,14 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
 
                     const itemsToCreate: MonitoredItemCreateRequestOptions[] = [];
 
-                    _.forEach(oldMonitoredItems, (monitoredItem: ClientMonitoredItemBase /*, clientHandle*/) => {
+                    for (const monitoredItem of Object.values(oldMonitoredItems)) {
                         assert(monitoredItem.monitoringParameters.clientHandle > 0);
                         itemsToCreate.push({
                             itemToMonitor: monitoredItem.itemToMonitor,
                             monitoringMode: monitoredItem.monitoringMode,
                             requestedParameters: monitoredItem.monitoringParameters
                         });
-                    });
+                    }
 
                     const createMonitorItemsRequest = new CreateMonitoredItemsRequest({
                         itemsToCreate,
@@ -441,7 +512,11 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
                                     throw new Error("Internal Error");
                                 }
                                 const monitoredItem = this.monitoredItems[clientHandle] as ClientMonitoredItemImpl;
-                                monitoredItem._applyResult(monitoredItemResult);
+                                if (monitoredItem) {
+                                    monitoredItem._applyResult(monitoredItemResult);
+                                } else {
+                                    warningLog("cannot find monitored item for clientHandle !:", clientHandle);
+                                }
                             });
                             innerCallback();
                         }
@@ -473,6 +548,10 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
 
         str += "timeSinceLast PR    : " + duration + "ms" + extra + "\n";
         str += "has expired         : " + (duration > timeToLive) + "\n";
+
+        str += "(session timeout    : " + this.session.timeout + " ms)\n";
+        str += "(maxKeepAliveCount*publishingInterval: " + this.publishingInterval * this.session.timeout + " ms)\n";
+
         return str;
     }
 
@@ -569,6 +648,9 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
             this.maxKeepAliveCount = response.revisedMaxKeepAliveCount;
 
             this.timeoutHint = (this.maxKeepAliveCount + 10) * this.publishingInterval;
+
+            displayKeepAliveWarning(this.session.timeout, this.maxKeepAliveCount, this.publishingInterval);
+            ClientSubscription.ignoreNextWarning = false;
 
             if (doDebug) {
                 debugLog(chalk.yellow.bold("registering callback"));
@@ -669,7 +751,7 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
         }
     }
 
-    private onNotificationMessage(notificationMessage: NotificationMessage) {
+    public onNotificationMessage(notificationMessage: NotificationMessage) {
         assert(notificationMessage.hasOwnProperty("sequenceNumber"));
 
         this.lastSequenceNumber = notificationMessage.sequenceNumber;
@@ -766,8 +848,53 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
         monitoredItemGroup.emit("terminated");
         this.monitoredItemGroups = this.monitoredItemGroups.filter((obj) => obj !== monitoredItemGroup);
     }
+    /**
+     * @private
+     * @param itemToMonitor
+     * @param monitoringParameters
+     * @param timestampsToReturn
+     */
+    public _createMonitoredItem(
+        itemToMonitor: ReadValueIdOptions,
+        monitoringParameters: MonitoringParametersOptions,
+        timestampsToReturn: TimestampsToReturn
+    ): ClientMonitoredItem {
+        /* istanbul ignore next*/
+        const monitoredItem = new ClientMonitoredItemImpl(this, itemToMonitor, monitoringParameters, timestampsToReturn);
+        return monitoredItem;
+    }
 }
 
+export function ClientMonitoredItem_create(
+    subscription: ClientSubscription,
+    itemToMonitor: ReadValueIdOptions,
+    monitoringParameters: MonitoringParametersOptions,
+    timestampsToReturn: TimestampsToReturn,
+    callback?: (err3?: Error | null, monitoredItem?: ClientMonitoredItem) => void
+): ClientMonitoredItem {
+    const monitoredItem = new ClientMonitoredItemImpl(subscription, itemToMonitor, monitoringParameters, timestampsToReturn);
+
+    setImmediate(() => {
+        (subscription as ClientSubscriptionImpl)._wait_for_subscription_to_be_ready((err?: Error) => {
+            if (err) {
+                if (callback) {
+                    callback(err);
+                }
+                return;
+            }
+            ClientMonitoredItemToolbox._toolbox_monitor(subscription, timestampsToReturn, [monitoredItem], (err1?: Error) => {
+                if (err1) {
+                    monitoredItem.emit("err", err1.message);
+                    monitoredItem.emit("terminated");
+                }
+                if (callback) {
+                    callback(err1, monitoredItem);
+                }
+            });
+        });
+    });
+    return monitoredItem;
+}
 // tslint:disable:no-var-requires
 // tslint:disable:max-line-length
 const thenify = require("thenify");

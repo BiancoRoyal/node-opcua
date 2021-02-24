@@ -13,7 +13,12 @@ const {
 } = require("node-opcua");
 
 
-const f = require("../../test_helpers/display_function_name").f.bind(null, true);
+const { make_debugLog, checkDebugFlag, make_errorLog} = require("node-opcua-debug");
+const debugLog = make_debugLog("TEST");
+const errorLog = make_errorLog("TEST");
+const doDebug = checkDebugFlag("TEST");
+
+const f = require("../../test_helpers/display_function_name").f.bind(null, doDebug);
 
 module.exports = function(test) {
 
@@ -34,18 +39,18 @@ module.exports = function(test) {
                     // create a single subscription
                     function(callback) {
                         const parameters = {
-                            requestedPublishingInterval: 100000,
+                            requestedPublishingInterval: 10000,
                             requestedLifetimeCount: 60,
                             requestedMaxKeepAliveCount: 10
                         };
+                        ClientSubscription.ignoreNextWarning = true;
                         the_subscription = ClientSubscription.create(the_session, parameters);
                         the_subscription.on("started", function() {
                             callback();
                         }).on("internal_error", function(err) {
-                            console.log(" received internal error", err.message);
+                            errorLog(" received internal error", err.message);
                         }).on("keepalive", function() {
-
-                            console.log("keepalive  -pending request on server = ", the_subscription.publish_engine.nbPendingPublishRequests);
+                            errorLog("keepalive  -pending request on server = ", the_subscription.publish_engine.nbPendingPublishRequests);
 
                         }).on("terminated", function(err) {
                             should.not.exist(err);
@@ -85,7 +90,7 @@ module.exports = function(test) {
             if (!server) { return done(); }
 
             const client1 = OPCUAClient.create({
-                requestedSessionTimeout: 10000,
+                requestedSessionTimeout: 120 * 60* 1000,
                 keepSessionAlive: false
             });
 
@@ -184,9 +189,15 @@ module.exports = function(test) {
                         requestedLifetimeCount: 100000,  // very long subscription lifetime
                         requestedMaxKeepAliveCount: 1000
                     };
+                    
+                    ClientSubscription.ignoreNextWarning = true;
+
                     the_subscription = ClientSubscription.create(the_session, parameters);
                     the_subscription.on("started", function() {
                         subscriptionId = the_subscription.subscriptionId;
+
+                        (the_subscription.publishingInterval * the_subscription.maxKeepAliveCount).should.be.greaterThan(the_session.timeout)
+                        
                         callback();
                     }).on("internal_error", function(err) {
                         console.log(" received internal error", err.message);

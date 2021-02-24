@@ -18,7 +18,7 @@ import { ReferenceTypeIds } from "node-opcua-constants";
 import { Certificate, Nonce } from "node-opcua-crypto";
 import { attributeNameById, BrowseDirection, LocalizedTextLike, makeResultMask } from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+import { checkDebugFlag, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
 import { ExtensionObject, OpaqueStructure } from "node-opcua-extension-object";
 import { coerceNodeId, makeNodeId, NodeId, NodeIdLike, NodeIdType, resolveNodeId } from "node-opcua-nodeid";
 import { getArgumentDefinitionHelper, IBasicSession } from "node-opcua-pseudo-session";
@@ -88,7 +88,13 @@ import {
 import { WriteRequest, WriteResponse, WriteValue } from "node-opcua-service-write";
 import { StatusCode, StatusCodes, Callback } from "node-opcua-status-code";
 import { ErrorCallback } from "node-opcua-status-code";
-import { BrowseNextRequest, BrowseNextResponse, HistoryReadValueIdOptions, HistoryReadValueId } from "node-opcua-types";
+import {
+    BrowseNextRequest,
+    BrowseNextResponse,
+    HistoryReadValueIdOptions,
+    HistoryReadValueId,
+    WriteValueOptions
+} from "node-opcua-types";
 import { buffer_ellipsis, check_flag, getFunctionParameterNames, isNullOrUndefined, lowerFirstLetter } from "node-opcua-utils";
 import { DataType, Variant, VariantLike } from "node-opcua-variant";
 
@@ -108,11 +114,9 @@ import {
     MonitoredItemData,
     NodeAttributes,
     QueryFirstRequestLike,
-    ReadValueIdLike,
     SetMonitoringModeRequestLike,
     SubscriptionId,
     TransferSubscriptionsRequestLike,
-    WriteValueLike,
     HistoryReadValueIdOptions2
 } from "../client_session";
 import { ClientSessionKeepAliveManager } from "../client_session_keepalive_manager";
@@ -129,7 +133,9 @@ const resultMask = makeResultMask("ReferenceType");
 const helpAPIChange = process.env.DEBUG && process.env.DEBUG.match(/API/);
 const debugLog = make_debugLog(__filename);
 const doDebug = checkDebugFlag(__filename);
-const warningLog = debugLog;
+const warningLog = make_warningLog(__filename);
+const errorLog = make_errorLog(__filename);
+
 let pendingTransactionMessageDisplayed = false;
 
 function coerceBrowseDescription(data: any): BrowseDescription {
@@ -173,7 +179,7 @@ const attributeNames: string[] = ((): string[] => {
     return r;
 })();
 
-function composeResult(nodes: any[], nodesToRead: ReadValueIdLike[], dataValues: DataValue[]): NodeAttributes[] {
+function composeResult(nodes: any[], nodesToRead: ReadValueIdOptions[], dataValues: DataValue[]): NodeAttributes[] {
     assert(nodesToRead.length === dataValues.length);
     let c = 0;
     const results = [];
@@ -437,7 +443,7 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
                     if (r.references && r.references.length > this.requestedMaxReferencesPerNode) {
                         warningLog(
                             chalk.yellow("warning") +
-                                " BrowseResponse : server didn't take into" +
+                                " BrowseResponse : the server didn't take into" +
                                 " account our requestedMaxReferencesPerNode "
                         );
                         warningLog("        this.requestedMaxReferencesPerNode= " + this.requestedMaxReferencesPerNode);
@@ -448,21 +454,6 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
             }
             for (const r of results) {
                 r.references = r.references || /* istanbul ignore next */ [];
-            }
-
-            // detect unsupported case :
-            // todo implement proper support for r.continuationPoint
-            /* istanbul ignore next */
-            for (const r of results) {
-                if (r.continuationPoint !== null) {
-                    warningLog(
-                        chalk.yellow(" warning:"),
-                        " BrowseResponse : server didn't send all references " +
-                            "and has provided a continuationPoint. Unfortunately we do not support this yet"
-                    );
-                    warningLog("           this.requestedMaxReferencesPerNode = ", this.requestedMaxReferencesPerNode);
-                    warningLog("           continuationPoint ", r.continuationPoint);
-                }
             }
             assert(results[0] instanceof BrowseResult);
             return callback(null, isArray ? results : results[0]);
@@ -910,13 +901,13 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
      *   const statusCodes = await session.write(nodesToWrite);
      * ```
      */
-    public write(nodeToWrite: WriteValueLike, callback: ResponseCallback<StatusCode>): void;
+    public write(nodeToWrite: WriteValueOptions, callback: ResponseCallback<StatusCode>): void;
 
-    public write(nodesToWrite: WriteValueLike[], callback: ResponseCallback<StatusCode[]>): void;
+    public write(nodesToWrite: WriteValueOptions[], callback: ResponseCallback<StatusCode[]>): void;
 
-    public async write(nodesToWrite: WriteValueLike[]): Promise<StatusCode[]>;
+    public async write(nodesToWrite: WriteValueOptions[]): Promise<StatusCode[]>;
 
-    public async write(nodeToWrite: WriteValueLike): Promise<StatusCode>;
+    public async write(nodeToWrite: WriteValueOptions): Promise<StatusCode>;
 
     /**
      * @internal
@@ -1120,17 +1111,17 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
      *   ```
      *
      */
-    public read(nodeToRead: ReadValueIdLike, maxAge: number, callback: ResponseCallback<DataValue>): void;
+    public read(nodeToRead: ReadValueIdOptions, maxAge: number, callback: ResponseCallback<DataValue>): void;
 
-    public read(nodesToRead: ReadValueIdLike[], maxAge: number, callback: ResponseCallback<DataValue[]>): void;
+    public read(nodesToRead: ReadValueIdOptions[], maxAge: number, callback: ResponseCallback<DataValue[]>): void;
 
-    public read(nodeToRead: ReadValueIdLike, callback: ResponseCallback<DataValue>): void;
+    public read(nodeToRead: ReadValueIdOptions, callback: ResponseCallback<DataValue>): void;
 
-    public read(nodesToRead: ReadValueIdLike[], callback: ResponseCallback<DataValue[]>): void;
+    public read(nodesToRead: ReadValueIdOptions[], callback: ResponseCallback<DataValue[]>): void;
 
-    public read(nodeToRead: ReadValueIdLike, maxAge?: number): Promise<DataValue>;
+    public read(nodeToRead: ReadValueIdOptions, maxAge?: number): Promise<DataValue>;
 
-    public read(nodeToRead: ReadValueIdLike[], maxAge?: number): Promise<DataValue[]>;
+    public read(nodeToRead: ReadValueIdOptions[], maxAge?: number): Promise<DataValue[]>;
 
     /**
      * @internal
@@ -1159,7 +1150,7 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
             if (
                 !(getFunctionParameterNames(callback)[1] === "dataValues" || getFunctionParameterNames(callback)[1] === "dataValue")
             ) {
-                warningLog(chalk.red("ERROR ClientSession#read  API has changed !!, please fix the client code"));
+                warningLog(chalk.red("[NODE-OPCUA-E04] the ClientSession#read  API has changed !!, please fix the client code"));
                 warningLog(chalk.red("   replace ..:"));
                 warningLog(chalk.cyan("   session.read(nodesToRead,function(err,nodesToRead,results) {}"));
                 warningLog(chalk.red("   with .... :"));
@@ -1241,14 +1232,22 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
     ): void;
     public createSubscription2(...args: any[]): any {
         const createSubscriptionRequest = args[0] as CreateSubscriptionRequestLike;
-        const callback = args[1];
+        let callback = args[1];
         const subscription = new ClientSubscriptionImpl(this, createSubscriptionRequest);
 
         // tslint:disable-next-line:no-empty
-        subscription.on("error", () => {});
+        subscription.on("error", (err) => {
+            if (callback) {
+                callback(err);
+                callback = null;
+            }
+        });
         subscription.on("started", () => {
             assert(subscription.session === this, "expecting a session here");
-            callback(null, subscription);
+            if (callback) {
+                callback(null, subscription);
+                callback = null;
+            }
         });
     }
 
@@ -1491,19 +1490,21 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
                 if (!pendingTransactionMessageDisplayed) {
                     pendingTransactionMessageDisplayed = true;
                     // tslint:disable-next-line: no-console
-                    console.log(
+                    warningLog(
+                        "[NODE-OPCUA-W21]",
                         "Pending transactions: ",
                         privateThis.pendingTransactions.map((a: any) => a.request.constructor.name).join(" ")
                     );
                     // tslint:disable-next-line: no-console
-                    console.log(
+                    warningLog(
+                        "[NODE-OPCUA-W22]",
                         chalk.yellow(
                             "Warning : your opcua client is sending multiple requests simultaneously to the server",
                             request.constructor.name
-                        )
+                        ),
+                        "\n",
+                        chalk.yellow(" please fix your application code")
                     );
-                    // tslint:disable-next-line: no-console
-                    console.log(chalk.yellow("Warning : please fix your application code"));
                 }
             } else if (privateThis.pendingTransactions.length > 3) {
                 debugLog(
