@@ -1,5 +1,4 @@
 // tslint:disable:no-var-requires
-const mocha = require("mocha");
 import * as fs from "fs";
 import * as path from "path";
 
@@ -13,7 +12,7 @@ import {
     UserIdentityInfoX509, UserTokenType
 } from "node-opcua-client";
 
-const should = require("should");
+import * as should from "should";
 import * as  crypto_utils from "node-opcua-crypto";
 import { Certificate, PrivateKey, PrivateKeyPEM, readCertificate, readCertificateRevocationList } from "node-opcua-crypto";
 
@@ -159,7 +158,7 @@ describe("Testing Session with user certificate", () => {
     });
 
 
-    it("should fail to create a session with a invalid client certificate (outofdate)", async () => {
+    it("should fail to create a session with a invalid client certificate (out-of-date)", async () => {
 
         const userIdentity: UserIdentityInfoX509 = {
             certificateData: invalidClientCertificate,

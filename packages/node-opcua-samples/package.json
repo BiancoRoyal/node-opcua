@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-samples",
-    "version": "2.33.0",
+    "version": "2.36.0",
     "description": "pure nodejs OPCUA SDK - module -samples",
     "bin": {
         "simple_client": "./dist/simple_client_ts.js",
@@ -16,14 +16,14 @@
         "clean": "node -e \"require('rimraf').sync('certificates');\""
     },
     "dependencies": {
-        "@types/underscore": "^1.10.24",
+        "@types/underscore": "^1.11.0",
         "@types/yargs": "16.0.0",
         "easy-table": "^1.1.1",
         "exit": "^0.1.2",
-        "node-opcua": "2.33.0",
-        "node-opcua-assert": "2.29.0",
+        "node-opcua": "2.36.0",
+        "node-opcua-assert": "2.35.0",
         "node-opcua-pki": "^2.8.0",
-        "node-opcua-server-configuration": "2.33.0",
+        "node-opcua-server-configuration": "2.36.0",
         "sprintf-js": "^1.1.2",
         "treeify": "^1.1.0",
         "underscore": "^1.12.0",

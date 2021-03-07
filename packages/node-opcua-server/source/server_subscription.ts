@@ -3,8 +3,6 @@
  */
 // tslint:disable:no-console
 
-import { TimestampsToReturn } from "node-opcua-data-value";
-
 import { Queue } from "./queue";
 import * as chalk from "chalk";
 import { EventEmitter } from "events";
@@ -15,9 +13,8 @@ import { SessionContext } from "node-opcua-address-space";
 import { assert } from "node-opcua-assert";
 import { Byte } from "node-opcua-basic-types";
 import { SubscriptionDiagnosticsDataType } from "node-opcua-common";
-import { NodeClass } from "node-opcua-data-model";
-import { AttributeIds } from "node-opcua-data-model";
-import { isValidDataEncoding } from "node-opcua-data-model";
+import { NodeClass, AttributeIds, isValidDataEncoding } from "node-opcua-data-model";
+import { TimestampsToReturn } from "node-opcua-data-value";
 import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 import { ExtensionObject } from "node-opcua-extension-object";
 import { NodeId } from "node-opcua-nodeid";
@@ -29,20 +26,16 @@ import {
     DataChangeNotification,
     EventNotificationList,
     MonitoringMode,
-    NotificationMessage,
-    StatusChangeNotification
-} from "node-opcua-service-subscription";
-import { DataChangeFilter, MonitoredItemCreateRequest } from "node-opcua-service-subscription";
-import { StatusCode, StatusCodes } from "node-opcua-status-code";
-import {
-    AggregateFilterResult,
-    ContentFilterResult,
-    EventFieldList,
-    EventFilterResult,
     MonitoredItemCreateResult,
     MonitoredItemNotification,
-    PublishResponse
-} from "node-opcua-types";
+    PublishResponse,
+    NotificationMessage,
+    StatusChangeNotification,
+    DataChangeFilter,
+    MonitoredItemCreateRequest
+} from "node-opcua-service-subscription";
+import { StatusCode, StatusCodes } from "node-opcua-status-code";
+import { AggregateFilterResult, ContentFilterResult, EventFieldList, EventFilterResult } from "node-opcua-types";
 
 import { MonitoredItem, MonitoredItemOptions, ISubscription } from "./monitored_item";
 import { ServerSession } from "./server_session";
@@ -339,7 +332,7 @@ export interface SubscriptionOptions {
     id?: number;
 }
 
-let g_monitoredItemId = 1;
+let g_monitoredItemId = Math.ceil(Math.random() * 100000);
 
 function getNextMonitoredItemId() {
     return g_monitoredItemId++;
@@ -682,6 +675,57 @@ export class Subscription extends EventEmitter {
         }
     }
 
+    public setTriggering(
+        triggeringItemId: number,
+        linksToAdd: number[] | null,
+        linksToRemove: number[] | null
+    ): { statusCode: StatusCode; addResults: StatusCode[]; removeResults: StatusCode[] } {
+        /** Bad_NothingToDo, Bad_TooManyOperations,Bad_SubscriptionIdInvalid, Bad_MonitoredItemIdInvalid */
+        linksToAdd = linksToAdd || [];
+        linksToRemove = linksToRemove || [];
+
+        if (linksToAdd.length === 0 && linksToRemove.length === 0) {
+            return { statusCode: StatusCodes.BadNothingToDo, addResults: [], removeResults: [] };
+        }
+        const triggeringItem = this.getMonitoredItem(triggeringItemId);
+
+        const monitoredItemsToAdd = linksToAdd.map((id) => this.getMonitoredItem(id));
+        const monitoredItemsToRemove = linksToRemove.map((id) => this.getMonitoredItem(id));
+
+        if (!triggeringItem) {
+            const removeResults1: StatusCode[] = monitoredItemsToRemove.map((m) =>
+                m ? StatusCodes.Good : StatusCodes.BadMonitoredItemIdInvalid
+            );
+            const addResults1: StatusCode[] = monitoredItemsToAdd.map((m) =>
+                m ? StatusCodes.Good : StatusCodes.BadMonitoredItemIdInvalid
+            );
+            return {
+                statusCode: StatusCodes.BadMonitoredItemIdInvalid,
+
+                addResults: addResults1,
+                removeResults: removeResults1
+            };
+        }
+        //
+        // note: it seems that CTT imposed that we do remove before add
+        const removeResults = monitoredItemsToRemove.map((m) =>
+            !m ? StatusCodes.BadMonitoredItemIdInvalid : triggeringItem.removeLinkItem(m.monitoredItemId)
+        );
+        const addResults = monitoredItemsToAdd.map((m) =>
+            !m ? StatusCodes.BadMonitoredItemIdInvalid : triggeringItem.addLinkItem(m.monitoredItemId)
+        );
+
+        const statusCode: StatusCode = StatusCodes.Good;
+
+        // do binding
+
+        return {
+            statusCode,
+
+            addResults,
+            removeResults
+        };
+    }
     public dispose() {
         if (doDebug) {
             debugLog("Subscription#dispose", this.id, this.monitoredItemCount);
@@ -1103,7 +1147,7 @@ export class Subscription extends EventEmitter {
         ];
 
         if (this.publishEngine!.pendingPublishRequestCount) {
-            // the GoodSubscriptionTransferred can be prcessed immediatly
+            // the GoodSubscriptionTransferred can be processed immediately
             this._addNotificationMessage(notificationData);
             debugLog(chalk.red("pendingPublishRequestCount"), this.publishEngine?.pendingPublishRequestCount);
             this._publish_pending_notifications();
@@ -1332,7 +1376,7 @@ export class Subscription extends EventEmitter {
         debugLog("Subscription#_tick  aborted=", this.aborted, "state=", this.state.toString());
 
         if (this.aborted) {
-            // xx  console.log(" Log aborteds")
+            // xx  console.log(" Log aborted")
             // xx  // underlying channel has been aborted ...
             // xx self.publishEngine.cancelPendingPublishRequestBeforeChannelChange();
             // xx // let's still increase lifetime counter to detect timeout

@@ -192,26 +192,54 @@ function apply_dataChange_filter(this: MonitoredItem, newDataValue: DataValue, o
     }
 
     const trigger = this.filter.trigger;
-
+    // istanbul ignore next
+    if (doDebug) {
+        try {
+        debugLog("filter pass ?", DataChangeTrigger[trigger] ,this.oldDataValue?.toString(), newDataValue.toString());
+        if (
+            trigger === DataChangeTrigger.Status ||
+            trigger === DataChangeTrigger.StatusValue ||
+            trigger === DataChangeTrigger.StatusValueTimestamp
+        ) {
+            debugLog("statusCodeHasChanged ", statusCodeHasChanged(newDataValue, oldDataValue));
+        }
+        if (trigger === DataChangeTrigger.StatusValue || trigger === DataChangeTrigger.StatusValueTimestamp) {
+            debugLog(
+                "valueHasChanged ",
+                valueHasChanged.call(this, newDataValue, oldDataValue, this.filter!.deadbandType, this.filter!.deadbandValue)
+            );
+        }
+        if (trigger === DataChangeTrigger.StatusValueTimestamp) {
+            debugLog("timestampHasChanged ", timestampHasChanged(newDataValue.sourceTimestamp, oldDataValue.sourceTimestamp));
+        }
+    } catch(err) {
+        console.log(err);
+    }
+    }
     switch (trigger) {
-        case DataChangeTrigger.Status: // Status
+        case DataChangeTrigger.Status: {
+            //
+            //              Status
             //              Report a notification ONLY if the StatusCode associated with
             //              the value changes. See Table 166 for StatusCodes defined in
             //              this standard. Part 8 specifies additional StatusCodes that are
             //              valid in particular for device data.
             return statusCodeHasChanged(newDataValue, oldDataValue);
-
-        case DataChangeTrigger.StatusValue: // StatusValue
-            //              Report a notification if either the StatusCode or the value
-            //              change. The Deadband filter can be used in addition for
+        }
+        case DataChangeTrigger.StatusValue:
+        {
             //              filtering value changes.
+            //              change. The Deadband filter can be used in addition for
+            //              Report a notification if either the StatusCode or the value
+            //              StatusValue
             //              This is the default setting if no filter is set.
             return (
                 statusCodeHasChanged(newDataValue, oldDataValue) ||
                 valueHasChanged.call(this, newDataValue, oldDataValue, this.filter.deadbandType, this.filter.deadbandValue)
             );
-
+        }
         default:
+        {
             // StatusValueTimestamp
             //              Report a notification if either StatusCode, value or the
             //              SourceTimestamp change.
@@ -226,6 +254,7 @@ function apply_dataChange_filter(this: MonitoredItem, newDataValue: DataValue, o
                 statusCodeHasChanged(newDataValue, oldDataValue) ||
                 valueHasChanged.call(this, newDataValue, oldDataValue, this.filter.deadbandType, this.filter.deadbandValue)
             );
+        }
     }
     return false;
 }
@@ -309,6 +338,7 @@ type TimerKey = NodeJS.Timer;
 export interface ISubscription {
     $session?: any;
     subscriptionDiagnostics: SubscriptionDiagnosticsDataType;
+    getMonitoredItem(monitoredItemId: number): MonitoredItem | null;
 }
 
 function isSourceNewerThan(a: DataValue, b?: DataValue): boolean {
@@ -357,7 +387,7 @@ export class MonitoredItem extends EventEmitter {
     public filter: MonitoringFilter | null;
     public discardOldest: boolean = true;
     public queueSize: number = 0;
-    public clientHandle?: number;
+    public clientHandle: number;
     public $subscription?: ISubscription;
     public _samplingId?: TimerKey | string;
     public samplingFunc:
@@ -373,6 +403,8 @@ export class MonitoredItem extends EventEmitter {
     private _value_changed_callback: any;
     private _semantic_changed_callback: any;
     private _on_node_disposed_listener: any;
+    private _linkedItems?: number[];
+    private _triggeredNotifications?: QueueItem[];
 
     constructor(options: MonitoredItemOptions) {
         super();
@@ -383,7 +415,7 @@ export class MonitoredItem extends EventEmitter {
         options.itemToMonitor = options.itemToMonitor || defaultItemToMonitor;
 
         this._samplingId = undefined;
-
+        this.clientHandle = -1; // invalid yet
         this.filter = null;
         this._set_parameters(options);
 
@@ -438,8 +470,7 @@ export class MonitoredItem extends EventEmitter {
 
             // OPCUA 1.03 part 4 : $5.12.4
             // setting the mode to DISABLED causes all queued Notifications to be deleted
-            this.queue = [];
-            this.overflow = false;
+            this._empty_queue();
         } else {
             assert(this.monitoringMode === MonitoringMode.Sampling || this.monitoringMode === MonitoringMode.Reporting);
 
@@ -589,7 +620,6 @@ export class MonitoredItem extends EventEmitter {
         }
 
         if (!apply_filter.call(this, dataValue)) {
-            debugLog("filter did not pass");
             return;
         }
 
@@ -608,16 +638,93 @@ export class MonitoredItem extends EventEmitter {
                 return;
             }
         }
+
+        // processTriggerItems
+        this.triggerLinkedItems();
         // store last value
         this._enqueue_value(dataValue);
     }
 
-    get hasMonitoredItemNotifications(): boolean {
-        return this.queue.length > 0;
+    public hasLinkItem(linkedMonitoredItemId: number): boolean {
+        if (!this._linkedItems) {
+            return false;
+        }
+        return this._linkedItems.findIndex((x) => x === linkedMonitoredItemId) > 0;
+    }
+    public addLinkItem(linkedMonitoredItemId: number): StatusCode {
+        if (linkedMonitoredItemId === this.monitoredItemId) {
+            return StatusCodes.BadMonitoredItemIdInvalid;
+        }
+        this._linkedItems = this._linkedItems || [];
+        if (this.hasLinkItem(linkedMonitoredItemId)) {
+            return StatusCodes.BadMonitoredItemIdInvalid; // nothing to do
+        }
+        this._linkedItems.push(linkedMonitoredItemId);
+        return StatusCodes.Good;
+    }
+    public removeLinkItem(linkedMonitoredItemId: number): StatusCode {
+        if (!this._linkedItems || linkedMonitoredItemId === this.monitoredItemId) {
+            return StatusCodes.BadMonitoredItemIdInvalid;
+        }
+        const index = this._linkedItems.findIndex((x) => x === linkedMonitoredItemId);
+        if (index === -1) {
+            return StatusCodes.BadMonitoredItemIdInvalid;
+        }
+        this._linkedItems.splice(index, 1);
+        return StatusCodes.Good;
+    }
+    /**
+     * @internals
+     */
+    private triggerLinkedItems() {
+        if (!this.$subscription || !this._linkedItems) {
+            return;
+        }
+        // see https://reference.opcfoundation.org/v104/Core/docs/Part4/5.12.1/#5.12.1.6
+        for (const linkItem of this._linkedItems) {
+            const linkedMonitoredItem = this.$subscription.getMonitoredItem(linkItem);
+            if (!linkedMonitoredItem) {
+                // monitoredItem may have been deleted
+                continue;
+            }
+            if (linkedMonitoredItem.monitoringMode === MonitoringMode.Disabled) {
+                continue;
+            }
+            if (linkedMonitoredItem.monitoringMode === MonitoringMode.Reporting) {
+                continue;
+            }
+            assert(linkedMonitoredItem.monitoringMode === MonitoringMode.Sampling);
+
+            // istanbul ignore next
+            if (doDebug) {
+                debugLog("triggerLinkedItems => ", this.node?.nodeId.toString(), linkedMonitoredItem.node?.nodeId.toString());
+            }
+            linkedMonitoredItem.trigger();
+        }
     }
 
-    public extractMonitoredItemNotifications() {
-        if (this.monitoringMode !== MonitoringMode.Reporting) {
+    get hasMonitoredItemNotifications(): boolean {
+        return this.queue.length > 0 || (this._triggeredNotifications !== undefined && this._triggeredNotifications.length > 0);
+    }
+
+    /**
+     * @internals
+     */
+    private trigger() {
+        setImmediate(() => {
+            this._triggeredNotifications = this._triggeredNotifications || [];
+            const notifications = this.extractMonitoredItemNotifications(true);
+            this._triggeredNotifications = ([] as QueueItem[]).concat(this._triggeredNotifications!, notifications);
+        });
+    }
+
+    public extractMonitoredItemNotifications(bForce: boolean = false): QueueItem[] {
+        if (!bForce && this.monitoringMode === MonitoringMode.Sampling && this._triggeredNotifications) {
+            const notifications1 = this._triggeredNotifications;
+            this._triggeredNotifications = undefined;
+            return notifications1;
+        }
+        if (!bForce && this.monitoringMode !== MonitoringMode.Reporting) {
             return [];
         }
         const notifications = this.queue;
