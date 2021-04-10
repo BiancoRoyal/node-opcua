@@ -1,3 +1,23 @@
+lockfileVersion: 5.3
+
+specifiers:
+  async: ^3.2.0
+  node-opcua-address-space: 2.37.0
+  node-opcua-assert: 2.37.0
+  node-opcua-constants: 2.35.0
+  node-opcua-data-model: 2.37.0
+  node-opcua-data-value: 2.37.0
+  node-opcua-nodeid: 2.37.0
+  node-opcua-pseudo-session: 2.37.0
+  node-opcua-service-browse: 2.37.0
+  node-opcua-service-call: 2.37.0
+  node-opcua-service-read: 2.37.0
+  node-opcua-service-subscription: 2.37.0
+  node-opcua-service-write: 2.37.0
+  node-opcua-status-code: 2.37.0
+  node-opcua-utils: 2.37.0
+  node-opcua-variant: 2.37.0
+
 dependencies:
   async: 3.2.0
   node-opcua-address-space: link:../node-opcua-address-space
@@ -15,26 +35,9 @@ dependencies:
   node-opcua-status-code: link:../node-opcua-status-code
   node-opcua-utils: link:../node-opcua-utils
   node-opcua-variant: link:../node-opcua-variant
-lockfileVersion: 5.2
+
 packages:
+
   /async/3.2.0:
+    resolution: {integrity: sha512-TR2mEZFVOj2pLStYxLht7TyfuRzaydfpxr3k9RpHIzMgw7A64dzsdqCxH1WJyQdoe8T10nDXd9wnEigmiuHIZw==}
     dev: false
-    resolution:
-      integrity: sha512-TR2mEZFVOj2pLStYxLht7TyfuRzaydfpxr3k9RpHIzMgw7A64dzsdqCxH1WJyQdoe8T10nDXd9wnEigmiuHIZw==
-specifiers:
-  async: ^3.2.0
-  node-opcua-address-space: 2.35.0
-  node-opcua-assert: 2.35.0
-  node-opcua-constants: 2.35.0
-  node-opcua-data-model: 2.35.0
-  node-opcua-data-value: 2.35.0
-  node-opcua-nodeid: 2.35.0
-  node-opcua-pseudo-session: 2.35.0
-  node-opcua-service-browse: 2.35.0
-  node-opcua-service-call: 2.35.0
-  node-opcua-service-read: 2.35.0
-  node-opcua-service-subscription: 2.35.0
-  node-opcua-service-write: 2.35.0
-  node-opcua-status-code: 2.35.0
-  node-opcua-utils: 2.35.0
-  node-opcua-variant: 2.35.0
