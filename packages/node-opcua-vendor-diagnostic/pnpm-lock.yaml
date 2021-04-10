@@ -1,3 +1,14 @@
+lockfileVersion: 5.3
+
+specifiers:
+  humanize: 0.0.9
+  node-opcua-address-space: 2.37.0
+  node-opcua-assert: 2.37.0
+  node-opcua-constants: 2.35.0
+  node-opcua-server: 2.37.0
+  node-opcua-status-code: 2.37.0
+  node-opcua-variant: 2.37.0
+
 dependencies:
   humanize: 0.0.9
   node-opcua-address-space: link:../node-opcua-address-space
@@ -6,17 +17,9 @@ dependencies:
   node-opcua-server: link:../node-opcua-server
   node-opcua-status-code: link:../node-opcua-status-code
   node-opcua-variant: link:../node-opcua-variant
-lockfileVersion: 5.2
+
 packages:
+
   /humanize/0.0.9:
+    resolution: {integrity: sha1-GZT/rs3+nEQe0r2sdFK3u0yeQaQ=}
     dev: false
-    resolution:
-      integrity: sha1-GZT/rs3+nEQe0r2sdFK3u0yeQaQ=
-specifiers:
-  humanize: 0.0.9
-  node-opcua-address-space: 2.35.0
-  node-opcua-assert: 2.35.0
-  node-opcua-constants: 2.35.0
-  node-opcua-server: 2.35.0
-  node-opcua-status-code: 2.35.0
-  node-opcua-variant: 2.35.0

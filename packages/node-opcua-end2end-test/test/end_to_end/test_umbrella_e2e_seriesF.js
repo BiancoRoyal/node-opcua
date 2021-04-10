@@ -46,6 +46,9 @@ describe("testing Client - Umbrella-F", function() {
 
   require("./u_test_e2e_issue_146")(test);
   require("./u_test_e2e_read_write")(test);
+  require("./u_test_e2e_issue_957")(test);
+ 
+  require("./u_test_e2e_monitored_item_ctt018").t(test);
 
 
   // require("./u_test_e2e_modifyMonitoredItem_onEvent")(test);
