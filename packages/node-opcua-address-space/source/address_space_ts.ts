@@ -22,6 +22,7 @@ export type Duration = number;
 
 import {
     AccessLevelFlag,
+    AccessRestrictionsFlag,
     AttributeIds,
     BrowseDirection,
     LocalizedText,
@@ -56,9 +57,12 @@ import {
     EnumValueType,
     EUInformation,
     EUInformationOptions,
+    PermissionType,
     Range,
     RangeOptions,
     ReferenceDescription,
+    RolePermissionType,
+    RolePermissionTypeOptions,
     ServerDiagnosticsSummaryDataType,
     ServerState,
     ServerStatusDataType,
@@ -112,9 +116,8 @@ export declare function resolveReferenceType(addressSpace: MinimalistAddressSpac
 export declare function resolveReferenceNode(addressSpace: MinimalistAddressSpace, reference: UAReference): BaseNode;
 
 export interface ISessionContext {
-    getCurrentUserRole(): string;
-
-    checkPermission(node: BaseNode, action: AccessLevelFlag | string): boolean;
+    getCurrentUserRoles(): NodeId[];
+    checkPermission(node: BaseNode, action: PermissionType): boolean;
 }
 
 export interface XmlWriter {
@@ -143,6 +146,8 @@ export declare class BaseNode extends EventEmitter {
     public readonly nodeId: NodeId;
     public readonly modellingRule?: ModellingRuleType;
     public readonly parentNodeId?: NodeId;
+    public readonly accessRestrictions?: AccessRestrictionsFlag;
+    public readonly rolePermissions?: RolePermissionType[];
 
     // access to parent namespace
     public readonly namespaceIndex: number;
@@ -221,6 +226,18 @@ export declare class BaseNode extends EventEmitter {
      * @return {ReferenceDescription[]}
      */
     public browseNode(browseDescription: BrowseDescriptionOptions, session?: SessionContext): ReferenceDescription[];
+
+
+    /**
+     * 
+     * @param rolePermissions 
+     */
+    setRolePermissions(rolePermissions: RolePermissionTypeOptions[]): void;
+
+    /**
+     * setAccessRestriction
+     */
+    setAccessRestrictions(accessRestrictions: AccessRestrictionsFlag): void;
 }
 
 export declare class UAView extends BaseNode {
@@ -320,7 +337,7 @@ export interface UAVariable extends BaseNode, VariableAttributes, IPropertyAndCo
      *
      * The AccessLevelType is defined in 8.57.
      */
-    userAccessLevel: number;
+    userAccessLevel?: number;
 
     /**
      * This Attribute indicates whether the Value Attribute of the Variable is an array and how many dimensions
@@ -553,8 +570,6 @@ export interface UAVariable extends BaseNode, VariableAttributes, IPropertyAndCo
     // advanced
     touchValue(updateNow?: PreciseClock): void;
 
-    setPermissions(permissions: Permissions): void;
-
     bindVariable(options: BindVariableOptions | VariantLike, overwrite?: boolean): void;
 
     bindExtensionObject(optionalExtensionObject?: ExtensionObject): ExtensionObject | null;
@@ -641,7 +656,7 @@ export interface AddMultiStateValueDiscreteOptions extends AddVariableOptionsWit
 }
 
 // tslint:disable:no-empty-interface
-export interface UAEventType extends UAObjectType {}
+export interface UAEventType extends UAObjectType { }
 
 export type EventTypeLike = string | NodeId | UAEventType;
 
@@ -733,6 +748,15 @@ export interface PseudoVariantExtensionObjectArray {
     arrayType: VariantArrayType.Array;
     value: object[];
 }
+export interface PseudoVariantVariantArray {
+    dataType: "Variant" | DataType.Variant;
+    arrayType: VariantArrayType.Array;
+    value: Variant[];
+}
+export interface PseudoVariantVariant {
+    dataType: "Variant" | DataType.Variant;
+    value: Variant;
+}
 
 export type PseudoVariantNumber =
     | PseudoVariantUInt32
@@ -756,8 +780,9 @@ export type PseudoVariant =
     | PseudoVariantStatusCode
     | PseudoVariantNumber
     | PseudoVariantExtensionObject
-    | PseudoVariantExtensionObjectArray;
-
+    | PseudoVariantExtensionObjectArray
+    | PseudoVariantVariant
+    | PseudoVariantVariantArray;
 export interface RaiseEventData {
     $eventDataSource?: UAEventType;
 
@@ -828,8 +853,6 @@ export declare class UAMethod extends BaseNode {
      */
     public _getExecutableFlag?: (sessionContext: SessionContext) => boolean;
 
-    public setPermissions(permissions: Permissions): void;
-
     public bindMethod(methodFunction: MethodFunctor): void;
 
     public getExecutableFlag(context: ISessionContext): boolean;
@@ -844,9 +867,14 @@ export declare class UAMethod extends BaseNode {
      * @param context
      * @param callback
      */
-    public execute(inputArguments: VariantLike[] | null, context: SessionContext, callback: MethodFunctorCallback): void;
-
-    public execute(inputArguments: null | VariantLike[], context: SessionContext): Promise<CallMethodResultOptions>;
+    public execute(
+        object: UAObject | UAObjectType | null, 
+        inputArguments: VariantLike[] | null,
+        context: SessionContext, callback: MethodFunctorCallback): void;
+    public execute(
+        object: UAObject | UAObjectType | null, 
+        inputArguments: null | VariantLike[], 
+        context: SessionContext): Promise<CallMethodResultOptions>;
 
     public clone(options: any, optionalFilter?: any, extraInfo?: any): UAMethod;
 
@@ -1018,6 +1046,13 @@ export declare class UAReferenceType extends BaseNode {
     public isSupertypeOf(baseType: UAReferenceType): boolean;
 
     public getAllSubtypes(): UAReferenceType[];
+
+    /**
+     * 
+     * @param reference 
+     */
+    public checkHasSubtype(referenceType: NodeId | Reference): boolean;
+
 }
 
 export enum EUEngineeringUnit {
@@ -1050,17 +1085,18 @@ export interface AddBaseNodeOptions {
     modellingRule?: ModellingRuleType;
 
     references?: AddReferenceOpts[];
+
+    /**
+     * 
+     */
+    accessRestrictions?: AccessRestrictionsFlag;
+    /**
+     * 
+     */
+    rolePermissions?: RolePermissionTypeOptions[];
 }
 
-export interface Permissions {
-    CurrentRead?: string[];
-    CurrentWrite?: string[];
-    HistoryRead?: string[];
-    HistoryWrite?: string[];
-    StatusWrite?: string[];
-    TimestampWrite?: string[];
-    Execute?: string[];
-}
+
 
 export type AccessLevelString = string;
 
@@ -1101,14 +1137,16 @@ export interface VariableStuff {
      * The AccessLevel Attribute is used to indicate how the Value of a Variable can be accessed
      * (read/write) and if it contains current and/or historic data. The AccessLevel does not take
      * any user access rights into account, i.e. although the Variable is writable this may be
-     * restricted to a certain user / user group. The AccessLevelType is defined in 8.57.
+     * restricted to a certain user / user group. 
+     * 
+     * https://reference.opcfoundation.org/v104/Core/docs/Part3/8.57/
      */
     accessLevel?: UInt32 | AccessLevelString;
 
     /**
      * The UserAccessLevel Attribute is used to indicate how the Value of a Variable can be accessed
      * (read/write) and if it contains current or historic data taking user access rights into account.
-     * The AccessLevelType is defined in 8.57.
+     * https://reference.opcfoundation.org/v104/Core/docs/Part3/8.57/
      */
     userAccessLevel?: UInt32 | AccessLevelString;
 
@@ -1146,12 +1184,8 @@ export interface AddVariableTypeOptions extends AddBaseNodeOptions, VariableStuf
 }
 
 export interface AddVariableOptionsWithoutValue extends AddBaseNodeOptions, VariableStuff {
-    permissions?: Permissions;
 }
 export interface AddVariableOptions extends AddVariableOptionsWithoutValue {
-    /**
-     * permissions
-     */
     // default value is "BaseVariableType";
     typeDefinition?: string | NodeId | UAVariableType;
     value?: VariantLike | BindVariableOptions;
@@ -1202,13 +1236,13 @@ export interface AddMethodOptions {
     componentOf?: NodeIdLike | BaseNode;
     executable?: boolean;
     userExecutable?: boolean;
-    permissions?: Permissions;
+    accessRestrictions?: AccessRestrictionsFlag;
+    rolePermissions?: RolePermissionTypeOptions[];
 }
 
 export interface AddMultiStateDiscreteOptions extends AddBaseNodeOptions, VariableStuff {
     enumStrings: string[]; // default value is "BaseVariableType";
     typeDefinition?: string | NodeId | UAVariableType;
-    permissions?: Permissions;
     postInstantiateFunc?: (node: UAVariable) => void;
     value?: number | VariantLike | BindVariableOptions;
 }
@@ -1478,7 +1512,7 @@ export declare interface Namespace {
 }
 
 // tslint:disable:no-empty-interface
-export interface Folder extends UAObject {}
+export interface Folder extends UAObject { }
 
 export type FolderType = UAObjectType;
 
@@ -1579,15 +1613,34 @@ export interface UAAddressSpaceFileType extends UAFileType {
 }
 
 /**
- * The Trust List file is a UA Binary encoded stream containing an instance of
- * TrustListDataType
+ * 
+ * this type defines a FileType that can be used to access a Trust List.
+ * The CertificateManager uses this type to implement the Pull Model.
+ * Servers use this type when implementing the Push Model.
+ * An instance of a TrustListType shall restrict access to appropriate users or applications.
+ *  This may be a CertificateManager administrative user that can change the contents of a 
+ * Trust List, it may be an Administrative user that is reading a Trust List to deploy to an 
+ * Application host or it may be an Application that can only access the Trust List assigned 
+ * to it.
+ * 
+ * The Trust List file is a UA Binary encoded stream containing an instance of TrustListDataType
+ * The Open Method shall not support modes other than Read (0x01) and the Write + EraseExisting (0x06).
+ * 
+ * When a Client opens the file for writing the Server will not actually update the Trust List
+ *  until the CloseAndUpdate Method is called. Simply calling Close will discard the updates. 
+ * The bit masks in TrustListDataType structure allow the Client to only update part of the 
+ * Trust List.
+ * When the CloseAndUpdate Method is called the Server will validate all new Certificates
+ *  and CRLs. If this validation fails the Trust List is not updated and the Server returns
+ *  the appropriate Certificate error code.
  */
 export interface UATrustList extends UAFileType {
     // methods
-    addCertificate: UAMethod;
+    addCertificate?: UAMethod;
+    removeCertificate?: UAMethod;
+
     closeAndUpdate: UAMethod;
-    openWithMask: UAMethod;
-    removeCertificate: UAMethod;
+    openWithMasks: UAMethod;
 
     // properties
 
@@ -1650,7 +1703,7 @@ export interface UACertificateGroup extends UAObject {
     trustListOutOfDate?: UATrustListOutOfDateAlarmType;
 }
 
-export interface UACertificateExpirationAlarmType extends UAEventType {}
+export interface UACertificateExpirationAlarmType extends UAEventType { }
 
 /**
  * This event is raised when a Trust List is changed.
@@ -1658,7 +1711,7 @@ export interface UACertificateExpirationAlarmType extends UAEventType {}
  * It shall also be raised when the AddCertificate or RemoveCertificate Method causes an
  * update to the Trust List.
  */
-export interface UATrustListOutOfDateAlarmType extends UAEventType {}
+export interface UATrustListOutOfDateAlarmType extends UAEventType { }
 
 export interface UACertificateGroupFolder extends Folder {
     /**
@@ -1690,9 +1743,9 @@ export interface UACertificateGroupFolder extends Folder {
     // <AdditionalGroup>
 }
 
-export interface UAKeyCredentialConfigurationFolder extends Folder {}
+export interface UAKeyCredentialConfigurationFolder extends Folder { }
 
-export interface UAUserTokenPolicy {}
+export interface UAUserTokenPolicy { }
 
 export interface UAAuthorizationService extends UAObject {
     // found in authorizationServices
@@ -1725,7 +1778,7 @@ export interface UAAuthorizationService extends UAObject {
     requestAccessToken?: UAMethod;
 }
 
-export interface UAAuthorizationServicesFolder extends Folder {}
+export interface UAAuthorizationServicesFolder extends Folder { }
 
 // partial UAServerConfiguration related to authorization service
 export interface UAServerConfiguration extends UAObject {
@@ -1810,7 +1863,7 @@ export interface UAServerConfiguration extends UAObject {
     supportedPrivateKeyFormats: UAVariableT<UAString[], DataType.String>;
 }
 
-export interface UADirectoryType {}
+export interface UADirectoryType { }
 
 /**
  *
@@ -1945,7 +1998,7 @@ export interface UAOperationLimits extends UAObject {
     maxMonitoredItemsPerCall?: UAVariableT<UInt32, DataType.UInt32>;
 }
 
-export interface IdentityMappingRuleType {}
+export interface IdentityMappingRuleType { }
 
 /**
  * The Properties and Methods of the Role contain sensitive security related information and
@@ -2597,7 +2650,7 @@ export interface UAVariableTypeT<T, DT extends DataType> extends UAVariableType 
     instantiate(options: InstantiateVariableOptions): UAVariableT<T, DT>;
 }
 
-export interface Property<T, DT extends DataType> extends UAVariableT<T, DT> {}
+export interface Property<T, DT extends DataType> extends UAVariableT<T, DT> { }
 
 export interface UAAggregateConfiguration extends UAObject {
     treatUncertainAsBad: UAVariableT<boolean, DataType.Boolean>;
@@ -2635,7 +2688,7 @@ export interface ConditionType extends UAObjectType {
     addComment: UAMethod;
 }
 
-export interface Enumeration extends UAVariable {}
+export interface Enumeration extends UAVariable { }
 
 // {{ Dynamic Array Variable
 export interface UADynamicVariableArray<T extends ExtensionObject> extends UAVariable {
@@ -2671,3 +2724,5 @@ export declare function removeElement<T extends ExtensionObject>(
 
 export declare function dumpXml(node: BaseNode, options: any): string;
 export declare function dumpToBSD(namespace: Namespace): string;
+export declare function adjustNamespaceArray(addressSpace: AddressSpace): void;
+  

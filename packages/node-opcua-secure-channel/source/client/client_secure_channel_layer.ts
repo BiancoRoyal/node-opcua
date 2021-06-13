@@ -224,7 +224,9 @@ export interface ClientSecureChannelLayerOptions {
 export class ClientSecureChannelLayer extends EventEmitter {
     private static g_counter: number = 0;
     private _counter: number = ClientSecureChannelLayer.g_counter++;
-
+    private _bytesRead: number = 0;
+    private _bytesWritten: number = 0;
+    
     public static minTransactionTimeout = 10 * 1000; // 10 sec
     public static defaultTransactionTimeout = 60 * 1000; // 1 minute
 
@@ -238,11 +240,11 @@ export class ClientSecureChannelLayer extends EventEmitter {
     }
 
     get bytesRead(): number {
-        return this._transport ? this._transport.bytesRead : 0;
+        return this._bytesRead + (this._transport ? this._transport.bytesRead : 0);
     }
 
     get bytesWritten(): number {
-        return this._transport ? this._transport.bytesWritten : 0;
+        return this._bytesWritten + (this._transport ? this._transport.bytesWritten : 0);
     }
 
     get transactionsPerformed(): number {
@@ -742,25 +744,31 @@ export class ClientSecureChannelLayer extends EventEmitter {
         if (response.responseHeader.requestHandle !== request.requestHeader.requestHandle) {
             const expected = request.requestHeader.requestHandle;
             const actual = response.responseHeader.requestHandle;
-            const moreInfo = "Request= " + request.schema.name + " Response = " + response.schema.name;
 
-            const message =
-                " WARNING SERVER responseHeader.requestHandle is invalid" +
-                ": expecting 0x" +
-                expected.toString(16) +
-                "(" +
-                expected +
-                ")" +
-                "  but got 0x" +
-                actual.toString(16) +
-                "(" +
-                actual +
-                ")" +
-                " ";
+            if (actual !== 0x0) {
+                // note some old OPCUA Server, like siemens with OPCUA 1.2 may send 0x00 as a 
+                // requestHandle, this is not harmful. THis happened with OpenSecureChannelRequest 
+                // so we only display the warning message if we have a real random discrepancy between the two requestHandle.
+                const moreInfo = "Request= " + request.schema.name + " Response = " + response.schema.name;
 
-            debugLog(chalk.red.bold(message), chalk.yellow(moreInfo));
-            console.log(chalk.red.bold(message), chalk.yellow(moreInfo));
-            console.log(request.toString());
+                const message =
+                    " WARNING SERVER responseHeader.requestHandle is invalid" +
+                    ": expecting 0x" +
+                    expected.toString(16) +
+                    "(" +
+                    expected +
+                    ")" +
+                    "  but got 0x" +
+                    actual.toString(16) +
+                    "(" +
+                    actual +
+                    ")" +
+                    " ";
+
+                debugLog(chalk.red.bold(message), chalk.yellow(moreInfo));
+                warningLog(chalk.red.bold(message), chalk.yellow(moreInfo));
+                warningLog(request.toString());
+            }
         }
 
         requestData.response = response;
@@ -852,6 +860,11 @@ export class ClientSecureChannelLayer extends EventEmitter {
          * @param err
          */
         this.emit("close", err);
+
+        //
+        this._bytesRead += this._transport?.bytesRead || 0;
+        this._bytesWritten += this._transport?.bytesWritten || 0;
+
         this._transport?.dispose();
         this._transport = undefined;
         this._cancel_pending_transactions(err);

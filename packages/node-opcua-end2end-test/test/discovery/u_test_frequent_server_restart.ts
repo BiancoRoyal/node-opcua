@@ -1,6 +1,5 @@
 import "should";
 import * as async from "async";
-import * as os from "os";
 import {
     OPCUAClient,
     ClientSubscription,
@@ -20,7 +19,7 @@ import {
 } from "node-opcua";
 
 import { make_debugLog, checkDebugFlag } from "node-opcua-debug";
-import { createDiscovery, createServerThatRegisterWithDiscoveryServer, f, startDiscovery } from "./_helper";
+import { createServerThatRegistersItselfToTheDiscoveryServer, f, startDiscovery } from "./_helper";
 
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
@@ -58,6 +57,7 @@ module.exports = () => {
         const stopDiscoveryServer = f(function stop_the_discovery_server(callback: ErrorCallback) {
             if (!discoveryServer) return callback();
             discoveryServer.shutdown((err?: Error) => {
+                discoveryServer = null;
                 debugLog("discovery server stopped!", err);
                 callback(err);
             });
@@ -66,7 +66,7 @@ module.exports = () => {
         let endpointUrl = "";
 
         const createServer = f(function start_an_opcua_server_that_registers_to_the_lds(callback: ErrorCallback) {
-            createServerThatRegisterWithDiscoveryServer(discoveryServerEndpointUrl, port1, "AZ")
+            createServerThatRegistersItselfToTheDiscoveryServer(discoveryServerEndpointUrl, port1, "AZ")
                 .then(async (server: OPCUAServer) => {
                     g_server = server;
                     await server.start();
@@ -101,7 +101,7 @@ module.exports = () => {
                     debugLog(" creating client");
                 }
                 let client = OPCUAClient.create({
-                    requestedSessionTimeout: 5000,
+                    requestedSessionTimeout: 10000,
                     clientName: "Client-" + clientCount
                 });
                 clientCount += 1;
@@ -148,7 +148,7 @@ module.exports = () => {
                             .on("keepalive", function () {
                                 debugLog("keepalive");
                             })
-                            .on("terminated", function () {});
+                            .on("terminated", function () { });
                         const monitoredItem = ClientMonitoredItem.create(
                             subscription,
                             {
@@ -204,18 +204,18 @@ module.exports = () => {
         });
 
         const wait_a_few_seconds = f(function wait_a_few_seconds(callback: ErrorCallback) {
-            setTimeout(callback, 800);
+            setTimeout(callback, 1200);
         });
 
         const wait_a_minute = f(function wait_a_minute(callback: ErrorCallback) {
-            setTimeout(callback, 4000);
+            setTimeout(callback, 12000);
         });
 
-        before(function (done) {
+        before((done) => {
             startDiscoveryServer(done);
         });
 
-        after(function (done) {
+        after((done) => {
             stopDiscoveryServer(done);
         });
 
@@ -230,13 +230,13 @@ module.exports = () => {
         it("T0c0 - disposing  cerficiation manager during initialization ", function (done) {
 
             const cm = new OPCUACertificateManager({
-               // rootFolder: 
+                // rootFolder: 
             });
 
             async.series(
                 [
                     f(function when_creating_a_opcua_certificate_manager(callback: ErrorCallback) {
-                        cm.initialize((err) =>{
+                        cm.initialize((err) => {
                             done();
                         })
                         callback();
@@ -245,7 +245,7 @@ module.exports = () => {
                         cm.dispose();
                     }),
                 ],
-                ()=>{
+                () => {
 
                 });
         })
@@ -270,7 +270,7 @@ module.exports = () => {
                         wait_a_few_seconds(callback);
                     })
                 ],
-                ()=>{
+                () => {
                     /* nothing here => connect wil call done */
                 }
             );
@@ -285,13 +285,13 @@ module.exports = () => {
             (server.registerServerManager as any).timeout = 100;
             async.series(
                 [
-                    function create_Server(callback: ErrorCallback) {
+                    f(function create_Server(callback: ErrorCallback) {
                         server.start(callback);
-                    },
+                    }),
 
-                    function close_client_while_connect_in_progress(callback: ErrorCallback) {
+                    f(function close_client_while_connect_in_progress(callback: ErrorCallback) {
                         server.shutdown(callback);
-                    }
+                    })
                 ],
                 done
             );
@@ -349,7 +349,7 @@ module.exports = () => {
             async.series(
                 [
                     function (callback: ErrorCallback) {
-                        registrationManager.start(function () {});
+                        registrationManager.start(function () { });
                         callback(); // setImmediate(callback);
                     },
                     function (callback: ErrorCallback) {
@@ -384,7 +384,7 @@ module.exports = () => {
             async.series(
                 [
                     function (callback: ErrorCallback) {
-                        registrationManager.start(function () {});
+                        registrationManager.start(function () { });
                         callback(); // setImmediate(callback);
                     },
                     function (callback: ErrorCallback) {

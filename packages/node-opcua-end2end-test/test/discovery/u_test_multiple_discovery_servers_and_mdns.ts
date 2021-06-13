@@ -11,7 +11,7 @@ import {
 } from "node-opcua";
 
 import { OPCUADiscoveryServer } from "node-opcua-server-discovery";
-import { createAndStartServer, ep, startDiscovery } from "./_helper";
+import { createAndStartServer, ep, startDiscovery, pause } from "./_helper";
 
 import { make_debugLog, checkDebugFlag } from "node-opcua-debug";
 const debugLog = make_debugLog("TEST");
@@ -36,7 +36,7 @@ export function t(test: any) {
             OPCUAServer.registry.count().should.eql(0);
         });
 
-        after(() => {
+        after(async () => {
             OPCUAServer.registry.count().should.eql(0);
         });
 
@@ -48,7 +48,7 @@ export function t(test: any) {
         const port2 = 1302;
         const port3 = 1303;
 
-        beforeEach(async () => {
+        before(async () => {
             discoveryServer1 = await startDiscovery(port_discover1);
             discoveryServerEndpointUrl1 = ep(discoveryServer1);
 
@@ -59,11 +59,10 @@ export function t(test: any) {
             discoveryServerEndpointUrl3 = ep(discoveryServer3);
         });
 
-        afterEach(async () => {
+        after(async () => {
             await discoveryServer1.shutdown();
             await discoveryServer2.shutdown();
             await discoveryServer3.shutdown();
-            await new Promise((resolve) => setTimeout(resolve, 200));
         });
 
         it("should register server to the discover server 1", async () => {
@@ -127,7 +126,7 @@ export function t(test: any) {
                 servers[1].applicationUri!.should.eql(makeApplicationUrn(hostname, `A2`));
             }
 
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await pause(500);
 
             {
                 const data = await findServers(discoveryServerEndpointUrl3);
@@ -137,7 +136,7 @@ export function t(test: any) {
                 servers[1].applicationUri!.should.eql(makeApplicationUrn(hostname, `A3`));
             }
 
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await pause(500);
 
             // query_discovery_server_for_available_servers_on_network
             {

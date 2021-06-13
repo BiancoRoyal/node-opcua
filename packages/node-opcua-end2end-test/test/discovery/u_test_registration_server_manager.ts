@@ -3,7 +3,7 @@ import * as async from "async";
 import * as os from "os";
 
 import { OPCUAServer, OPCUADiscoveryServer, RegisterServerMethod, makeApplicationUrn } from "node-opcua";
-import { createDiscovery, createServerThatRegisterWithDiscoveryServer, f, fa } from "./_helper";
+import { createDiscovery, createServerThatRegistersItselfToTheDiscoveryServer, f, fa, pause } from "./_helper";
 import { make_debugLog } from "node-opcua-debug";
 const debugLog = make_debugLog("TEST");
 
@@ -46,19 +46,15 @@ export function t() {
 
         after(async () => {
             await stop_discovery_server();
-            await new Promise<void>((resolve) => {
-                setTimeout(() => {
-                    OPCUAServer.registry.count().should.eql(0);
-                    resolve();
-                }, 1000);
-            });
+            await pause(100);
+            OPCUAServer.registry.count().should.eql(0);
         });
 
         it("DS6-1 a server shall register itself to the LDS when the LDS comes online", async () => {
             let server: OPCUAServer;
 
             await fa("given a server that has started before the discovery server is online", async () => {
-                server = await createServerThatRegisterWithDiscoveryServer(discoveryServerEndpointUrl, port, "AA");
+                server = await createServerThatRegistersItselfToTheDiscoveryServer(discoveryServerEndpointUrl, port, "AA");
 
                 await server.start();
                 (server.registerServerManager as any).timeout = 100;
@@ -105,7 +101,7 @@ export function t() {
 
             let server: OPCUAServer;
             await fa("given a server that registers itself to the local discovery server", async () => {
-                server = await createServerThatRegisterWithDiscoveryServer(discoveryServerEndpointUrl, port, "B");
+                server = await createServerThatRegistersItselfToTheDiscoveryServer(discoveryServerEndpointUrl, port, "B");
                 (server.registerServerManager as any).timeout = 100;
             });
 

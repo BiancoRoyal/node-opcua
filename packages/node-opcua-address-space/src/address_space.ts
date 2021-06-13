@@ -253,7 +253,7 @@ export class AddressSpace implements AddressSpacePrivate {
                 version: "undefined"
             })
         );
-        return this._namespaceArray[index];
+         return this._namespaceArray[index];
     }
 
     /***
@@ -981,7 +981,9 @@ export class AddressSpace implements AddressSpacePrivate {
             throw new Error("getExtensionObjectConstructor: dataType has unexpected type" + dataType);
         }
         const _dataType = dataType as UADataType;
+       
         // to do verify that dataType is of type "Structure"
+        /* istanbul ignore next */
         if (!_dataType.isSupertypeOf(this.findDataType("Structure")!)) {
             console.log(_dataType.toString());
         }
@@ -1103,6 +1105,7 @@ export class AddressSpace implements AddressSpacePrivate {
         }
 
         const obj = this.findNode(nodeId);
+
         if (!obj) {
             // Object Not Found
             browseResult.statusCode = StatusCodes.BadNodeIdUnknown;
