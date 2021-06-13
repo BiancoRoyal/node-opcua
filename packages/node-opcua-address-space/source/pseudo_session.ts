@@ -34,8 +34,12 @@ import { randomGuid } from "node-opcua-basic-types";
 import { AddressSpace } from "./address_space_ts";
 import { ContinuationPointManager } from "./continuation_points/continuation_point_manager";
 import { callMethodHelper } from "./helpers/call_helpers";
-import { IServerBase, ISessionBase, SessionContext } from "./session_context";
+import { SessionContext } from "./session_context";
 import { UAVariable } from "../src/ua_variable";
+import { make_errorLog } from "node-opcua-debug";
+
+
+const errorLog = make_errorLog("PseudoSession");
 /**
  * Pseudo session is an helper object that exposes the same async methods
  * than the ClientSession. It can be used on a server address space.
@@ -49,27 +53,16 @@ import { UAVariable } from "../src/ua_variable";
  * @constructor
  */
 export class PseudoSession implements IBasicSession {
-    public server: IServerBase;
-    public session: ISessionBase;
     public requestedMaxReferencesPerNode: number = 0;
     private _sessionId: NodeId = new NodeId(NodeIdType.GUID, randomGuid());
     private readonly addressSpace: AddressSpace;
     private readonly continuationPointManager: ContinuationPointManager;
+    private readonly context: SessionContext;
 
-    constructor(addressSpace: AddressSpace, server?: IServerBase, session?: ISessionBase) {
+    constructor(addressSpace: AddressSpace, context?: SessionContext) {
         this.addressSpace = addressSpace;
-        this.server = server || {};
         const self = this;
-        this.session = session || {
-            channel: {
-                clientCertificate: null,
-                securityMode: MessageSecurityMode.None,
-                securityPolicy: "http://opcfoundation.org/UA/SecurityPolicy#None" // SecurityPolicy.None
-            },
-            getSessionId() {
-                return self._sessionId;
-            }
-        };
+        this.context = context || SessionContext.defaultContext;
         this.continuationPointManager = new ContinuationPointManager();
     }
 
@@ -91,7 +84,7 @@ export class PseudoSession implements IBasicSession {
                 browseDescription.referenceTypeId = resolveNodeId(browseDescription.referenceTypeId);
                 browseDescription = new BrowseDescription(browseDescription);
                 const nodeId = resolveNodeId(browseDescription.nodeId);
-                const r = this.addressSpace.browseSingleNode(nodeId, browseDescription);
+                const r = this.addressSpace.browseSingleNode(nodeId, browseDescription, this.context);
                 results.push(r);
             }
 
@@ -106,7 +99,6 @@ export class PseudoSession implements IBasicSession {
                 truncatedResult.statusCode = result.statusCode;
                 return new BrowseResult(truncatedResult);
             });
-
             callback!(null, isArray ? results : results[0]);
         });
     }
@@ -121,8 +113,8 @@ export class PseudoSession implements IBasicSession {
             nodesToRead = [nodesToRead];
         }
 
-        const context = SessionContext.defaultContext;
-
+        const context =  this.context;
+        
         setImmediate(() => {
             async.map(
                 nodesToRead,
@@ -134,7 +126,6 @@ export class PseudoSession implements IBasicSession {
                     (obj as UAVariable).readValueAsync(context, innerCallback);
                 },
                 (err) => {
-                    // xx const context = new SessionContext({ session: null });
                     const dataValues = nodesToRead.map((nodeToRead: ReadValueIdOptions) => {
                         assert(!!nodeToRead.nodeId, "expecting a nodeId");
                         assert(!!nodeToRead.attributeId, "expecting a attributeId");
@@ -147,7 +138,7 @@ export class PseudoSession implements IBasicSession {
                         if (!obj) {
                             return new DataValue({ statusCode: StatusCodes.BadNodeIdUnknown });
                         }
-                        const context = SessionContext.defaultContext;
+                        const context = this.context;
                         const dataValue = obj.readAttribute(context, attributeId, indexRange, dataEncoding);
                         return dataValue;
                     });
@@ -184,7 +175,6 @@ export class PseudoSession implements IBasicSession {
                 });
                 return;
             }
-            const session = this;
             let results: any;
             if (releaseContinuationPoints) {
                 // releaseContinuationPoints = TRUE
@@ -192,7 +182,7 @@ export class PseudoSession implements IBasicSession {
                 //   the Server. The continuation points are released and the results
                 //   and diagnosticInfos arrays are empty.
                 results = continuationPoints.map((continuationPoint: any) => {
-                    return session.continuationPointManager.cancel(continuationPoint);
+                    return this.continuationPointManager.cancel(continuationPoint);
                 });
             } else {
                 // let extract data from continuation points
@@ -201,7 +191,7 @@ export class PseudoSession implements IBasicSession {
                 //   passed continuationPoints shall be used to get the next set of
                 //   browse information.
                 results = continuationPoints.map((continuationPoint: any) => {
-                    return session.continuationPointManager.getNext(continuationPoint);
+                    return this.continuationPointManager.getNext(continuationPoint);
                 });
             }
             results = results.map((r: any) => new BrowseResult(r));
@@ -227,13 +217,13 @@ export class PseudoSession implements IBasicSession {
                 const callMethodRequest = new CallMethodRequest(methodToCall);
 
                 callMethodHelper(
-                    this.server,
-                    this.session,
+                    this.context,
                     this.addressSpace,
                     callMethodRequest,
                     (err: Error | null, result?: CallMethodResultOptions) => {
                         let callMethodResult: CallMethodResult;
                         if (err) {
+                            errorLog("Internal Error = ", err);
                             callMethodResult = new CallMethodResult({
                                 statusCode: StatusCodes.BadInternalError
                             });
@@ -265,7 +255,6 @@ export class PseudoSession implements IBasicSession {
         if (!isArray) {
             browsePaths = [browsePaths as BrowsePath];
         }
-        // xx const context = new SessionContext({ session: null });
         const browsePathResults = (browsePaths as BrowsePath[]).map((browsePath: BrowsePath) => {
             return this.addressSpace.browsePath(browsePath);
         });
@@ -280,9 +269,7 @@ export class PseudoSession implements IBasicSession {
         if (!isArray) {
             nodesToWrite = [nodesToWrite];
         }
-
-        const context = SessionContext.defaultContext;
-
+        const context = this.context;
         setImmediate(() => {
             const statusCodesPromises: Promise<StatusCode>[] = nodesToWrite.map((nodeToWrite: WriteValue) => {
                 assert(!!nodeToWrite.nodeId, "expecting a nodeId");

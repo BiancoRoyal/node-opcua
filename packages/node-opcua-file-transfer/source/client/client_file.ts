@@ -5,7 +5,7 @@ import { Byte, Int32, UInt16, UInt32, UInt64 } from "node-opcua-basic-types";
 import { AttributeIds } from "node-opcua-data-model";
 import { NodeId, resolveNodeId } from "node-opcua-nodeid";
 import { IBasicSession } from "node-opcua-pseudo-session";
-import { ReadValueId, ReadValueIdOptions } from "node-opcua-service-read";
+import { ReadValueIdOptions } from "node-opcua-service-read";
 import { BrowsePath, makeBrowsePath } from "node-opcua-service-translate-browse-path";
 import { StatusCodes } from "node-opcua-status-code";
 import { DataType, VariantArrayType } from "node-opcua-variant";
@@ -28,9 +28,9 @@ export class ClientFile {
 
     public static useGlobalMethod: boolean = false;
 
-    public fileHandle: number = 0;
-    private session: IBasicSession;
-    private readonly fileNodeId: NodeId;
+    public    fileHandle: number = 0;
+    protected session: IBasicSession;
+    protected readonly fileNodeId: NodeId;
 
     private openMethodNodeId?: NodeId;
     private closeMethodNodeId?: NodeId;
@@ -65,7 +65,7 @@ export class ClientFile {
         });
         if (result.statusCode !== StatusCodes.Good) {
             debugLog("Cannot open file : ");
-            throw new Error("cannot open file statusCode = " + result.statusCode.toString() + "mode = " + OpenFileMode[mode]);
+            throw new Error("cannot open file statusCode = " + result.statusCode.toString() + " mode = " + OpenFileMode[mode]);
         }
 
         this.fileHandle = result.outputArguments![0].value;
@@ -206,7 +206,7 @@ export class ClientFile {
         return dataValue.value.value;
     }
 
-    private async extractMethodsIds(): Promise<void> {
+    protected async extractMethodsIds(): Promise<void> {
 
         if (ClientFile.useGlobalMethod) {
             debugLog("Using GlobalMethodId");
@@ -282,7 +282,7 @@ export class ClientFile {
         this.sizeNodeId = results[7].targets![0].targetId;
     }
 
-    private async ensureInitialized() {
+    protected async ensureInitialized() {
         if (!this.openMethodNodeId) {
             await this.extractMethodsIds();
         }

@@ -4,7 +4,7 @@ import * as should from "should";
 import * as sinon from "sinon";
 
 import { DataTypeIds } from "node-opcua-constants";
-import { AttributeIds, NodeClass } from "node-opcua-data-model";
+import { AttributeIds, makeAccessLevelFlag, NodeClass } from "node-opcua-data-model";
 import { DataValue, sameDataValue } from "node-opcua-data-value";
 import { NodeId, makeNodeId } from "node-opcua-nodeid";
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
@@ -28,6 +28,7 @@ import {
 import { generateAddressSpace } from "../nodeJS";
 
 import { create_minimalist_address_space_nodeset } from "../testHelpers";
+import { assert } from "sinon";
 
 const context = SessionContext.defaultContext;
 
@@ -52,7 +53,14 @@ describe("testing Variables ", () => {
 
         value = v.readAttribute(context, AttributeIds.AccessLevel);
         value.value.dataType.should.eql(DataType.Byte);
+        value.value.value.should.eql(makeAccessLevelFlag("CurrentRead"));
         value.statusCode.should.eql(StatusCodes.Good);
+
+        value = v.readAttribute(context, AttributeIds.AccessLevelEx);
+        value.value.dataType.should.eql(DataType.UInt32);
+        value.value.value.should.eql(makeAccessLevelFlag("CurrentRead"));
+        value.statusCode.should.eql(StatusCodes.Good);
+
 
         value = v.readAttribute(context, AttributeIds.UserAccessLevel);
         value.value.dataType.should.eql(DataType.Byte);
@@ -93,6 +101,20 @@ describe("testing Variables ", () => {
         value.value.value.should.eql(NodeClass.Variable);
         value.statusCode.should.eql(StatusCodes.Good);
 
+        //https://reference.opcfoundation.org/v104/Core/docs/Part3/8.56/
+        should(v.accessRestrictions).eql(undefined);
+        value = v.readAttribute(context, AttributeIds.AccessRestrictions);
+        value.statusCode.name.should.eql("BadAttributeIdInvalid");
+        // value.value.dataType.should.eql(DataType.UInt16);
+        //value.value.value.should.eql(0x00);
+        // value.statusCode.should.eql(StatusCodes.Good);
+
+        value = v.readAttribute(context, AttributeIds.RolePermissions);
+        value.statusCode.name.should.eql("BadAttributeIdInvalid");
+ 
+        value = v.readAttribute(context, AttributeIds.UserRolePermissions);
+        value.statusCode.name.should.eql("BadAttributeIdInvalid");
+        
         addressSpace.dispose();
     });
 });

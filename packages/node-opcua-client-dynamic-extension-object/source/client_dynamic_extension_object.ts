@@ -9,7 +9,7 @@ const pe = new PrettyError();
 import { assert } from "node-opcua-assert";
 import { AttributeIds, makeNodeClassMask, makeResultMask, NodeClass, QualifiedName } from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
 import {
     ConstructorFuncWithSchema,
     DataTypeFactory,
@@ -19,11 +19,13 @@ import {
     StructuredTypeSchema,
     TypeDefinition,
     getStandardDataTypeFactory,
-    EnumerationDefinitionSchema
+    EnumerationDefinitionSchema,
+    ConstructorFunc
 } from "node-opcua-factory";
 import { ExpandedNodeId, makeExpandedNodeId, NodeId, resolveNodeId, sameNodeId } from "node-opcua-nodeid";
-import { browseAll, BrowseDescriptionLike, IBasicSession } from "node-opcua-pseudo-session";
+import { browseAll, BrowseDescriptionLike, IBasicSession, readNamespaceArray } from "node-opcua-pseudo-session";
 import {
+    AnyConstructorFunc,
     createDynamicObjectConstructor,
     DataTypeAndEncodingId,
     MapDataTypeAndEncodingIdProvider,
@@ -37,6 +39,7 @@ import { ExtraDataTypeManager } from "./extra_data_type_manager";
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
+const errorLog = make_errorLog(__filename);
 
 async function _readDeprecatedFlag(session: IBasicSession, dataTypeDictionary: NodeId): Promise<boolean> {
     const browsePath = makeBrowsePath(dataTypeDictionary, ".Deprecated");
@@ -1129,6 +1132,7 @@ export async function convertDataTypeDefinitionToStructureTypeSchema(
     cache: { [key: string]: Cache }
 ): Promise<StructuredTypeSchema> {
     if (definition instanceof StructureDefinition) {
+
         const fields: FieldInterfaceOptions[] = [];
 
         const isUnion = definition.structureType === StructureType.Union;
@@ -1199,4 +1203,64 @@ export async function convertDataTypeDefinitionToStructureTypeSchema(
         return structuredTypeSchema;
     }
     throw new Error("Not Implemented");
+}
+
+interface IBasicSessionEx extends IBasicSession {
+    dataTypeConstructor: { [key:string]: ConstructorFunc};
+    $$extraDataTypeManager?: ExtraDataTypeManager
+}
+export async function extractNamespaceDataType(session: IBasicSession): Promise<ExtraDataTypeManager> {
+
+    const sessionPriv: IBasicSessionEx = session as IBasicSessionEx;
+    if (!sessionPriv.$$extraDataTypeManager) {
+        const dataTypeManager = new ExtraDataTypeManager();
+
+        const namespaceArray = await readNamespaceArray(sessionPriv);
+        if (namespaceArray.length === 0) {
+            errorLog("namespaceArray is not populated ! check your code !")
+        }
+        debugLog("Namespace Array = ", namespaceArray.join("\n                   "));
+        sessionPriv.$$extraDataTypeManager = dataTypeManager;
+        dataTypeManager.setNamespaceArray(namespaceArray);
+
+        for (let namespaceIndex = 1; namespaceIndex < namespaceArray.length; namespaceIndex++) {
+            const dataTypeFactory1 = new DataTypeFactory([getStandardDataTypeFactory()]);
+            dataTypeManager.registerDataTypeFactory(namespaceIndex, dataTypeFactory1);
+        }
+        await populateDataTypeManager(session, dataTypeManager);
+    }
+    return sessionPriv.$$extraDataTypeManager;
+}
+
+export async function getExtensionObjectConstructor(
+    session: IBasicSession, 
+    dataTypeNodeId: NodeId
+):  Promise<AnyConstructorFunc>{
+            
+    if (!dataTypeNodeId) throw new Error("Invalid dataType");
+    const sessionPriv = session as IBasicSessionEx;
+
+    if (!sessionPriv.dataTypeConstructor) {
+        sessionPriv.dataTypeConstructor = {};
+    }
+    const c = sessionPriv.dataTypeConstructor[dataTypeNodeId.toString()];
+    if (c) {
+        return c as AnyConstructorFunc;
+    }
+    await extractNamespaceDataType(session);
+
+    if (!sessionPriv.$$extraDataTypeManager) {
+        throw new Error("Make sure to call await session.extractNamespaceDataType(); ");
+    }
+    const extraDataTypeManager = sessionPriv.$$extraDataTypeManager as ExtraDataTypeManager;
+
+    // make sure schema has been extracted
+    const schema = await getDataTypeDefinition(session, dataTypeNodeId, extraDataTypeManager);
+
+    // now resolve it
+    const constructor = extraDataTypeManager.getExtensionObjectConstructorFromDataType(dataTypeNodeId);
+
+    // put it in cache
+    sessionPriv.dataTypeConstructor[dataTypeNodeId.toString()] = constructor;
+    return constructor;
 }

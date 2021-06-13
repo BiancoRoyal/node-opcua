@@ -37,7 +37,7 @@ import {
 } from "node-opcua-address-space";
 import { getDefaultCertificateManager, OPCUACertificateManager } from "node-opcua-certificate-manager";
 import { ServerState } from "node-opcua-common";
-import { Certificate, exploreCertificate, Nonce, toPem } from "node-opcua-crypto";
+import { Certificate, exploreCertificate, makeSHA1Thumbprint, Nonce, toPem } from "node-opcua-crypto";
 import { AttributeIds, LocalizedText, NodeClass } from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
 import { dump, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
@@ -494,28 +494,6 @@ function isMonitoringModeValid(monitoringMode: MonitoringMode): boolean {
     return monitoringMode !== MonitoringMode.Invalid && monitoringMode <= MonitoringMode.Reporting;
 }
 
-/**
- * @method registerServer
- * @async
- * @param discoveryServerEndpointUrl
- * @param isOnline
- * @param outer_callback
- */
-function _registerServer(this: OPCUAServer, discoveryServerEndpointUrl: string, isOnline: boolean, outer_callback: ErrorCallback) {
-    assert(typeof discoveryServerEndpointUrl === "string");
-    assert(typeof isOnline === "boolean");
-    const self = this;
-    if (!self.registerServerManager) {
-        throw new Error("Internal Error");
-    }
-    self.registerServerManager.discoveryServerEndpointUrl = discoveryServerEndpointUrl;
-    if (isOnline) {
-        self.registerServerManager.start(outer_callback);
-    } else {
-        self.registerServerManager.stop(outer_callback);
-    }
-}
-
 function _installRegisterServerManager(self: OPCUAServer) {
     assert(self instanceof OPCUAServer);
     assert(!self.registerServerManager);
@@ -624,7 +602,7 @@ export interface OPCUAServerEndpointOptions {
     alternateHostname?: string | string[];
 
     /**
-     *  true, if discovery service on unsecure channel shall be disabled
+     *  true, if discovery service on secure channel shall be disabled
      */
     disableDiscovery?: boolean;
 }
@@ -803,20 +781,6 @@ export interface OPCUAServer {
     userCertificateManager: OPCUACertificateManager;
 }
 
-function getNodeIds(nodesToBrowse: BrowseDescription[]): NodeId[] {
-    // perform beforeBrowse action on nodes
-    const map = new Map<string, NodeId>();
-    for (const browseDescription of nodesToBrowse) {
-        const hash = browseDescription.nodeId.toString();
-        map.set(hash, browseDescription.nodeId);
-    }
-    const result: NodeId[] = [];
-    for (const nodeId of map.values()) {
-        result.push(nodeId);
-    }
-    return result;
-}
-
 const g_requestExactEndpointUrl: boolean = !!process.env.NODEOPCUA_SERVER_REQUEST_EXACT_ENDPOINT_URL;
 /**
  *
@@ -939,7 +903,7 @@ export class OPCUAServer extends OPCUABaseServer {
     /**
      * the maximum number of subscription that can be created per server
      */
-    public static MAX_SUBSCRIPTION = 50;   
+    public static MAX_SUBSCRIPTION = 50;
     /**
      * the maximum number of concurrent sessions allowed on the server
      */
@@ -961,8 +925,7 @@ export class OPCUAServer extends OPCUABaseServer {
     public readonly options: OPCUAServerOptions;
 
     private objectFactory?: Factory;
-    private nonce: Nonce;
-    private protocolVersion: number = 0;
+  
     private _delayInit?: () => Promise<void>;
 
     constructor(options?: OPCUAServerOptions) {
@@ -997,10 +960,6 @@ export class OPCUAServer extends OPCUABaseServer {
                 return false;
             };
         }
-
-        this.nonce = this.makeServerNonce();
-
-        this.protocolVersion = 0;
 
         options.allowAnonymous = options.allowAnonymous === undefined ? true : !!options.allowAnonymous;
         /**
@@ -1472,6 +1431,7 @@ export class OPCUAServer extends OPCUABaseServer {
 
         // decrypt password if necessary
         if (securityPolicy === SecurityPolicy.None) {
+            // not good, password was sent in clear text ... 
             password = password.toString();
         } else {
             const serverPrivateKey = this.getPrivateKey();
@@ -1484,7 +1444,15 @@ export class OPCUAServer extends OPCUABaseServer {
             if (!cryptoFactory) {
                 return callback(new Error(" Unsupported security Policy"));
             }
+
             const buff = cryptoFactory.asymmetricDecrypt(password, serverPrivateKey);
+
+            // server certificate may be invalid and asymmetricDecrypt may fail
+            if (!buff || buff.length < 4) {
+                async.setImmediate(() => callback(null, false));
+                return;
+            }
+
             const length = buff.readUInt32LE(0) - serverNonce.length;
             password = buff.slice(4, 4 + length).toString("utf-8");
         }
@@ -1769,7 +1737,7 @@ export class OPCUAServer extends OPCUABaseServer {
         const hasEncryption = true;
         // If the securityPolicyUri is None and none of the UserTokenPolicies requires encryption
         if (session.channel!.securityMode === MessageSecurityMode.None) {
-            // ToDo: Check that none of our unsecure endpoint has a a UserTokenPolicy that require encryption
+            // ToDo: Check that none of our insecure endpoint has a a UserTokenPolicy that require encryption
             // and set hasEncryption = false under this condition
         }
 
@@ -2928,9 +2896,9 @@ export class OPCUAServer extends OPCUABaseServer {
                 }
 
                 const options = this.options as OPCUAServerOptions;
-                let results: MonitoredItemCreateResult[] =[];
+                let results: MonitoredItemCreateResult[] = [];
                 if (options.onCreateMonitoredItem) {
-                    const resultsPromise = request.itemsToCreate.map( async (monitoredItemCreateRequest) => {
+                    const resultsPromise = request.itemsToCreate.map(async (monitoredItemCreateRequest) => {
                         const { monitoredItem, createResult } = subscription.preCreateMonitoredItem(
                             addressSpace,
                             timestampsToReturn,
@@ -2939,12 +2907,12 @@ export class OPCUAServer extends OPCUABaseServer {
                         if (monitoredItem) {
                             await options.onCreateMonitoredItem!(subscription, monitoredItem);
                             subscription.postCreateMonitoredItem(monitoredItem, monitoredItemCreateRequest, createResult);
-                        } 
+                        }
                         return createResult;
                     });
                     results = await Promise.all(resultsPromise);
                 } else {
-                    results = request.itemsToCreate.map( (monitoredItemCreateRequest) => {
+                    results = request.itemsToCreate.map((monitoredItemCreateRequest) => {
                         const { monitoredItem, createResult } = subscription.preCreateMonitoredItem(
                             addressSpace,
                             timestampsToReturn,
@@ -3123,14 +3091,14 @@ export class OPCUAServer extends OPCUABaseServer {
 
                 try {
                     const results = await Promise.all(resultsPromises);
-                    
+
                     const response = new DeleteMonitoredItemsResponse({
                         diagnosticInfos: undefined,
                         results
                     });
-    
-                    sendResponse(response);    
-                } catch(err) {
+
+                    sendResponse(response);
+                } catch (err) {
                     console.log(err);
                     return sendError(StatusCodes.BadInternalError);
                 }
@@ -3358,9 +3326,11 @@ export class OPCUAServer extends OPCUABaseServer {
                 /* jshint validthis: true */
                 const addressSpace = server.engine.addressSpace!;
 
+                const context = new SessionContext({ session, server });
+
                 async.map(
                     request.methodsToCall,
-                    callMethodHelper.bind(null, server, session, addressSpace),
+                    callMethodHelper.bind(null, context, addressSpace),
                     (err?: Error | null, results?: (CallMethodResultOptions | undefined)[]) => {
                         /* istanbul ignore next */
                         if (err) {
@@ -3638,7 +3608,7 @@ export interface RaiseEventAuditActivateSessionEventData extends RaiseEventAudit
 }
 
 // tslint:disable:no-empty-interface
-export interface RaiseEventTransitionEventData extends RaiseEventData {}
+export interface RaiseEventTransitionEventData extends RaiseEventData { }
 
 export interface RaiseEventAuditUrlMismatchEventTypeData extends RaiseEventData {
     endpointUrl: PseudoVariantString;

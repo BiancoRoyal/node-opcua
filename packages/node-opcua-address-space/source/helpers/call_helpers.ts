@@ -9,10 +9,11 @@ import { CallMethodRequest } from "node-opcua-service-call";
 import { StatusCodes } from "node-opcua-status-code";
 import { CallMethodResultOptions } from "node-opcua-types";
 import { Variant } from "node-opcua-variant";
+import { UAObjectType } from "../../src/ua_object_type";
 
 import { AddressSpace, UAMethod, UAObject } from "../address_space_ts";
 import { ensureDatatypeExtractedWithCallback } from "../loader/load_nodeset2";
-import { IServerBase, ISessionBase, SessionContext } from "../session_context";
+import { SessionContext } from "../session_context";
 import { getMethodDeclaration_ArgumentList, verifyArguments_ArgumentList } from "./argument_list";
 
 // Symbolic Id                   Description
@@ -33,18 +34,34 @@ import { getMethodDeclaration_ArgumentList, verifyArguments_ArgumentList } from 
 type ResponseCallback<T> = (err: Error | null, result?: T) => void;
 
 export function callMethodHelper(
-    server: IServerBase,
-    session: ISessionBase,
+    context: SessionContext,
     addressSpace: AddressSpace,
     callMethodRequest: CallMethodRequest,
     callback: ResponseCallback<CallMethodResultOptions>
 ): void {
+
     const objectId = callMethodRequest.objectId;
     const methodId = callMethodRequest.methodId;
     const inputArguments = callMethodRequest.inputArguments || [];
 
     assert(objectId instanceof NodeId);
     assert(methodId instanceof NodeId);
+
+    const object = addressSpace.findNode(objectId) as UAObject;
+    if (!object) {
+        return callback(null, { statusCode: StatusCodes.BadNodeIdUnknown });
+    }
+    if (object.nodeClass !== NodeClass.Object && object.nodeClass !== NodeClass.ObjectType) {
+        return callback(null, { statusCode: StatusCodes.BadNodeIdInvalid });
+    }
+
+    const methodObj = addressSpace.findNode(methodId) as UAMethod;
+    if (!methodObj) {
+        return callback(null, { statusCode: StatusCodes.BadNodeIdUnknown });
+    }
+    if (methodObj.nodeClass !== NodeClass.Method) {
+        return callback(null, { statusCode: StatusCodes.BadNodeIdInvalid });
+    }
 
     const response1 = getMethodDeclaration_ArgumentList(addressSpace, objectId, methodId);
 
@@ -61,18 +78,6 @@ export function callMethodHelper(
         return callback(null, response);
     }
 
-    const methodObj = addressSpace.findNode(methodId) as UAMethod;
-    if (methodObj.nodeClass !== NodeClass.Method) {
-        return callback(null, { statusCode: StatusCodes.BadNodeIdInvalid });
-    }
-
-    // invoke method on object
-    const context = new SessionContext({
-        object: addressSpace.findNode(objectId) as UAObject,
-        server,
-        session
-    });
-
     let l_extraDataTypeManager: ExtraDataTypeManager;
 
     ensureDatatypeExtractedWithCallback(addressSpace, (err2: Error | null, extraDataTypeManager?: ExtraDataTypeManager) => {
@@ -86,7 +91,7 @@ export function callMethodHelper(
             resolveDynamicExtensionObject(variant, l_extraDataTypeManager);
         }
 
-        methodObj.execute(inputArguments, context, (err: Error | null, callMethodResponse?: CallMethodResultOptions) => {
+        methodObj.execute(object, inputArguments, context, (err: Error | null, callMethodResponse?: CallMethodResultOptions) => {
             /* istanbul ignore next */
             if (err) {
                 return callback(err);

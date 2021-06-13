@@ -15,7 +15,7 @@ import { installPeriodicClockAdjustment, periodicClockAdjustment, uninstallPerio
 import { checkDebugFlag, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
 
 import { makeApplicationUrn } from "node-opcua-common";
-import { getHostname, resolveFullyQualifiedDomainName } from "node-opcua-hostname";
+import { getHostname } from "node-opcua-hostname";
 
 import {
     ClientSecureChannelLayer,
@@ -84,7 +84,7 @@ interface MasterClient extends OPCUAClientBase {
 function __findEndpoint(this: OPCUAClientBase, endpointUrl: string, params: FindEndpointOptions, _callback: FindEndpointCallback) {
     const masterClient = this as MasterClient;
     debugLog("findEndpoint : endpointUrl = ", endpointUrl);
-
+    debugLog(" params ", params);
     assert(!masterClient._tmpClient);
 
     const callback = (err: Error | null, result?: FindEndpointResult) => {
@@ -94,13 +94,19 @@ function __findEndpoint(this: OPCUAClientBase, endpointUrl: string, params: Find
 
     const securityMode = params.securityMode;
     const securityPolicy = params.securityPolicy;
-
+    const connectionStrategy = params.connectionStrategy;
     const options: OPCUAClientBaseOptions = {
         applicationName: params.applicationName,
         applicationUri: params.applicationUri,
         certificateFile: params.certificateFile,
         clientCertificateManager: params.clientCertificateManager,
-        connectionStrategy: params.connectionStrategy,
+
+        clientName: "EndpointFetcher",
+        connectionStrategy: {
+            maxRetry: 0, /* no- retry */
+            maxDelay: 2000,
+        },
+
         privateKeyFile: params.privateKeyFile
     };
 
@@ -248,8 +254,33 @@ class ClockAdjustment {
     }
 }
 
-type InternalClientState = "idle" | "connecting" | "connected" | "reconnecting" | "disconnecting";
+type InternalClientState =
+    "uninitialized" |
+    "disconnected" |
+    "connecting" |
+    "connected" |
+    "reconnecting" |
+    "disconnecting";
 
+/*
+ *    "disconnected"  ---[connect]----------------------> "connecting"
+ *
+ *    "connecting"    ---[(connection successfull)]-----> "connected"
+ *
+ *    "connecting"    ---[(connection faiulure)]--------> "disconnected"
+ * 
+ *    "connecting"    ---[disconnect]-------------------> "disconnecting" --> "disconnected"
+ * 
+ *    "connecting"    ---[lost of connection]-----------> "reconnecting" ->[reconnection]
+ * 
+ *    "reconnecting"  ---[reconnection successful]------> "connected"
+ * 
+ *    "reconnecting"  ---[reconnection failure]---------> [reconnection] ---> "reconnecting"
+ *    
+ *    "reconnecting"  ---[disconnect]-------------------> "disconnecting" --> "disconnected"
+ */
+
+let g_ClientCounter = 0;
 /**
  * @internal
  */
@@ -288,7 +319,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
      * @type {Boolean}
      */
     get isReconnecting() {
-        return !!(this._secureChannel && this._secureChannel.isConnecting);
+        return !!(this._secureChannel && this._secureChannel.isConnecting) || this._internalState !== "connected";
     }
 
     /**
@@ -352,15 +383,28 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
     private reconnectionIsCanceled: boolean;
     private _clockAdjuster?: ClockAdjustment;
     private _tmpClient?: OPCUAClientBase;
+    private _instanceNumber: number;
 
     public clientCertificateManager: OPCUACertificateManager;
 
     protected _setInternalState(internalState: InternalClientState) {
+        const previousState = this._internalState;
+        if (doDebug) {
+            debugLog(chalk.cyan(`  Client ${this._instanceNumber} ${this.clientName} from    `), chalk.yellow(previousState), "to", chalk.yellow(internalState));
+        }
         this._internalState = internalState;
     }
-    constructor(options?: OPCUAClientBaseOptions) {
-        options = options || {};
+    public emit(eventName: string | symbol, ...others: any[]): boolean {
+        if (doDebug) {
+            debugLog(chalk.cyan(`  Client ${this._instanceNumber} ${this.clientName} emiting `), chalk.magentaBright(eventName));
+        }
+        return super.emit(eventName, ...others);
 
+
+    }
+    constructor(options?: OPCUAClientBaseOptions) {
+
+        options = options || {};
         if (!options.clientCertificateManager) {
             options.clientCertificateManager = getDefaultCertificateManager("PKI");
         }
@@ -370,6 +414,8 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
 
         super(options as IOPCUASecureObjectOptions);
 
+        this._instanceNumber = g_ClientCounter++;
+        this._internalState = "uninitialized";
         this.applicationName = options.applicationName || "NodeOPCUA-Client";
         assert(!this.applicationName.match(/^locale=/), "applicationName badly converted from LocalizedText");
         assert(!this.applicationName.match(/urn:/), "applicationName should not be a URI");
@@ -378,7 +424,6 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         this._applicationUri = options.applicationUri || this._getBuiltApplicationUri();
 
         this.disconnecting = false;
-        this._internalState = "idle";
 
         this.clientCertificateManager = options.clientCertificateManager;
 
@@ -421,6 +466,9 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         this.keepPendingSessionsOnDisconnect = options.keepPendingSessionsOnDisconnect || false;
 
         this.discoveryUrl = options.discoveryUrl || "";
+
+        this._setInternalState("disconnected");
+
     }
 
     private _cancel_reconnection(callback: ErrorCallback) {
@@ -445,20 +493,21 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
     }
 
     public _recreate_secure_channel(callback: ErrorCallback) {
-        debugLog("_recreate_secure_channel...");
+        debugLog("_recreate_secure_channel...", this._internalState);
 
         if (!this.knowsServerEndpoint) {
             debugLog("Cannot reconnect , server endpoint is unknown");
             return callback(new Error("Cannot reconnect, server endpoint is unknown"));
         }
         assert(this.knowsServerEndpoint);
-        assert(!this.isReconnecting);
+        // xx ???        assert(!this.isReconnecting);
         /**
          * notifies the observer that the OPCUA is now trying to reestablish the connection
          * after having received a connection break...
          * @event start_reconnection
          *
          */
+        this._setInternalState("reconnecting");
         this.emit("start_reconnection"); // send after callback
 
         this._destroy_secure_channel();
@@ -471,6 +520,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         };
 
         const failAndRetry = (err: Error, message: string) => {
+            debugLog("failAndRetry; ", message);
             if (this.reconnectionIsCanceled) {
                 this.emit("reconnection_canceled");
                 return callback(new Error("Reconnection has been canceled - " + this.clientName));
@@ -495,7 +545,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                     if (err.message.match("Backoff aborted.")) {
                         return failAndRetry(err!, "cannot create secure channel (backoff aborted)");
                     }
-                    if (true || err!.message.match("BadCertificateInvalid")) {
+                    if (err!.message.match("BadCertificateInvalid") || err!.message.match(/_socket has been disconnected by third party/)) {
                         warningLog(
                             "the server certificate has changed,  we need to retrieve server certificate again: ",
                             err.message
@@ -520,6 +570,8 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                                 if (err3) {
                                     return failAndRetry(err3, "trying to create new channel with new certificate");
                                 }
+                                this._setInternalState("connected");
+                                this.emit("connected");
                                 callback();
                             });
                         });
@@ -536,6 +588,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                     assert(this._secureChannel, "expecting a secureChannel here ");
                     // a new channel has be created and a new connection is established
                     debugLog(chalk.bgWhite.red("ClientBaseImpl:  RECONNECTED                !!!"));
+                    this._setInternalState("connected");
                     return callback();
                 }
             });
@@ -578,7 +631,6 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                         debugLog("_internal_create_secure_channel after secureChannel.create");
                         if (!this._secureChannel) {
                             debugLog("_secureChannel has been closed during the transaction !");
-                            this._destroy_secure_channel();
                             return _innerCallback(new Error("Secure Channel Closed"));
                         }
                         if (err) {
@@ -601,16 +653,17 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                 },
                 // ------------------------------------------------- STEP 3 : GetEndpointsRequest
                 (innerCallback: ErrorCallback) => {
+                    assert(this._secureChannel !== null);
                     if (!this.knowsServerEndpoint) {
-                        assert(this._secureChannel !== null);
                         this.getEndpoints((err: Error | null /*, endpoints?: EndpointDescription[]*/) => {
-                            // Xx endpoints;
-                            assert(this._secureChannel !== null);
+                            if (this._secureChannel === null) {
+                                assert(this.disconnecting);
+                                innerCallback(new Error("disconnecting"));
+                            }
                             innerCallback(err ? err : undefined);
                         });
                     } else {
                         // end points are already known
-                        assert(this._secureChannel !== null);
                         innerCallback();
                     }
                 }
@@ -651,17 +704,20 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             throw new Error(" cannot locate certificate file " + certificateFile);
         }
     }
-    protected async createDefaultCertificate() {   
+    protected async createDefaultCertificate() {
+
+        // istanbul ignore next
         if ((this as any)._increateDefaultCertificate) {
-            console.log("Rentrancy !:!!")
+            errorLog("Internal error : rentreancy in createDefaultCertificate!");
         }
+
         (this as any)._increateDefaultCertificate = true;
         if (!fs.existsSync(this.certificateFile)) {
             const lockfile = path.join(this.certificateFile + ".lock");
-            await withLock({ lockfile: lockfile, maxStaleDuration: 60*1000, retryInterval: 100 }, async () => {   
-                if (this.disconnecting) {
-                    return;
-                }            
+            await withLock({ lockfile: lockfile, maxStaleDuration: 60 * 1000, retryInterval: 100 }, async () => {
+
+                if (this.disconnecting) return;
+
                 await ClientBaseImpl.createCertificate(this.clientCertificateManager, this.certificateFile, this.applicationName, this._getBuiltApplicationUri())
                 debugLog("privateKey      = ", this.privateKeyFile);
                 debugLog("                = ", this.clientCertificateManager.privateKey);
@@ -689,13 +745,35 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         }
 
         if (this.disconnecting) return;
+
         const lockfile = path.join(this.certificateFile + ".lock");
-        await withLock({ lockfile: lockfile, maxStaleDuration: 60*1000, retryInterval: 100 }, async () => {   
+        await withLock({ lockfile: lockfile, maxStaleDuration: 60 * 1000, retryInterval: 100 }, async () => {
+            if (this.disconnecting) return;
             await performCertificateSanityCheck.call(this, "client", this.clientCertificateManager, this._getBuiltApplicationUri());
         });
     }
 
     protected _internalState: InternalClientState;
+
+    protected _handleUnrecoverableConnectionFailure(err: Error, callback: ErrorCallback) {
+        debugLog(err.message);
+        this.emit("connection_failed");
+        this._setInternalState("disconnected");
+        return callback(err);
+    }
+    private _handleDisconnectionWhileConnecting(err: Error, callback: ErrorCallback) {
+        debugLog(err.message);
+        this.emit("connection_failed");
+        this._setInternalState("disconnected");
+        return callback(err);
+    }
+    private _handleSuccessfulConnection(callback: ErrorCallback) {
+        debugLog(" Connected successfully  to ", this.endpointUrl);
+        this.emit("connected");
+        this._setInternalState("connected");
+        callback();
+    }
+
 
     /**
      * connect the OPC-UA client to a server end point.
@@ -713,31 +791,27 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             return;
         }
         assert(typeof endpointUrl === "string" && endpointUrl.length > 0);
+
         // istanbul ignore next
-        if (this._internalState !== "idle") {
+        if (this._internalState !== "disconnected") {
             callback(new Error("invalid internal state = " + this._internalState));
             return;
         }
 
         // prevent illegal call to connect
         if (this._secureChannel !== null) {
-            setImmediate(() => {
-                callback(new Error("connect already called"));
-            });
+            setImmediate(() => callback(new Error("connect already called")));
             return;
         }
 
-        this._internalState = "connecting";
+        this._setInternalState("connecting");
         this.disconnecting = false;
 
         this.initializeCM()
             .then(() => {
                 debugLog("ClientBaseImpl#connect ", endpointUrl);
-                if (this.disconnecting || this._internalState === "disconnecting") {
-                    debugLog("premature disconnection 1");
-                    this.emit("connection_failed");
-                    this._internalState = "idle";
-                    return callback(new Error("premature disconnection 1"));
+                if (this.disconnecting) {
+                    return this._handleDisconnectionWhileConnecting(new Error("premature disconnection 1"), callback);
                 }
 
                 if (
@@ -747,16 +821,10 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                     debugLog("Fetching certificates from endpoints");
                     this.fetchServerCertificate(endpointUrl, (err: Error | null, adjustedEndpointUrl?: string) => {
                         if (err) {
-                            debugLog("fetchServerCertificate Err = ", err.message);
-                            this.emit("connection_failed", err);
-                            this._internalState = "idle";
-                            return callback(err);
+                            return this._handleUnrecoverableConnectionFailure(err, callback);
                         }
-                        if (this.disconnecting || this._internalState === "disconnecting") {
-                            debugLog("premature disconnection 2");
-                            this.emit("connection_failed");
-                            this._internalState = "idle";
-                            return callback(new Error("premature disconnection 2"));
+                        if (this.disconnecting) {
+                            return this._handleDisconnectionWhileConnecting(new Error("premature disconnection 2"), callback);
                         }
                         if (forceEndpointDiscoveryOnConnect) {
                             debugLog("connecting with adjusted endpoint : ", adjustedEndpointUrl, "  was =", endpointUrl);
@@ -771,9 +839,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                 }
             })
             .catch((err) => {
-                this.emit("connection_failed");
-                this._internalState = "idle";
-                callback(err);
+                return this._handleUnrecoverableConnectionFailure(err, callback);
             });
     }
 
@@ -785,30 +851,24 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         assert(this._secureChannel === null);
         this.endpointUrl = endpointUrl;
 
-        // make sure callback will only be call once regardless of outcome, and will be also deferred.
-        const callbackOnceDelayed: (err: Error | null) => void = once((err?: Error) => setImmediate(() => callback(err)));
-
         this._clockAdjuster = this._clockAdjuster || new ClockAdjustment();
         OPCUAClientBase.registry.register(this);
 
         debugLog("__connectStep2");
         this._internal_create_secure_channel(this.connectionStrategy, (err: Error | null) => {
             if (!err) {
-                debugLog(" Connected successfully  to ", this.endpointUrl);
-                this.emit("connected");
-                this._internalState = "connected";
-                callbackOnceDelayed(err!);
+                this._handleSuccessfulConnection(callback);
             } else {
                 OPCUAClientBase.registry.unregister(this);
                 if (this._clockAdjuster) {
                     this._clockAdjuster.dispose();
                     this._clockAdjuster = undefined;
                 }
-
                 debugLog(chalk.red("SecureChannel creation has failed with error :", err.message));
                 if (err.message.match(/ECONNABORTED/)) {
                     debugLog(chalk.yellow("- The client cannot to :" + endpointUrl + ". Connection has been aborted."));
                     err = new Error("The connection has been aborted");
+                    this._handleUnrecoverableConnectionFailure(err, callback);
                 } else if (err.message.match(/ECONNREF/)) {
                     debugLog(chalk.yellow("- The client cannot to :" + endpointUrl + ". Server is not reachable."));
                     err = new Error(
@@ -820,13 +880,14 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                         err.message +
                         ")"
                     );
+                    this._handleUnrecoverableConnectionFailure(err, callback);
+                } else if (err.message.match(/disconnecting/)) {
+                    /* */
+                    this._handleDisconnectionWhileConnecting(err, callback);
                 } else {
-                    debugLog(chalk.yellow("  - The client certificate may not be trusted by the server"));
                     err = new Error("The connection may have been rejected by server,\n" + "Err = (" + err.message + ")");
+                    this._handleUnrecoverableConnectionFailure(err, callback);
                 }
-                this.emit("connection_failed", err);
-                this._internalState = "idle";
-                callbackOnceDelayed(err!);
             }
         });
     }
@@ -840,6 +901,9 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             // this may happen if the Server has closed the connection abruptly for some unknown reason
             // or if the tcp connection has been broken.
             return callback(new Error("No SecureChannel , connection may have been canceled abruptly by server"));
+        }
+        if (this._internalState !== "connected" && this._internalState !== "connecting") {
+            return callback(new Error("Invalid client state " + this._internalState));
         }
         assert(this._secureChannel);
         assert(request);
@@ -965,6 +1029,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             if (err) {
                 return callback(err);
             }
+            /* istanbul ignore next */
             if (!response || !(response instanceof FindServersResponse)) {
                 return callback(new Error("Internal Error"));
             }
@@ -997,6 +1062,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             if (err) {
                 return callback(err);
             }
+            /* istanbul ignore next */
             if (!response || !(response instanceof FindServersOnNetworkResponse)) {
                 return new Error("Internal Error");
             }
@@ -1027,23 +1093,25 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         this.disconnecting = true;
 
         if (this._tmpClient) {
-            this._tmpClient.disconnect(() => {
+            this._tmpClient.disconnect((err) => {
+                this._tmpClient = undefined;
+                assert(!this._tmpClient);
+                // retry disconnect on main client
                 this.disconnect(callback);
             });
             return;
         }
         debugLog("ClientBaseImpl#disconnect", this.endpointUrl);
-        if (this.isReconnecting) {
+        if (this.isReconnecting && !this.reconnectionIsCanceled) {
             debugLog("ClientBaseImpl#disconnect called while reconnection is in progress");
             // let's abort the reconnection process
-            return this._cancel_reconnection((err?: Error) => {
+            this._cancel_reconnection((err?: Error) => {
                 debugLog("ClientBaseImpl#disconnect reconnection has been canceled", this.applicationName);
-
                 assert(!err, " why would this fail ?");
-                assert(!this.isReconnecting);
                 // sessions cannot be cancelled properly and must be discarded.
                 this.disconnect(callback);
             });
+            return;
         }
 
         if (this._sessions.length && !this.keepPendingSessionsOnDisconnect) {
@@ -1059,11 +1127,11 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         if (this.clientCertificateManager) {
             this.clientCertificateManager.dispose();
         }
-        if (this._internalState === "idle" || this._internalState === "disconnecting") {
+        if (this._internalState === "disconnected" || this._internalState === "disconnecting") {
             return callback();
         }
         debugLog("Disconnecting !");
-        this._internalState = "disconnecting";
+        this._setInternalState("disconnecting");
 
         if (this._sessions.length) {
             // transfer active session to  orphan and detach them from channel
@@ -1089,12 +1157,12 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                 this._secureChannel = tmpChannel;
                 tmpChannel = null;
                 this._destroy_secure_channel();
-                this._internalState = "idle";
+                this._setInternalState("disconnected");
                 setImmediate(callback);
             });
         } else {
             this.emit("close", null);
-            this._internalState = "idle";
+            this._setInternalState("disconnected");
             setImmediate(callback);
         }
     }
@@ -1186,6 +1254,8 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             clientCertificateManager: this.clientCertificateManager
         };
         return __findEndpoint.call(this, discoveryUrl, params, (err: Error | null, result?: FindEndpointResult) => {
+
+
             if (err) {
                 return callback(err);
             }
@@ -1211,11 +1281,11 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             assert(endpoint);
 
             _verify_serverCertificate(this.clientCertificateManager, endpoint.serverCertificate, (err1?: Error) => {
-                if (err1) { 
+                if (err1) {
                     warningLog("[NODE-OPCUA-W25] client's server certificate verification has failed ", err1.message);
                     warningLog("                 ", this.clientCertificateManager.rootDir);
-                    warningLog("                 ", endpoint.serverCertificate.toString("base64").replace(/(.{80})/g,"$1\n                 "));
-                    warningLog("                 verify that server certificate is trusted or that server certificate issuer's certificate is present in the issuer foder");
+                    warningLog("                 ", endpoint.serverCertificate.toString("base64").replace(/(.{80})/g, "$1\n                 "));
+                    warningLog("                 verify that server certificate is trusted or that server certificate issuer's certificate is present in the issuer folder");
                     return callback(err1);
                 }
                 this.serverCertificate = endpoint.serverCertificate;
@@ -1231,10 +1301,10 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             this._transactionsPerformed += this._secureChannel.transactionsPerformed;
             this._timedOutRequestCount += this._secureChannel.timedOutRequestCount;
             if (doDebug) {
-                debugLog("byteWritten  = ", this._byteWritten);
-                debugLog("byteRead     = ", this._byteRead);
-                debugLog("transactions = ", this._transactionsPerformed);
-                debugLog("timedOutRequestCount = ", this._timedOutRequestCount);
+                debugLog(chalk.cyan(`  Client ${this._instanceNumber} ${this.clientName} byteWritten          = `), this._byteWritten);
+                debugLog(chalk.cyan(`  Client ${this._instanceNumber} ${this.clientName} byteRead             = `), this._byteRead);
+                debugLog(chalk.cyan(`  Client ${this._instanceNumber} ${this.clientName} transactions         = `), this._transactionsPerformed);
+                debugLog(chalk.cyan(`  Client ${this._instanceNumber} ${this.clientName} timedOutRequestCount = `), this._timedOutRequestCount);
             }
         }
     }
@@ -1257,7 +1327,6 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
     }
 
     private _close_pending_sessions(callback: ErrorCallback) {
-        assert(typeof callback === "function");
         const sessions = [...this._sessions];
         async.map(
             sessions,
@@ -1355,61 +1424,21 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         });
 
         secureChannel.on("close", (err?: Error) => {
-            debugLog(chalk.yellow.bold(" ClientBaseImpl emitting close"), err);
-
+            debugLog(chalk.yellow.bold(" ClientBaseImpl emitting close"), err?.message);
             if (!err || !this.reconnectOnFailure) {
-                // this is a normal close operation initiated byu
-
+                // this is a normal close operation initiated by us
                 /**
                  * @event close
                  * @param error
                  */
                 this.emit("close", err);
-
-                setImmediate(() => {
-                    this._destroy_secure_channel();
-                });
-                return;
+                setImmediate(() => this._destroy_secure_channel());
             } else {
-                this.emit("connection_lost");
-
-                setImmediate(() => {
-                    debugLog("recreating new secure channel ");
-
-                    this._recreate_secure_channel((err1?: Error) => {
-                        debugLog("secureChannel#on(close) => _recreate_secure_channel returns ", err1 ? err1.message : "OK");
-
-                        if (err1) {
-                            // xx assert(!this._secureChannel);
-                            debugLog("_recreate_secure_channel has failed");
-                            // xx this.emit("close", err1);
-                            return;
-                        } else {
-                            /**
-                             * @event connection_reestablished
-                             *        send when the connection is reestablished after a connection break
-                             */
-                            this.emit("connection_reestablished");
-
-                            // now delegate to upper class the
-                            if (this._on_connection_reestablished) {
-                                assert(typeof this._on_connection_reestablished === "function");
-                                this._on_connection_reestablished((err2?: Error) => {
-                                    if (err2) {
-                                        if (doDebug) {
-                                            debugLog("connection_reestablished has failed");
-                                            debugLog(err);
-                                        }
-                                        this.disconnect(() => {
-                                            //  callback(err);
-                                            warningLog("Disconnected following reconnection failure", err2.message);
-                                        });
-                                    }
-                                });
-                            }
-                        }
-                    });
-                });
+                /**
+                 * @event connection_lost
+                 */
+                this.emit("connection_lost"); // instead of "close"
+                this._repairConnection();
             }
         });
 
@@ -1422,38 +1451,89 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             this.emit("timed_out_request", request);
         });
     }
+    private _repairConnection() {
+        setImmediate(() => {
+            debugLog("recreating new secure channel ");
+            this._recreate_secure_channel((err1?: Error) => {
+                debugLog("secureChannel#on(close) => _recreate_secure_channel returns ", err1 ? err1.message : "OK");
+
+                if (err1) {
+                    // xx assert(!this._secureChannel);
+                    debugLog("_recreate_secure_channel has failed");
+
+                    this.emit("close", err1);
+                    this._setInternalState("disconnected");
+
+                    return;
+                } else {
+
+                    this._finalReconnectionStep((err2?: Error | null) => {
+                        if (err2) {
+                            if (doDebug) {
+                                debugLog("connection_reestablished has failed");
+                                debugLog("errv= ", err2);
+                            }
+                            this.disconnect(() => {
+                                warningLog("Disconnected following reconnection failure", err2.message);
+                            });
+                            return;
+                        } else {
+                            /**
+                             * @event connection_reestablished
+                             *        send when the connection is reestablished after a connection break
+                             */
+                            this.emit("connection_reestablished");
+                            this._setInternalState("connected");
+                        }
+                    })
+                }
+            });
+        });
+    }
+    private _finalReconnectionStep(callback: ErrorCallback) {
+        // now delegate to upper class the
+        if (this._on_connection_reestablished) {
+            assert(typeof this._on_connection_reestablished === "function");
+            this._on_connection_reestablished((err2?: Error) => {
+                callback(err2);
+            });
+        } else {
+            callback();
+        }
+    }
 }
 
 // tslint:disable-next-line: max-classes-per-file
 class TmpClient extends ClientBaseImpl {
     constructor(options: OPCUAClientBaseOptions) {
+
+        options.clientName = (options.clientName || "") + "_TmpClient";
         super(options);
+
     }
 
     async connect(endpoint: string): Promise<void>;
     connect(endpoint: string, callback: ErrorCallback): void;
     connect(endpoint: string, callback?: ErrorCallback): any {
         debugLog("connecting to TmpClient");
-        if (this._internalState !== "idle") {
-            callback!(new Error("invalid internal state"));
+
+        // istanbul ignore next
+        if (this._internalState !== "disconnected") {
+            callback!(new Error("TmpClient#connect: invalid internal state " + this._internalState));
             return;
         }
-        this._internalState = "connecting";
-       /* this.initializeCM()
-            .then(() => {
-        */
-                if (this.disconnecting /*|| this._internalState === "disconnecting" */) {
-                    debugLog("premature disconnection 2");
-                    this.emit("connection_failed");
-                    this._internalState = "idle";
-                    return callback!(new Error("premature disconnection 3"));
-                }
-                this._connectStep2(endpoint, (err?: Error) => {
-                    callback!(err);
-                });
-        /*    })
-            .catch((err) => callback!(err));
-        */
+
+        if (this.disconnecting) {
+            return this._handleUnrecoverableConnectionFailure(new Error("premature disconnection 3"), callback!);
+        }
+
+        this._setInternalState("connecting");
+        this._connectStep2(endpoint, (err?: Error) => {
+            if (this.disconnecting) {
+                return this._handleUnrecoverableConnectionFailure(new Error("premature disconnection 4"), callback!);
+            }
+            callback!(err);
+        });
     }
 }
 

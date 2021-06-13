@@ -1,17 +1,17 @@
 /**
  * @module node-opcua-address-space
  */
-// tslint:disable:no-console
 import * as chalk from "chalk";
 import { assert } from "node-opcua-assert";
 
 import { AttributeIds } from "node-opcua-data-model";
 import { DiagnosticInfo, NodeClass } from "node-opcua-data-model";
 import { DataValue, DataValueLike } from "node-opcua-data-value";
+import { make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
 import { NodeId } from "node-opcua-nodeid";
 import { Argument } from "node-opcua-service-call";
 import { StatusCodes } from "node-opcua-status-code";
-import { CallMethodResultOptions } from "node-opcua-types";
+import { CallMethodResultOptions, PermissionType } from "node-opcua-types";
 import { Variant } from "node-opcua-variant";
 import { DataType, VariantLike } from "node-opcua-variant";
 import {
@@ -19,14 +19,19 @@ import {
     MethodFunctorCallback,
     UAMethod as UAMethodPublic,
     UAObject as UAObjectPublic,
-    UAObjectType,
-    Permissions
 } from "../source";
 import { SessionContext } from "../source";
 import { BaseNode } from "./base_node";
 import { _clone } from "./base_node_private";
 import { _handle_hierarchy_parent } from "./namespace";
+import { UAObject } from "./ua_object";
+import { UAObjectType } from "./ua_object_type";
 import { UAVariable } from "./ua_variable";
+
+
+const warningLog = make_warningLog(__filename);
+const debugLog = make_debugLog(__filename);
+const errorLog = make_errorLog(__filename);
 
 function default_check_valid_argument(arg: any) {
     return arg.constructor.name === "Argument";
@@ -50,21 +55,21 @@ export class UAMethod extends BaseNode implements UAMethodPublic {
     public value?: any;
     public methodDeclarationId: NodeId;
     public _getExecutableFlag?: (this: UAMethod, context: SessionContext) => boolean;
-    public _permissions: Permissions | null;
+
     public _asyncExecutionFunction?: MethodFunctor;
 
     constructor(options: any) {
         super(options);
         this.value = options.value;
         this.methodDeclarationId = options.methodDeclarationId;
-        this._permissions = null;
-        if (options.permissions) {
-            this.setPermissions(options.permissions);
-        }
     }
 
+    /**
+     *
+     * 
+     */
     public getExecutableFlag(context: SessionContext): boolean {
-        if (typeof this._asyncExecutionFunction !== "function") {
+        if (!this.isBound()) {
             return false;
         }
         if (this._getExecutableFlag) {
@@ -73,8 +78,12 @@ export class UAMethod extends BaseNode implements UAMethodPublic {
         return true;
     }
 
+    /**
+     * 
+     * @returns  true if the method is bound
+     */
     public isBound(): boolean {
-        return !!this._asyncExecutionFunction;
+        return typeof this._asyncExecutionFunction === "function";
     }
 
     public readAttribute(context: SessionContext, attributeId: AttributeIds): DataValue {
@@ -102,18 +111,14 @@ export class UAMethod extends BaseNode implements UAMethodPublic {
         return this._getArguments("OutputArguments");
     }
 
-    public setPermissions(permissions: Permissions): void {
-        this._permissions = permissions;
-    }
-
     public bindMethod(async_func: MethodFunctor): void {
         assert(typeof async_func === "function");
         this._asyncExecutionFunction = async_func;
     }
-
-    public execute(inputArguments: null | VariantLike[], context: SessionContext): Promise<CallMethodResultOptions>;
-    public execute(inputArguments: null | VariantLike[], context: SessionContext, callback: MethodFunctorCallback): void;
-    public execute(inputArguments: VariantLike[] | null, context: SessionContext, callback?: MethodFunctorCallback): any {
+    public execute(object: UAObject | UAObjectType | null, inputArguments: null | VariantLike[], context: SessionContext): Promise<CallMethodResultOptions>;
+    public execute(object: UAObject | UAObjectType | null, inputArguments: null | VariantLike[], context: SessionContext, callback: MethodFunctorCallback): void;
+    public execute(object: UAObject | UAObjectType | null, inputArguments: VariantLike[] | null, context: SessionContext, callback?: MethodFunctorCallback): any {
+        // istanbul ignore next 
         if (!callback) {
             throw new Error("execute need to be promisified");
         }
@@ -124,43 +129,49 @@ export class UAMethod extends BaseNode implements UAMethodPublic {
         assert(context !== null && typeof context === "object");
         assert(typeof callback === "function");
 
-        // a context object must be provided
-        if (!context.object) {
-            context.object = this.parent;
+        object = object || this.parent as UAObject;
+
+        // istanbul ignore next
+        if (!object) {
+            errorLog("UAMethod#execute expects a valid object");
+            return callback(null, { statusCode: StatusCodes.BadInternalError });
         }
 
-        assert(context.object instanceof BaseNode);
-        if (context.object.nodeClass !== NodeClass.Object && context.object.nodeClass !== NodeClass.ObjectType) {
-            console.log(
+        if (object.nodeClass !== NodeClass.Object && object.nodeClass !== NodeClass.ObjectType) {
+            warningLog(
                 "Method " +
-                    this.nodeId.toString() +
-                    " " +
-                    this.browseName.toString() +
-                    " called for a node that is not a Object/ObjectType but " +
-                    NodeClass[context.object.nodeClass]
+                this.nodeId.toString() +
+                " " +
+                this.browseName.toString() +
+                " called for a node that is not a Object/ObjectType but " +
+                NodeClass[context.object.nodeClass]
             );
             return callback(null, { statusCode: StatusCodes.BadNodeIdInvalid });
         }
         if (!this._asyncExecutionFunction) {
-            console.log("Method " + this.nodeId.toString() + " " + this.browseName.toString() + " has not been bound");
+            warningLog("Method " + this.nodeId.toString() + " " + this.browseName.toString() + " has not been bound");
             return callback(null, { statusCode: StatusCodes.BadInternalError });
         }
 
+
         if (!this.getExecutableFlag(context)) {
-            console.log("Method " + this.nodeId.toString() + " " + this.browseName.toString() + " is not executable");
-            // todo : find the correct Status code to return here
-            return callback(null, { statusCode: StatusCodes.BadMethodInvalid });
+            warningLog("Method " + this.nodeId.toString() + " " + this.browseName.toString() + " is not executable");
+            return callback(null, { statusCode: StatusCodes.BadNotExecutable });
         }
 
-        if (this._permissions && context.checkPermission) {
-            if (!context.checkPermission(this, "Execute")) {
-                return callback(null, { statusCode: StatusCodes.BadUserAccessDenied });
-            }
+        if (context.isAccessRestricted(this)) {
+            return callback(null, { statusCode: StatusCodes.BadSecurityModeInsufficient });
+        }
+
+        if (!context.checkPermission(this, PermissionType.Call)) {
+            return callback(null, { statusCode: StatusCodes.BadUserAccessDenied });
         }
 
         // verify that input arguments are correct
         // todo :
         const inputArgumentDiagnosticInfos: DiagnosticInfo[] = [];
+
+        context.object = object;
 
         try {
             this._asyncExecutionFunction.call(
@@ -169,8 +180,8 @@ export class UAMethod extends BaseNode implements UAMethodPublic {
                 context,
                 (err: Error | null, callMethodResult: CallMethodResultOptions) => {
                     if (err) {
-                        console.log(err.message);
-                        console.log(err);
+                        debugLog(err.message);
+                        debugLog(err);
                     }
                     callMethodResult = callMethodResult || {};
 
@@ -196,9 +207,8 @@ export class UAMethod extends BaseNode implements UAMethodPublic {
                 }
             );
         } catch (err) {
-            // tslint:disable:no-console
-            console.log(chalk.red("ERR in method  handler"), err.message);
-            console.error(err.stack);
+            warningLog(chalk.red("ERR in method  handler"), err.message);
+            warningLog(err.stack);
             const callMethodResponse = { statusCode: StatusCodes.BadInternalError };
             callback(err, callMethodResponse);
         }

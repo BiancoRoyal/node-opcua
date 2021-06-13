@@ -3,9 +3,11 @@
  */
 import * as chalk from "chalk";
 import * as fs from "fs";
+// node 14 onward : import {  readFile } from "fs/promises";
+const { readFile } = fs.promises;
+
 import * as os from "os";
 import * as path from "path";
-import { promisify } from "util";
 
 import { assert } from "node-opcua-assert";
 import { OPCUACertificateManager } from "node-opcua-certificate-manager";
@@ -15,8 +17,9 @@ import { getFullyQualifiedDomainName } from "node-opcua-hostname";
 import { ICertificateKeyPairProvider } from "node-opcua-secure-channel";
 import { OPCUAServer, OPCUAServerEndPoint } from "node-opcua-server";
 import { ApplicationDescriptionOptions } from "node-opcua-types";
-import { installPushCertificateManagement } from "../push_certificate_manager_helpers";
+import { installPushCertificateManagement } from "./push_certificate_manager_helpers";
 import { ActionQueue } from "./push_certificate_manager_server_impl";
+
 
 const debugLog = make_debugLog("ServerConfiguration");
 const errorLog = make_errorLog("ServerConfiguration");
@@ -73,6 +76,10 @@ async function getIpAddresses(): Promise<string[]> {
     return ipAddresses;
 }
 
+
+/**
+ * 
+ */
 async function install(this: OPCUAServerPartial): Promise<void> {
     debugLog("install push certificate management", this.serverCertificateManager.rootDir);
 
@@ -82,7 +89,7 @@ async function install(this: OPCUAServerPartial): Promise<void> {
     );
 
     if (!this.$$privateKeyPEM) {
-        this.$$privateKeyPEM = await promisify(fs.readFile)(this.serverCertificateManager.privateKey, "utf8");
+        this.$$privateKeyPEM = await readFile(this.serverCertificateManager.privateKey, "utf8");
     }
 
     if (!this.$$certificateChain) {
@@ -116,12 +123,13 @@ async function install(this: OPCUAServerPartial): Promise<void> {
             debugLog("creating self signed certificate", options);
             await this.serverCertificateManager.createSelfSignedCertificate(options);
         }
-        const certificatePEM = await promisify(fs.readFile)(certificateFile, "utf8");
+        const certificatePEM = await readFile(certificateFile, "utf8");
 
         this.$$certificateChain = convertPEMtoDER(certificatePEM);
 
         //  await this.serverCertificateManager.trustCertificate( this.$$certificateChain);
     }
+
 }
 
 function getCertificateChainEP(this: OPCUAServerEndPoint): Certificate {
@@ -191,10 +199,10 @@ async function onCertificateChange(server: OPCUAServer) {
 }
 
 export async function installPushCertificateManagementOnServer(server: OPCUAServer): Promise<void> {
-    if (!server.engine.addressSpace) {
+    if (!server.engine || !server.engine.addressSpace) {
         throw new Error(
             "Server must have a valid address space." +
-                "you need to call installPushCertificateManagementOnServer after server has been initialized"
+            "you need to call installPushCertificateManagementOnServer after server has been initialized"
         );
     }
     await install.call((server as any) as OPCUAServerPartial);
@@ -248,4 +256,5 @@ export async function installPushCertificateManagementOnServer(server: OPCUAServ
             }
         );
     });
+
 }

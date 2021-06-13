@@ -15,11 +15,16 @@ import {
     RegisterServerMethod
 } from "node-opcua";
 import { make_debugLog, checkDebugFlag } from "node-opcua-debug";
+import { once } from "events";
 
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
 
 const configFolder = path.join(__dirname, "../../tmp");
+
+export async function pause(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
 /**
  *
  * @param discoveryEndpointUrl
@@ -27,14 +32,14 @@ const configFolder = path.join(__dirname, "../../tmp");
  * @param name
  */
 export async function createAndStartServer(discoveryEndpointUrl: string, port: number, name: string): Promise<OPCUAServer> {
-    const server = await createServerThatRegisterWithDiscoveryServer(discoveryEndpointUrl, port, name);
+    const server = await createServerThatRegistersItselfToTheDiscoveryServer(discoveryEndpointUrl, port, name);
     /* no await here on purpose */ server.start();
     // server registration takes place in parallel and should be checked independently
-    await new Promise((resolve) => server.on("serverRegistered", resolve));
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await once(server, "serverRegistered");
+    await pause(100);
     return server;
 }
-export async function createServerThatRegisterWithDiscoveryServer(
+export async function createServerThatRegistersItselfToTheDiscoveryServer(
     discoveryServerEndpointUrl: string,
     port: number,
     name: string
@@ -153,6 +158,7 @@ export type FF = (callback: ErrorCallback) => void;
 export function f(func: FF): FF {
     const title = func.name
         .replace(/_/g, " ")
+        .replace(/^bound /,"")
         .replace("given ", chalk.green("**GIVEN** "))
         .replace("when ", chalk.green("**WHEN** "))
         .replace("then ", chalk.green("**THEN** "));
@@ -173,8 +179,9 @@ export function f(func: FF): FF {
 }
 
 export async function fa(title: string, func: () => Promise<void>): Promise<void> {
-    title = title
+    title= title
         .replace(/_/g, " ")
+        .replace(/^bound /,"")
         .replace("given ", chalk.green("**GIVEN** "))
         .replace("when ", chalk.green("**WHEN** "))
         .replace("then ", chalk.green("**THEN** "));

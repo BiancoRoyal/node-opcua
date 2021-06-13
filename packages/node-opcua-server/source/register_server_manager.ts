@@ -62,6 +62,7 @@ function securityPolicyLevel(securityPolicy: UAString): number {
             return 6;
         case SecurityPolicy.Basic256Sha256:
             return 7;
+        case SecurityPolicy.Aes128_Sha256_RsaOaep:
         default:
             return 0;
     }
@@ -351,9 +352,11 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             if (err) {
                 debugLog("RegisterServerManager#start => _establish_initial_connection has failed");
                 return callback(err);
+            }   
+            if (this.state !== RegisterServerManagerStatus.INITIALIZING) {
+                debugLog("RegisterServerManager#start => _establish_initial_connection has failed");
+                return callback();
             }
-
-            this._setState(RegisterServerManagerStatus.REGISTERING);
 
             this._registerServer(true, (err1?: Error | null) => {
                 if (this.state !== RegisterServerManagerStatus.REGISTERING) {
@@ -362,10 +365,11 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                 }
 
                 if (err1) {
-                    debugLog(
-                        "RegisterServerManager#start - registering server has failed ! " +
-                            "please check that your server certificate is accepted by the LDS"
+                    warningLog(
+                        "RegisterServerManager#start - registering server has failed ! \n" +
+                        "please check that your server certificate is accepted by the LDS"
                     );
+                    this._setState(RegisterServerManagerStatus.INACTIVE);
                     this._emitEvent("serverRegistrationFailure");
                 } else {
                     this._emitEvent("serverRegistered");
@@ -377,7 +381,8 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         });
     }
 
-    public _establish_initial_connection(outer_callback: ErrorCallback) {
+    private _establish_initial_connection(outer_callback: ErrorCallback) {
+        /* istanbul ignore next */
         if (!this.server) {
             throw new Error("Internal Error");
         }
@@ -393,7 +398,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
 
         // Retry Strategy must be set
         this.server.serverCertificateManager.referenceCounter++;
-        const client = OPCUAClientBase.create({
+        const registrationClient = OPCUAClientBase.create({
             clientName: this.server.serverInfo.applicationUri!,
 
             applicationName,
@@ -408,9 +413,9 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             privateKeyFile: this.server.privateKeyFile
         }) as ClientBaseEx;
 
-        this._registration_client = client;
+        this._registration_client = registrationClient;
 
-        client.on("backoff", (nbRetry: number, delay: number) => {
+        registrationClient.on("backoff", (nbRetry: number, delay: number) => {
             debugLog("RegisterServerManager - received backoff");
             warningLog(
                 chalk.bgWhite.cyan("contacting discovery server backoff "),
@@ -428,7 +433,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             [
                 //  do_initial_connection_with_discovery_server
                 (callback: ErrorCallback) => {
-                    client.connect(this.discoveryServerEndpointUrl, (err?: Error) => {
+                    registrationClient.connect(this.discoveryServerEndpointUrl, (err?: Error) => {
                         if (err) {
                             debugLog(
                                 "RegisterServerManager#_establish_initial_connection " + ": initial connection to server has failed"
@@ -441,7 +446,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
 
                 // getEndpoints_on_discovery_server
                 (callback: ErrorCallback) => {
-                    client.getEndpoints((err: Error | null, endpoints?: EndpointDescription[]) => {
+                    registrationClient.getEndpoints((err: Error | null, endpoints?: EndpointDescription[]) => {
                         if (!err) {
                             const endpoint = findSecureEndpoint(endpoints!);
 
@@ -464,10 +469,10 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                 },
                 // function closing_discovery_server_connection
                 (callback: ErrorCallback) => {
-                    this._serverEndpoints = client._serverEndpoints;
+                    this._serverEndpoints = registrationClient._serverEndpoints;
 
-                    client.disconnect((err?: Error) => {
-                        // client = null;
+                    registrationClient.disconnect((err?: Error) => {
+                        this._registration_client = null;
                         callback(err);
                     });
                 },
@@ -479,12 +484,11 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             (err?: Error | null) => {
                 debugLog("-------------------------------", !!err);
 
-                this._registration_client = null;
                 if (this.state !== RegisterServerManagerStatus.INITIALIZING) {
-                    debugLog("RegisterServerManager#_establish_initial_connection has been interrupted");
+                    debugLog("RegisterServerManager#_establish_initial_connection has been interrupted ", RegisterServerManagerStatus[this.state]);
                     this._setState(RegisterServerManagerStatus.INACTIVE);
-                    if (client) {
-                        client.disconnect((err2?: Error) => {
+                    if (this._registration_client) {
+                        this._registration_client.disconnect((err2?: Error) => {
                             this._registration_client = null;
                             outer_callback(new Error("Initialization has been canceled"));
                         });
@@ -495,20 +499,23 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                 }
                 if (err) {
                     this._setState(RegisterServerManagerStatus.INACTIVE);
-                    client.disconnect((err1?: Error) => {
-                        this._registration_client = null;
-                        debugLog("#######", !!err1);
-                        outer_callback(err);
-                    });
-                } else {
-                    outer_callback();
+                    if (this._registration_client) {
+                        this._registration_client.disconnect((err1?: Error) => {
+                            this._registration_client = null;
+                            debugLog("#######", !!err1);
+                            outer_callback(err);
+                        });
+                        return;
+                    }
                 }
+                outer_callback();
             }
         );
     }
 
     public _trigger_next() {
         assert(!this._registrationTimerId);
+        assert(this.state === RegisterServerManagerStatus.WAITING);
         // from spec 1.04 part 4:
         // The registration process is designed to be platform independent, robust and able to minimize
         // problems created by configuration errors. For that reason, Servers shall register themselves more
@@ -555,7 +562,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         }, this.timeout);
     }
 
-    public stop(outer_callback: ErrorCallback) {
+    public stop(callback: ErrorCallback) {
         debugLog("RegisterServerManager#stop");
 
         if (this._registrationTimerId) {
@@ -564,23 +571,18 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             this._registrationTimerId = null;
         }
 
-        this._cancel_pending_client_if_any((err?: Error | null) => {
+        this._cancel_pending_client_if_any(() => {
             debugLog("RegisterServerManager#stop  _cancel_pending_client_if_any done ", this.state);
 
             if (!this.selectedEndpoint || this.state === RegisterServerManagerStatus.INACTIVE) {
                 this.state = RegisterServerManagerStatus.INACTIVE;
                 assert(this._registrationTimerId === null);
-                return outer_callback();
-            }
-
-            if (err) {
-                this._setState(RegisterServerManagerStatus.INACTIVE);
-                return outer_callback(err);
+                return callback();
             }
             this._registerServer(false, () => {
                 this._setState(RegisterServerManagerStatus.INACTIVE);
                 this._emitEvent("serverUnregistered");
-                outer_callback(err!);
+                callback();
             });
         });
     }
@@ -615,7 +617,21 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
 
         server.serverCertificateManager.referenceCounter++;
 
-        const applicationName: string| undefined = coerceLocalizedText(server.serverInfo.applicationName!)?.text || undefined;
+        const applicationName: string | undefined = coerceLocalizedText(server.serverInfo.applicationName!)?.text || undefined;
+
+        const theStatus = isOnline ? RegisterServerManagerStatus.REGISTERING : RegisterServerManagerStatus.UNREGISTERING;
+
+        if (theStatus === this.state) {
+            warningLog(`Warning the server is already in the ${RegisterServerManagerStatus[theStatus]} state`);
+            return outer_callback();
+        }
+        assert(this.state === RegisterServerManagerStatus.INITIALIZING || this.state === RegisterServerManagerStatus.WAITING);
+        
+        this._setState(theStatus);
+
+        if (this._registration_client) {
+            warningLog(`Warning there is already a registering/unregistering task taking place:  ${RegisterServerManagerStatus[this.state]} state`);
+        }
 
         const options: OPCUAClientBaseOptions = {
             securityMode: selectedEndpoint.securityMode,
@@ -633,17 +649,16 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
 
             applicationUri: server.serverInfo.applicationUri!,
 
-            connectionStrategy: no_reconnect_connectivity_strategy
+            connectionStrategy: no_reconnect_connectivity_strategy,
+
+            clientName: "server client to LDS " + RegisterServerManagerStatus[theStatus],
         };
 
         const client = OPCUAClientBase.create(options) as ClientBaseEx;
 
         const tmp = this._serverEndpoints;
         client._serverEndpoints = tmp;
-        (server as any)._registration_client = client;
-
-        const theStatus = isOnline ? RegisterServerManagerStatus.REGISTERING : RegisterServerManagerStatus.UNREGISTERING;
-        this._setState(theStatus);
+        this._registration_client = client;
 
         debugLog("                      lds endpoint uri : ", selectedEndpoint.endpointUrl);
         debugLog("                      securityMode     : ", MessageSecurityMode[selectedEndpoint.securityMode]);
@@ -659,11 +674,11 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                             debugLog("RegisterServerManager#_registerServer connection to client has failed");
                             debugLog(
                                 "RegisterServerManager#_registerServer  " +
-                                    "=> please check that you server certificate is trusted by the LDS"
+                                "=> please check that you server certificate is trusted by the LDS"
                             );
                             warningLog(
                                 "RegisterServer to the LDS  has failed during secure connection  " +
-                                    "=> please check that you server certificate is trusted by the LDS.",
+                                "=> please check that you server certificate is trusted by the LDS.",
                                 "\nerr: " + err.message,
                                 "\nLDS endpoint    :",
                                 selectedEndpoint?.endpointUrl!,
@@ -674,70 +689,44 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
                             );
                             // xx debugLog(options);
                             client.disconnect(() => {
+                                this._registration_client = null;
                                 debugLog("RegisterServerManager#_registerServer client disconnected");
-                                callback(err);
+                                callback(/* intentionally no error propagation*/);
                             });
-
-                            //     if (false) {
-                            //
-                            //         // try anonymous connection then
-                            //         const options = {
-                            //             securityMode: MessageSecurityMode.None,
-                            //             securityPolicy: SecurityPolicy.None,
-                            //             serverCertificate: selectedEndpoint.serverCertificate,
-                            //             certificateFile: server.certificateFile,
-                            //             privateKeyFile: server.privateKeyFile
-                            //         };
-                            //         debugLog("RegisterServerManager#_registerServer trying with no security");
-                            //
-                            //         client = OPCUAClientBase.create(options);
-                            //         client._serverEndpoints = tmp;
-                            //         server._registration_client = client;
-                            //
-                            //         client.connect(selectedEndpoint.endpointUrl, function (err) {
-                            //
-                            //             if (err) {
-                            //                 console.log(" cannot register server to discovery server " +
-                            //                              self.discoveryServerEndpointUrl);
-                            //                 console.log("   " + err.message);
-                            //                 console.log(" make sure discovery server is up and running.");
-                            //                 console.log(" also, make sure that discovery server is accepting
-                            //                      and trusting server  certificate.");
-                            //                 console.log(" endpoint  = ", selectedEndpoint.toString());
-                            //                 console.log(" certificateFile ", server.certificateFile);
-                            //                 console.log("privateKeyFile   ", server.privateKeyFile);
-                            //                 client.disconnect(function () {
-                            //                     callback(err);
-                            //                 });
-                            //                 return;
-                            //             }
-                            //             return callback();
-                            //         });
-                            //         }
                         } else {
                             callback();
                         }
                     });
                 },
                 (callback: ErrorCallback) => {
+                    if (!this._registration_client) { callback(); return; }
                     sendRegisterServerRequest(this.server!, client as ClientBaseEx, isOnline, (err?: Error | null) => {
-                        callback(err!);
+                        callback(/* intentionally no error propagation*/);
                     });
                 },
                 // close_connection_with_lds
                 (callback: ErrorCallback) => {
+                    if (!this._registration_client) { callback(); return; }
                     client.disconnect(callback);
                 }
             ],
             (err?: Error | null) => {
-                debugLog("RegisterServerManager#_registerServer end (isOnline", isOnline, ")");
-                (server as any)._registration_client = null;
-                outer_callback(err!);
+                if (!this._registration_client) {
+                    debugLog("RegisterServerManager#_registerServer end (isOnline", isOnline, ") has been interrupted");
+                    outer_callback();
+                    return;
+                }
+                this._registration_client.disconnect(() => {
+                    debugLog("RegisterServerManager#_registerServer end (isOnline", isOnline, ")");
+                    this._registration_client = null;
+                    outer_callback(err!);
+                });
+
             }
         );
     }
 
-    private _cancel_pending_client_if_any(callback: (err?: Error) => void) {
+    private _cancel_pending_client_if_any(callback: () => void) {
         debugLog("RegisterServerManager#_cancel_pending_client_if_any");
 
         if (this._registration_client) {
