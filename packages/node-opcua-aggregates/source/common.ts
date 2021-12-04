@@ -1,10 +1,12 @@
 /**
  * @module node-opca-aggregates
  */
-import { SessionContext, UAVariable } from "node-opcua-address-space";
+import { SessionContext, UAVariable, ContinuationPointManager, ContinuationPoint } from "node-opcua-address-space";
+import { NodeClass } from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
 import { HistoryData, HistoryReadResult, ReadRawModifiedDetails } from "node-opcua-service-history";
 import { StatusCode } from "node-opcua-status-code";
+import { coerceNodeId } from "node-opcua-nodeid";
 
 import { getAggregateConfiguration } from "./aggregates";
 import { getInterval, Interval, AggregateConfigurationOptionsEx } from "./interval";
@@ -55,7 +57,6 @@ function processAggregateData(
     setImmediate(() => {
         callback(null, results);
     });
-
 }
 
 export function getAggregateData(
@@ -65,10 +66,9 @@ export function getAggregateData(
     endDate: Date,
     lambda: (interval: Interval, aggregateConfiguration: AggregateConfigurationOptionsEx) => DataValue,
     callback: (err: Error | null, dataValues?: DataValue[]) => void
-) {
-
+): void {
     /* istanbul ignore next */
-    if (!(node.constructor.name === "UAVariable")) {
+    if (node.nodeClass !== NodeClass.Variable) {
         throw new Error("node must be UAVariable");
     }
 
@@ -77,17 +77,30 @@ export function getAggregateData(
         throw new Error("Invalid processing interval, shall be greater than 0");
     }
 
-    const context = new SessionContext();
+    const continuationPointManager = new ContinuationPointManager();
+    const context = new SessionContext({
+        session: {
+            continuationPointManager,
+            getSessionId: () => coerceNodeId("i=0")
+        }
+    });
     const historyReadDetails = new ReadRawModifiedDetails({
         endTime: endDate,
         startTime: startDate,
+        isReadModified: false,
+        numValuesPerNode: 0
+        // returnBounds: true,
     });
     const indexRange = null;
     const dataEncoding = null;
-    const continuationPoint = null;
-    node.historyRead(context, historyReadDetails, indexRange, dataEncoding, continuationPoint,
+    const continuationPoint: ContinuationPoint | null = null;
+    node.historyRead(
+        context,
+        historyReadDetails,
+        indexRange,
+        dataEncoding,
+        { continuationPoint },
         (err: Error | null, result?: HistoryReadResult) => {
-
             /* istanbul ignore next */
             if (err) {
                 return callback(err);
@@ -97,10 +110,11 @@ export function getAggregateData(
             const dataValues = historyData.dataValues || [];
 
             processAggregateData(node, processingInterval, startDate, endDate, dataValues, lambda, callback);
-        });
+        }
+    );
 }
 
-export function interpolateValue(dataValue1: DataValue, dataValue2: DataValue, date: Date) {
+export function interpolateValue(dataValue1: DataValue, dataValue2: DataValue, date: Date): DataValue {
     const t0 = dataValue1.sourceTimestamp!.getTime();
     const t = date.getTime();
     const t1 = dataValue2.sourceTimestamp!.getTime();

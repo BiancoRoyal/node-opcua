@@ -1,3 +1,4 @@
+/* eslint-disable max-statements */
 /**
  * @module node-opcua-address-space
  */
@@ -10,7 +11,7 @@ import { DataTypeIds, ObjectIds, ObjectTypeIds, ReferenceTypeIds, VariableTypeId
 import { NodeClass } from "node-opcua-data-model";
 import { NodeId, resolveNodeId } from "node-opcua-nodeid";
 
-import { AddReferenceOpts, AddressSpace, Folder, UAObject, UAReferenceType, UAVariableType } from "..";
+import { AddReferenceOpts, AddressSpace, UAFolder, UAObject, UAReferenceType, UAVariableType, NamespacePrivate } from "..";
 
 const doDebug = false;
 
@@ -42,8 +43,11 @@ function dumpReferencesHierarchy(_addressSpace: AddressSpace) {
     _dump(references, " ");
 }
 
-export function create_minimalist_address_space_nodeset(addressSpace: AddressSpace) {
-    const namespace0 = addressSpace.registerNamespace("http://opcfoundation.org/UA/");
+export function create_minimalist_address_space_nodeset(addressSpace: AddressSpace): void {
+    const _addressSpace = addressSpace;
+
+    const namespace0 = addressSpace.registerNamespace("http://opcfoundation.org/UA/") as unknown as NamespacePrivate;
+
     assert(namespace0.index === 0);
 
     function addReferenceType(browseName_: string, isAbstract?: boolean, subtypeOf?: UAReferenceType): UAReferenceType {
@@ -69,7 +73,7 @@ export function create_minimalist_address_space_nodeset(addressSpace: AddressSpa
                 referenceType: hasSubType
             });
         }
-        const node = namespace0._createNode(options);
+        const node = namespace0.internalCreateNode(options);
 
         node.propagate_back_references();
 
@@ -129,52 +133,52 @@ export function create_minimalist_address_space_nodeset(addressSpace: AddressSpa
         dumpReferencesHierarchy(addressSpace);
     }
 
-    const baseObjectType = namespace0._createNode({
+    const baseObjectType = namespace0.internalCreateNode({
         browseName: "BaseObjectType",
         isAbstract: true,
         nodeClass: NodeClass.ObjectType,
         nodeId: resolveNodeId(ObjectTypeIds.BaseObjectType)
     });
 
-    const baseVariableType = (namespace0._createNode({
+    const baseVariableType = namespace0.internalCreateNode({
         browseName: "BaseVariableType",
         isAbstract: true,
         nodeClass: NodeClass.VariableType,
         nodeId: resolveNodeId(VariableTypeIds.BaseVariableType)
-    }) as any) as UAVariableType;
+    }) as any as UAVariableType;
 
     const propertyType = namespace0.addVariableType({
         browseName: "PropertyType",
         subtypeOf: baseVariableType
     });
 
-    const baseDataVariableType = (namespace0._createNode({
+    const baseDataVariableType = namespace0.internalCreateNode({
         browseName: "BaseDataVariableType",
         isAbstract: true,
         nodeClass: NodeClass.VariableType,
         nodeId: resolveNodeId(VariableTypeIds.BaseDataVariableType),
         subtypeOf: baseVariableType.nodeId
-    }) as any) as UAVariableType;
+    }) as any as UAVariableType;
 
-    const modellingRule_Optional = (namespace0._createNode({
+    const modellingRule_Optional = namespace0.internalCreateNode({
         browseName: "Optional",
         nodeClass: NodeClass.Object,
         nodeId: resolveNodeId(ObjectIds.ModellingRule_Optional)
-    }) as any) as UAObject;
+    }) as any as UAObject;
 
-    const modellingRule_Mandatory = (namespace0._createNode({
+    const modellingRule_Mandatory = namespace0.internalCreateNode({
         browseName: "Mandatory",
         nodeClass: NodeClass.Object,
         nodeId: resolveNodeId(ObjectIds.ModellingRule_Mandatory)
-    }) as any) as UAObject;
+    }) as any as UAObject;
 
     // add the root folder
     {
-        const rootFolder = (namespace0._createNode({
+        const rootFolder = namespace0.internalCreateNode({
             browseName: "RootFolder",
             nodeClass: NodeClass.Object,
             nodeId: resolveNodeId(ObjectIds.RootFolder)
-        }) as any) as UAObject;
+        }) as any as UAObject;
 
         {
             const objectsFolder = namespace0.addObject({
@@ -192,7 +196,7 @@ export function create_minimalist_address_space_nodeset(addressSpace: AddressSpa
                 organizedBy: rootFolder
             });
             {
-                const doubleDataType = namespace0._createNode({
+                const doubleDataType = namespace0.internalCreateNode({
                     browseName: "Double",
                     nodeClass: NodeClass.DataType,
                     nodeId: resolveNodeId(DataTypeIds.Double),

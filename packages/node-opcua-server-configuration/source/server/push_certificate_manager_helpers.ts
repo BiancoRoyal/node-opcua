@@ -10,13 +10,11 @@ import {
     UAMethod,
     UATrustList,
     UAObject,
-    UAVariable
+    UAVariable,
+    UAServerConfiguration,
+    ISessionContext
 } from "node-opcua-address-space";
-import {
-    checkDebugFlag,
-    make_debugLog,
-    make_warningLog
-} from "node-opcua-debug";
+import { checkDebugFlag, make_debugLog, make_warningLog } from "node-opcua-debug";
 import { NodeId, resolveNodeId } from "node-opcua-nodeid";
 import { StatusCodes } from "node-opcua-status-code";
 import { CallMethodResultOptions } from "node-opcua-types";
@@ -25,19 +23,10 @@ import { AccessRestrictionsFlag, NodeClass } from "node-opcua-data-model";
 import { ByteString, UAString } from "node-opcua-basic-types";
 import { ObjectTypeIds } from "node-opcua-constants";
 
-import {
-    CreateSigningRequestResult,
-    PushCertificateManager
-} from "../push_certificate_manager";
+import { CreateSigningRequestResult, PushCertificateManager } from "../push_certificate_manager";
 
-
-import {
-    installCertificateExpirationAlarm
-} from "./install_CertificateAlarm";
-import {
-    PushCertificateManagerServerImpl,
-    PushCertificateManagerServerOptions
-} from "./push_certificate_manager_server_impl";
+import { installCertificateExpirationAlarm } from "./install_CertificateAlarm";
+import { PushCertificateManagerServerImpl, PushCertificateManagerServerOptions } from "./push_certificate_manager_server_impl";
 import { installAccessRestrictionOnTrustList, promoteTrustList } from "./promote_trust_list";
 import { hasEncryptedChannel, hasExpectedUserAccess } from "./tools";
 import { rolePermissionAdminOnly, rolePermissionRestricted } from "./roles_and_permissions";
@@ -47,12 +36,7 @@ const doDebug = checkDebugFlag("ServerConfiguration");
 const warningLog = make_warningLog("ServerConfiguration");
 const errorLog = debugLog;
 
-
-function expected(
-    variant: Variant | undefined,
-    dataType: DataType,
-    variantArrayType: VariantArrayType
-): boolean {
+function expected(variant: Variant | undefined, dataType: DataType, variantArrayType: VariantArrayType): boolean {
     if (!variant) {
         return false;
     }
@@ -66,8 +50,7 @@ function expected(
 }
 
 function getPushCertificateManager(method: UAMethod): PushCertificateManager | null {
-
-    const serverConfiguration = method.addressSpace.rootFolder.objects.server.serverConfiguration;
+    const serverConfiguration = method.addressSpace.rootFolder.objects.server.getChildByName("ServerConfiguration");
     const serverConfigurationPriv = serverConfiguration as any;
     if (serverConfigurationPriv.$pushCertificateManager) {
         return serverConfigurationPriv.$pushCertificateManager;
@@ -76,13 +59,11 @@ function getPushCertificateManager(method: UAMethod): PushCertificateManager | n
     return null;
 }
 
-
 async function _createSigningRequest(
     this: UAMethod,
     inputArguments: Variant[],
-    context: SessionContext
+    context: ISessionContext
 ): Promise<CallMethodResultOptions> {
-
     const certificateGroupIdVariant = inputArguments[0];
     const certificateTypeIdVariant = inputArguments[1];
     const subjectNameVariant = inputArguments[2];
@@ -90,23 +71,23 @@ async function _createSigningRequest(
     const nonceVariant = inputArguments[4];
 
     if (!expected(certificateGroupIdVariant, DataType.NodeId, VariantArrayType.Scalar)) {
-        warningLog("epecting an NodeId for certificateGroupId - 0");
+        warningLog("expecting an NodeId for certificateGroupId - 0");
         return { statusCode: StatusCodes.BadInvalidArgument };
     }
     if (!expected(certificateTypeIdVariant, DataType.NodeId, VariantArrayType.Scalar)) {
-        warningLog("epecting an NodeId for certificateTypeId - 1");
+        warningLog("expecting an NodeId for certificateTypeId - 1");
         return { statusCode: StatusCodes.BadInvalidArgument };
     }
     if (!expected(subjectNameVariant, DataType.String, VariantArrayType.Scalar)) {
-        warningLog("epecting an String for subjectName - 2");
+        warningLog("expecting an String for subjectName - 2");
         return { statusCode: StatusCodes.BadInvalidArgument };
     }
     if (!expected(regeneratePrivateKeyVariant, DataType.Boolean, VariantArrayType.Scalar)) {
-        warningLog("epecting an Boolean for regeneratePrivateKey - 3");
+        warningLog("expecting an Boolean for regeneratePrivateKey - 3");
         return { statusCode: StatusCodes.BadInvalidArgument };
     }
     if (!expected(nonceVariant, DataType.ByteString, VariantArrayType.Scalar)) {
-        warningLog("epecting an ByteString for nonceVariant - 4");
+        warningLog("expecting an ByteString for nonceVariant - 4");
         return { statusCode: StatusCodes.BadInvalidArgument };
     }
 
@@ -155,9 +136,8 @@ async function _createSigningRequest(
 async function _updateCertificate(
     this: UAMethod,
     inputArguments: Variant[],
-    context: SessionContext
+    context: ISessionContext
 ): Promise<CallMethodResultOptions> {
-
     const certificateGroupId: NodeId = inputArguments[0].value as NodeId;
     const certificateTypeId: NodeId = inputArguments[1].value as NodeId;
     const certificate: Buffer = inputArguments[2].value as Buffer;
@@ -190,7 +170,7 @@ async function _updateCertificate(
         certificate,
         issuerCertificates,
         privateKeyFormat,
-        privateKey,
+        privateKey
     );
 
     // todo   raise a CertificateUpdatedAuditEventType
@@ -213,9 +193,8 @@ async function _updateCertificate(
 async function _getRejectedList(
     this: UAMethod,
     inputArguments: Variant[],
-    context: SessionContext
+    context: ISessionContext
 ): Promise<CallMethodResultOptions> {
-
     if (!hasEncryptedChannel(context)) {
         return { statusCode: StatusCodes.BadSecurityModeInsufficient };
     }
@@ -249,9 +228,8 @@ async function _getRejectedList(
 async function _applyChanges(
     this: UAMethod,
     inputArguments: Variant[],
-    context: SessionContext
+    context: ISessionContext
 ): Promise<CallMethodResultOptions> {
-
     // This Method requires an encrypted channel and that the Client provide credentials with
     // administrative rights on the Server.
     if (!hasEncryptedChannel(context)) {
@@ -269,12 +247,10 @@ async function _applyChanges(
     return { statusCode };
 }
 
-function bindCertificateManager(
-    addressSpace: AddressSpace,
-    options: PushCertificateManagerServerOptions
-) {
-
-    const serverConfiguration = addressSpace.rootFolder.objects.server.serverConfiguration;
+function bindCertificateManager(addressSpace: AddressSpace, options: PushCertificateManagerServerOptions) {
+    const serverConfiguration = addressSpace.rootFolder.objects.server.getChildByName(
+        "ServerConfiguration"
+    )! as UAServerConfiguration;
 
     const defaultApplicationGroup = serverConfiguration.certificateGroups.getComponentByName("DefaultApplicationGroup");
     if (defaultApplicationGroup) {
@@ -292,9 +268,7 @@ function bindCertificateManager(
     }
 }
 
-
 export async function promoteCertificateGroup(certificateGroup: UAObject) {
-
     const trustList = certificateGroup.getChildByName("TrustList") as UATrustList;
     if (trustList) {
         promoteTrustList(trustList);
@@ -305,8 +279,9 @@ export async function installPushCertificateManagement(
     addressSpace: AddressSpace,
     options: PushCertificateManagerServerOptions
 ): Promise<void> {
-
-    const serverConfiguration = addressSpace.rootFolder.objects.server.serverConfiguration;
+    const serverConfiguration = addressSpace.rootFolder.objects.server.getChildByName(
+        "ServerConfiguration"
+    )! as UAServerConfiguration;
 
     const serverConfigurationPriv = serverConfiguration as any;
     if (serverConfigurationPriv.$pushCertificateManager) {
@@ -314,8 +289,9 @@ export async function installPushCertificateManagement(
         return;
     }
 
-    function installAccessRestrictions(serverConfiguration: UAObject) {
+    const accessRestrictionFlag = AccessRestrictionsFlag.SigningRequired | AccessRestrictionsFlag.EncryptionRequired;
 
+    function installAccessRestrictions(serverConfiguration: UAObject) {
         serverConfiguration.setRolePermissions(rolePermissionRestricted);
         serverConfiguration.setAccessRestrictions(AccessRestrictionsFlag.None);
 
@@ -325,22 +301,21 @@ export async function installPushCertificateManagement(
 
         const createSigningRequest = serverConfiguration.getMethodByName("CreateSigningRequest");
         createSigningRequest?.setRolePermissions(rolePermissionAdminOnly);
-        createSigningRequest?.setAccessRestrictions(AccessRestrictionsFlag.SigningRequired | AccessRestrictionsFlag.EncryptionRequired);
+        createSigningRequest?.setAccessRestrictions(accessRestrictionFlag);
 
         const getRejectedList = serverConfiguration.getMethodByName("GetRejectedList");
         getRejectedList?.setRolePermissions(rolePermissionAdminOnly);
-        getRejectedList?.setAccessRestrictions(AccessRestrictionsFlag.SigningRequired | AccessRestrictionsFlag.EncryptionRequired);
+        getRejectedList?.setAccessRestrictions(accessRestrictionFlag);
 
-        const updateCertficate = serverConfiguration.getMethodByName("UpdateCertficate");
-        updateCertficate?.setRolePermissions(rolePermissionAdminOnly);
-        updateCertficate?.setAccessRestrictions(AccessRestrictionsFlag.SigningRequired | AccessRestrictionsFlag.EncryptionRequired);
+        const updateCertificate = serverConfiguration.getMethodByName("UpdateCertificate");
+        updateCertificate?.setRolePermissions(rolePermissionAdminOnly);
+        updateCertificate?.setAccessRestrictions(accessRestrictionFlag);
 
         const certificateGroups = serverConfiguration.getComponentByName("CertificateGroups")!;
         certificateGroups.setRolePermissions(rolePermissionRestricted);
         certificateGroups.setAccessRestrictions(AccessRestrictionsFlag.None);
 
         function installAccessRestrictionOnGroup(group: UAObject) {
-
             const trustList = group.getComponentByName("TrustList")!;
             if (trustList) {
                 installAccessRestrictionOnTrustList(trustList);
@@ -353,9 +328,8 @@ export async function installPushCertificateManagement(
                 installAccessRestrictionOnGroup(group as UAObject);
             }
         }
-
     }
-    installAccessRestrictions(serverConfiguration)
+    installAccessRestrictions(serverConfiguration);
 
     serverConfigurationPriv.$pushCertificateManager = new PushCertificateManagerServerImpl(options);
 
@@ -365,25 +339,24 @@ export async function installPushCertificateManagement(
         value: ["PEM"]
     });
 
-
     function install_method_handle_on_type(addressSpace: AddressSpace): void {
         const serverConfigurationType = addressSpace.findObjectType("ServerConfigurationType")! as any;
         if (serverConfigurationType.createSigningRequest.isBound()) {
             return;
         }
-        serverConfigurationType.createSigningRequest.bindMethod(callbackify(_createSigningRequest));
-        serverConfigurationType.getRejectedList.bindMethod(callbackify(_getRejectedList));
-        serverConfigurationType.updateCertificate.bindMethod(callbackify(_updateCertificate));
-        serverConfigurationType.applyChanges.bindMethod(callbackify(_applyChanges));
+        serverConfigurationType.createSigningRequest.bindMethod(_createSigningRequest);
+        serverConfigurationType.getRejectedList.bindMethod(_getRejectedList);
+        serverConfigurationType.updateCertificate.bindMethod(_updateCertificate);
+        serverConfigurationType.applyChanges.bindMethod(_applyChanges);
     }
 
     install_method_handle_on_type(addressSpace);
 
-    serverConfiguration.createSigningRequest.bindMethod(callbackify(_createSigningRequest));
-    serverConfiguration.updateCertificate.bindMethod(callbackify(_updateCertificate));
-    serverConfiguration.getRejectedList.bindMethod(callbackify(_getRejectedList));
+    serverConfiguration.createSigningRequest.bindMethod(_createSigningRequest);
+    serverConfiguration.updateCertificate.bindMethod(_updateCertificate);
+    serverConfiguration.getRejectedList.bindMethod(_getRejectedList);
     if (serverConfiguration.applyChanges) {
-        serverConfiguration.applyChanges!.bindMethod(callbackify(_applyChanges));
+        serverConfiguration.applyChanges!.bindMethod(_applyChanges);
     }
 
     installCertificateExpirationAlarm(addressSpace);
@@ -395,9 +368,7 @@ export async function installPushCertificateManagement(
     certificateTypes.setValueFromSource({
         dataType: DataType.NodeId,
         arrayType: VariantArrayType.Array,
-        value: [
-            resolveNodeId(ObjectTypeIds.RsaSha256ApplicationCertificateType)
-        ]
+        value: [resolveNodeId(ObjectTypeIds.RsaSha256ApplicationCertificateType)]
     });
     for (const certificateGroup of cg) {
         if (certificateGroup.nodeClass !== NodeClass.Object) {
@@ -407,4 +378,3 @@ export async function installPushCertificateManagement(
     }
     await bindCertificateManager(addressSpace, options);
 }
-

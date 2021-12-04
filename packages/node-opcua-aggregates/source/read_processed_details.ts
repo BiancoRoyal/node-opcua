@@ -1,13 +1,12 @@
 import * as async from "async";
 import { AggregateFunction } from "node-opcua-constants";
-import { SessionContext, ContinuationPoint, UAVariable } from "node-opcua-address-space";
+import { ISessionContext, ContinuationPoint, UAVariable, ContinuationData } from "node-opcua-address-space";
 import { NumericRange } from "node-opcua-numeric-range";
 import { QualifiedNameLike } from "node-opcua-data-model";
 import { CallbackT, StatusCodes } from "node-opcua-status-code";
 import { DataValue } from "node-opcua-data-value";
 import { ObjectIds } from "node-opcua-constants";
 import { NodeId } from "node-opcua-nodeid";
-import { getMinData, getMaxData } from "./minmax";
 import {
     HistoryData,
     HistoryReadResult,
@@ -17,18 +16,66 @@ import {
     ReadRawModifiedDetails
 } from "node-opcua-service-history";
 
+import { getMinData, getMaxData } from "./minmax";
+
 import { getInterpolatedData } from "./interpolate";
 import { getAverageData } from "./average";
 
+function _buildResult(err: Error | null, dataValues: DataValue[] | undefined, callback2: CallbackT<HistoryReadResult>) {
+    if (err) {
+        return callback2(null, new HistoryReadResult({ statusCode: StatusCodes.BadInternalError }));
+    }
+    const result = new HistoryReadResult({
+        historyData: new HistoryData({
+            dataValues
+        }),
+        statusCode: StatusCodes.Good
+    });
+    return callback2(null, result);
+}
+
+function applyAggregate(
+    variable: UAVariable,
+    processingInterval: number,
+    startTime: Date,
+    endTime: Date,
+    aggregateType: NodeId,
+    callback2: CallbackT<HistoryReadResult>
+) {
+    if (!startTime || !endTime) {
+        return _buildResult(new Error("Invalid date time"), undefined, callback2);
+    }
+    const buildResult = (err: Error | null, dataValues: DataValue[] | undefined) => {
+        _buildResult(err, dataValues, callback2);
+    };
+    switch (aggregateType.value) {
+        case AggregateFunction.Minimum:
+            getMinData(variable, processingInterval, startTime, endTime, buildResult);
+            break;
+        case AggregateFunction.Maximum:
+            getMaxData(variable, processingInterval, startTime, endTime, buildResult);
+            break;
+        case AggregateFunction.Interpolative:
+            getInterpolatedData(variable, processingInterval, startTime, endTime, buildResult);
+            break;
+        case AggregateFunction.Average:
+            getAverageData(variable, processingInterval, startTime, endTime, buildResult);
+            break;
+        case AggregateFunction.Count:
+        default:
+            // todo provide correct implementation
+            return callback2(null, new HistoryReadResult({ statusCode: StatusCodes.BadAggregateNotSupported }));
+    }
+}
 export function readProcessedDetails(
     variable: UAVariable,
-    context: SessionContext,
+    context: ISessionContext,
     historyReadDetails: ReadProcessedDetails,
     indexRange: NumericRange | null,
     dataEncoding: QualifiedNameLike | null,
-    continuationPoint: ContinuationPoint | null,
+    continuationData: ContinuationData,
     callback: CallbackT<HistoryReadResult>
-) {
+): void {
     // OPC Unified Architecture, Part 11 27 Release 1.03
     //
     // This structure is used to compute Aggregate values, qualities, and timestamps from data in
@@ -95,45 +142,8 @@ export function readProcessedDetails(
     const processingInterval = historyReadDetails.processingInterval || endTime.getTime() - startTime.getTime();
 
     // tslint:disable-next-line: prefer-for-of
-
-    function applyAggregate(aggregateType: NodeId, callback2: (err: Error | null, result: HistoryReadResult) => void) {
-        function buildResult(err: Error | null, dataValues?: DataValue[]) {
-            if (err) {
-                return callback2(null, new HistoryReadResult({ statusCode: StatusCodes.BadInternalError }));
-            }
-            const result = new HistoryReadResult({
-                historyData: new HistoryData({
-                    dataValues
-                }),
-                statusCode: StatusCodes.Good
-            });
-            return callback2(null, result);
-        }
-
-        if (!startTime || !endTime) {
-            return buildResult(new Error("Invalid date time"));
-        }
-        switch (aggregateType.value) {
-            case AggregateFunction.Minimum:
-                getMinData(variable, processingInterval, startTime, endTime, buildResult);
-                break;
-            case AggregateFunction.Maximum:
-                getMaxData(variable, processingInterval, startTime, endTime, buildResult);
-                break;
-            case AggregateFunction.Interpolative:
-                getInterpolatedData(variable, processingInterval, startTime, endTime, buildResult);
-                break;
-            case AggregateFunction.Average:
-                getAverageData(variable, processingInterval, startTime, endTime, buildResult);
-                break;
-            case AggregateFunction.Count:
-            default:
-                // todo provide correct implementation
-                return callback2(null, new HistoryReadResult({ statusCode: StatusCodes.BadAggregateNotSupported }));
-        }
-    }
     if (historyReadDetails.aggregateType?.length !== 1) {
         return callback(null, new HistoryReadResult({ statusCode: StatusCodes.BadInternalError }));
     }
-    return applyAggregate(aggregateTypes[0], callback);
+    return applyAggregate(variable, processingInterval, startTime, endTime, aggregateTypes[0], callback);
 }

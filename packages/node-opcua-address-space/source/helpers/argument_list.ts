@@ -6,15 +6,15 @@ import * as ec from "node-opcua-basic-types";
 import { BinaryStream, BinaryStreamSizeCalculator, OutputBinaryStream } from "node-opcua-binary-stream";
 import { checkDebugFlag, make_debugLog, make_warningLog } from "node-opcua-debug";
 import * as factories from "node-opcua-factory";
-import { NodeId, resolveNodeId } from "node-opcua-nodeid";
+import { coerceNodeId, NodeId, resolveNodeId } from "node-opcua-nodeid";
 import { Argument } from "node-opcua-service-call";
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
 import { Variant } from "node-opcua-variant";
 import { DataType } from "node-opcua-variant";
 import { VariantArrayType } from "node-opcua-variant";
-
+import { DataTypeIds } from "node-opcua-constants";
 import { NodeClass } from "node-opcua-data-model";
-import { AddressSpace, UAMethod, UAObject } from "../address_space_ts";
+import { IAddressSpace, UAMethod, UAObject } from "node-opcua-address-space-base";
 
 const debugLog = make_debugLog(__filename);
 const warningLog = make_warningLog(__filename);
@@ -23,8 +23,11 @@ const doDebug = checkDebugFlag(__filename);
 function myfindBuiltInType(dataType: DataType): any {
     return factories.findBuiltInType(DataType[dataType]);
 }
-
-export function encode_ArgumentList(definition: any[], args: any, stream: OutputBinaryStream) {
+export interface ArgumentDef {
+    dataType: DataType;
+    valueRank?: undefined | number;
+}
+export function encode_ArgumentList(definition: ArgumentDef[], args: any[], stream: OutputBinaryStream): void {
     assert(definition.length === args.length);
 
     assert(Array.isArray(definition));
@@ -52,7 +55,7 @@ export function encode_ArgumentList(definition: any[], args: any, stream: Output
     }
 }
 
-export function decode_ArgumentList(definition: any[], stream: BinaryStream): any[] {
+export function decode_ArgumentList(definition: ArgumentDef[], stream: BinaryStream): any[] {
     if (!Array.isArray(definition)) {
         throw new Error(
             "This BaseDataType cannot be decoded because it has no definition.\n" +
@@ -79,7 +82,7 @@ export function decode_ArgumentList(definition: any[], stream: BinaryStream): an
     return args;
 }
 
-export function binaryStoreSize_ArgumentList(description: any, args: any) {
+export function binaryStoreSize_ArgumentList(description: ArgumentDef[], args: any[]): number {
     assert(Array.isArray(description));
     assert(Array.isArray(args));
     assert(args.length === description.length);
@@ -90,7 +93,7 @@ export function binaryStoreSize_ArgumentList(description: any, args: any) {
 }
 
 export function getMethodDeclaration_ArgumentList(
-    addressSpace: AddressSpace,
+    addressSpace: IAddressSpace,
     objectId: NodeId,
     methodId: NodeId
 ): { statusCode: StatusCode; methodDeclaration?: UAMethod } {
@@ -130,9 +133,9 @@ export function getMethodDeclaration_ArgumentList(
 /**
  * @private
  */
-function isArgumentValid(addressSpace: AddressSpace, argDefinition: Argument, arg: Variant): boolean {
-    assert(argDefinition.hasOwnProperty("dataType"));
-    assert(argDefinition.hasOwnProperty("valueRank"));
+function isArgumentValid(addressSpace: IAddressSpace, argDefinition: Argument, arg: Variant): boolean {
+    assert(Object.prototype.hasOwnProperty.call(argDefinition, "dataType"));
+    assert(Object.prototype.hasOwnProperty.call(argDefinition, "valueRank"));
 
     const argDefDataType = addressSpace.findDataType(argDefinition.dataType);
     const argDataType = addressSpace.findDataType(resolveNodeId(arg.dataType));
@@ -178,7 +181,17 @@ function isArgumentValid(addressSpace: AddressSpace, argDefinition: Argument, ar
     }
 
     // check that dataType is of the same type (derived )
-    return argDefDataType.isSupertypeOf(argDataType);
+    if (argDefDataType.isSupertypeOf(argDataType)) {
+        return true;
+    }
+    // special case for Enumeration
+    if (arg.dataType === DataType.Int32) {
+        const enumDataType = addressSpace.findDataType(coerceNodeId(DataTypeIds.Enumeration))!;
+        if (argDefDataType.isSupertypeOf(enumDataType)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -189,7 +202,7 @@ function isArgumentValid(addressSpace: AddressSpace, argDefinition: Argument, ar
  * @return statusCode,inputArgumentResults
  */
 export function verifyArguments_ArgumentList(
-    addressSpace: AddressSpace,
+    addressSpace: IAddressSpace,
     methodInputArguments: Argument[],
     inputArguments?: Variant[]
 ): {
@@ -248,17 +261,16 @@ export function verifyArguments_ArgumentList(
 
     return {
         inputArgumentResults,
-        statusCode: 
-            (   
-                inputArgumentResults.includes(StatusCodes.BadTypeMismatch)  ||
-                inputArgumentResults.includes(StatusCodes.BadOutOfRange)
-            ) 
-            ? StatusCodes.BadInvalidArgument
-            : StatusCodes.Good
+        statusCode:
+            inputArgumentResults.includes(StatusCodes.BadTypeMismatch) || inputArgumentResults.includes(StatusCodes.BadOutOfRange)
+                ? StatusCodes.BadInvalidArgument
+                : StatusCodes.Good
     };
 }
 
-export function build_retrieveInputArgumentsDefinition(addressSpace: AddressSpace) {
+export function build_retrieveInputArgumentsDefinition(
+    addressSpace: IAddressSpace
+): (objectId: NodeId, methodId: NodeId) => Argument[] {
     const the_address_space = addressSpace;
     return (objectId: NodeId, methodId: NodeId) => {
         const response = getMethodDeclaration_ArgumentList(the_address_space, objectId, methodId);

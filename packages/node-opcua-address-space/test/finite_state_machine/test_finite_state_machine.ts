@@ -5,22 +5,21 @@ import { LocalizedText } from "node-opcua-data-model";
 import { StatusCodes } from "node-opcua-status-code";
 import { DataType } from "node-opcua-variant";
 
+import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+import { nodesets } from "node-opcua-nodesets";
+import * as sinon from "sinon";
 import {
     AddressSpace,
-    ExclusiveLimitStateMachineType,
-    FiniteStateMachineType,
     promoteToStateMachine,
-    StateMachine,
-    StateMachineType,
+    UAStateMachineEx,
     UAObject,
-    Transition
+    UAStateMachineType,
+    UAFiniteStateMachineType
 } from "../..";
 import { generateAddressSpace } from "../../nodeJS";
 
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
-let debugLog = make_debugLog("TEST");
+const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
-
 
 // make sure extra error checking is made on object constructions
 // tslint:disable-next-line:no-var-requires
@@ -45,7 +44,7 @@ describe("Testing Finite State Machine", () => {
     });
 
     it("finite state machine should have expected mandatory and optional fields", async () => {
-        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as StateMachineType;
+        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as UAStateMachineType;
 
         stateMachineType.currentState.modellingRule!.should.eql("Mandatory");
         stateMachineType.currentState.id.modellingRule!.should.eql("Mandatory");
@@ -63,7 +62,7 @@ describe("Testing Finite State Machine", () => {
     });
 
     it("should instantiate a finite state machine", async () => {
-        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as StateMachineType;
+        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as UAStateMachineType;
 
         const stateMachine = stateMachineType.instantiate({ browseName: "MyStateMachine" });
 
@@ -72,11 +71,11 @@ describe("Testing Finite State Machine", () => {
         stateMachine.currentState.browseName.toString().should.eql("CurrentState");
         stateMachine.currentState.id.browseName.toString().should.eql("Id");
 
-        stateMachine.hasOwnProperty("lastTransition").should.eql(false);
+        Object.prototype.hasOwnProperty.call(stateMachine, "lastTransition").should.eql(false);
     });
 
     it("should instantiate a finite state machine with lastTransition", async () => {
-        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as StateMachineType;
+        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as UAStateMachineType;
 
         const stateMachine = stateMachineType.instantiate({
             browseName: "MyStateMachine",
@@ -91,7 +90,7 @@ describe("Testing Finite State Machine", () => {
     });
 
     it("should bind a finite state machine state variable", async () => {
-        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as StateMachineType;
+        const stateMachineType = addressSpace.findObjectType("StateMachineType")! as UAStateMachineType;
 
         const stateMachine = stateMachineType.instantiate({
             browseName: "MyStateMachine2",
@@ -115,7 +114,7 @@ describe("Testing Finite State Machine", () => {
     //   A Transition is directed and points from one State to another State.
 
     it("should explore FiniteStateMachineType", async () => {
-        const finiteStateMachineType = addressSpace.findObjectType("FiniteStateMachineType")! as FiniteStateMachineType;
+        const finiteStateMachineType = addressSpace.findObjectType("FiniteStateMachineType")! as UAFiniteStateMachineType;
 
         finiteStateMachineType.currentState.modellingRule!.should.eql("Mandatory");
         finiteStateMachineType.currentState.id.modellingRule!.should.eql("Mandatory");
@@ -132,9 +131,7 @@ describe("Testing Finite State Machine", () => {
     });
 
     it("should handle a FiniteStateMachine Type defined in a nodeset.xml file", () => {
-        const exclusiveLimitStateMachineType = addressSpace.findObjectType(
-            "ExclusiveLimitStateMachineType"
-        )! as ExclusiveLimitStateMachineType;
+        const exclusiveLimitStateMachineType = addressSpace.findObjectType("ExclusiveLimitStateMachineType")!;
 
         exclusiveLimitStateMachineType.browseName.toString().should.eql("ExclusiveLimitStateMachineType");
 
@@ -142,7 +139,7 @@ describe("Testing Finite State Machine", () => {
 
         const myStateMachine = exclusiveLimitStateMachineType.instantiate({
             browseName: "MyStateMachine"
-        });
+        }) as UAStateMachineEx;
         if (doDebug) {
             debugLog(myStateMachine.toString());
         }
@@ -219,7 +216,7 @@ describe("Testing Finite State Machine", () => {
         const myFiniteStateMachine = namespace.addObjectType({
             browseName: "MyFiniteStateMachine",
             subtypeOf: "FiniteStateMachineType"
-        }) as FiniteStateMachineType;
+        }) as UAFiniteStateMachineType;
 
         // The AnalyserDevice is in its power-up sequence and cannot perform any other task.
         namespace.addState(myFiniteStateMachine, "Powerup", 100, true);
@@ -270,9 +267,6 @@ describe("Testing Finite State Machine", () => {
     });
 });
 
-import { nodesets } from "node-opcua-nodesets";
-import * as sinon from "sinon";
-
 describe("FiniteStateMachine with Multiple transition from one state to an other", () => {
     // some state machine may have multiple transition from one state to the other
     // this is the case in the VisionStateMachine of the MachineVision nodeset
@@ -304,7 +298,7 @@ describe("FiniteStateMachine with Multiple transition from one state to an other
         // resultManagement: UAResultManagement;
         // safetyStateManagement: UASafetyStateManagement;
         // diagnosticLevel: UAVariableT<number, DataType.UInt32>;
-        visionStateMachine: StateMachine;
+        visionStateMachine: UAStateMachineEx;
         // systemState: UAVariable;
     }
     let visionSystem: UAVisionSystem;
@@ -360,7 +354,7 @@ describe("FiniteStateMachine with Multiple transition from one state to an other
         captureConsoleLog();
         visionSystem.visionStateMachine.setState(
             "Preoperational",
-            (possibleTransitions: Transition[]) => possibleTransitions.find((t) => t.browseName.toString().match(/Auto/)) || null
+            (possibleTransitions) => possibleTransitions.find((t) => t.browseName.toString().match(/Auto/)) || null
         );
         const output = unCaptureConsoleLog();
 

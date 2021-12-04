@@ -1,17 +1,11 @@
 /**
  * @module node-opcua-secure-channel
  */
-// tslint:disable:variable-name
-// tslint:disable:no-empty
-// tslint:disable:max-line-length
-// tslint:disable:no-shadowed-variable
-// tslint:disable:no-var-requires
-
-import * as chalk from "chalk";
 import * as crypto from "crypto";
 import { EventEmitter } from "events";
 import { Socket } from "net";
-import { callbackify, promisify } from "util";
+import { callbackify } from "util";
+import * as chalk from "chalk";
 
 import { assert } from "node-opcua-assert";
 import {
@@ -39,6 +33,9 @@ import { ServerTCP_transport } from "node-opcua-transport";
 import { get_clock_tick, timestamp } from "node-opcua-utils";
 import { Callback2, ErrorCallback } from "node-opcua-status-code";
 
+import { EndpointDescription } from "node-opcua-service-endpoints";
+import { ICertificateManager } from "node-opcua-certificate-manager";
+import { ObjectRegistry } from "node-opcua-object-registry";
 import { SecureMessageChunkManagerOptions, SecurityHeader } from "../secure_message_chunk_manager";
 
 import { getThumbprint, ICertificateKeyPairProvider, Request, Response } from "../common";
@@ -53,7 +50,6 @@ import {
     SecurityPolicy
 } from "../security_policy";
 
-import { EndpointDescription } from "node-opcua-service-endpoints";
 import {
     AsymmetricAlgorithmSecurityHeader,
     OpenSecureChannelRequest,
@@ -62,9 +58,6 @@ import {
     ServiceFault
 } from "../services";
 
-import { ICertificateManager } from "node-opcua-certificate-manager";
-
-import { ObjectRegistry } from "node-opcua-object-registry";
 import {
     doPerfMonitoring,
     doTraceServerMessage,
@@ -101,7 +94,7 @@ export interface ServerSecureChannelParent extends ICertificateKeyPairProvider {
     ): EndpointDescription | null;
 }
 
-export interface SeverSecureChannelLayerOptions {
+export interface ServerSecureChannelLayerOptions {
     parent: ServerSecureChannelParent;
     /**
      * timeout in milliseconds [default = 30000]
@@ -136,6 +129,8 @@ function isValidSecurityPolicy(securityPolicy: SecurityPolicy) {
         case SecurityPolicy.Basic128Rsa15:
         case SecurityPolicy.Basic256:
         case SecurityPolicy.Basic256Sha256:
+        case SecurityPolicy.Aes128_Sha256_RsaOaep:
+        case SecurityPolicy.Aes256_Sha256_RsaPss:
             return StatusCodes.Good;
         default:
             return StatusCodes.BadSecurityPolicyRejected;
@@ -155,13 +150,20 @@ export function nonceAlreadyBeenUsed(nonce?: Buffer): boolean {
         return false;
     }
     const hash = nonce.toString("base64");
-    if (g_alreadyUsedNonce.hasOwnProperty(hash)) {
+    if (Object.prototype.hasOwnProperty.call(g_alreadyUsedNonce, hash)) {
         return true;
     }
     g_alreadyUsedNonce[hash] = {
         time: new Date()
     };
     return false;
+}
+
+export interface IServerSessionBase {
+    sessionTimeout: number;
+    sessionName: string;
+    clientLastContactTime: number;
+    status: string;
 }
 
 /**
@@ -171,46 +173,46 @@ export function nonceAlreadyBeenUsed(nonce?: Buffer): boolean {
  * @uses MessageChunker
  */
 export class ServerSecureChannelLayer extends EventEmitter {
-    public static throttleTime: number = 100;
+    public static throttleTime = 100;
 
-    private static g_counter: number = 0;
+    private static g_counter = 0;
     private _counter: number = ServerSecureChannelLayer.g_counter++;
 
-    public get securityTokenCount() {
+    public get securityTokenCount(): number {
         assert(typeof this.lastTokenId === "number");
         return this.lastTokenId;
     }
 
-    public get remoteAddress() {
+    public get remoteAddress(): string {
         return this._remoteAddress;
     }
 
-    public get remotePort() {
+    public get remotePort(): number {
         return this._remotePort;
     }
 
     /**
      *
      */
-    public get aborted() {
+    public get aborted(): boolean {
         return this._abort_has_been_called;
     }
 
     /**
      * the number of bytes read so far by this channel
      */
-    public get bytesRead() {
+    public get bytesRead(): number {
         return this.transport ? this.transport.bytesRead : 0;
     }
 
     /**
      * the number of bytes written so far by this channel
      */
-    public get bytesWritten() {
+    public get bytesWritten(): number {
         return this.transport ? this.transport.bytesWritten : 0;
     }
 
-    public get transactionsCount() {
+    public get transactionsCount(): number {
         return this._transactionsCount;
     }
 
@@ -218,7 +220,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
      * true when the secure channel has been opened successfully
      *
      */
-    public get isOpened() {
+    public get isOpened(): boolean {
         return !!this.clientCertificate;
     }
 
@@ -243,7 +245,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
     public static registry = new ObjectRegistry({});
     public _on_response: ((msgType: string, response: Response, message: Message) => void) | null;
-    public sessionTokens: any;
+    public sessionTokens: { [key: string]: IServerSessionBase };
     public channelId: number | null;
     public timeout: number;
     public readonly messageBuilder: MessageBuilder;
@@ -295,7 +297,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
     private __verifId: any;
     private _transport_socket_close_listener?: any;
 
-    public constructor(options: SeverSecureChannelLayerOptions) {
+    public constructor(options: ServerSecureChannelLayerOptions) {
         super();
 
         this._on_response = null;
@@ -391,7 +393,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         // xx #422 self.setMaxListeners(200); // increase the number of max listener
     }
 
-    public dispose() {
+    public dispose(): void {
         debugLog("ServerSecureChannelLayer#dispose");
         if (this.timeoutId) {
             clearTimeout(this.timeoutId);
@@ -421,11 +423,11 @@ export class ServerSecureChannelLayer extends EventEmitter {
         }
         this.channelId = 0xdeadbeef;
         this.timeoutId = null;
-        this.sessionTokens = null;
+        this.sessionTokens = {};
         this.removeAllListeners();
     }
 
-    public abruptlyInterrupt() {
+    public abruptlyInterrupt(): void {
         const clientSocket = this.transport._socket;
         if (clientSocket) {
             clientSocket.end();
@@ -619,7 +621,12 @@ export class ServerSecureChannelLayer extends EventEmitter {
         );
     }
 
-    public send_fatal_error_and_abort(statusCode: StatusCode, description: string, message: Message, callback: ErrorCallback) {
+    public send_fatal_error_and_abort(
+        statusCode: StatusCode,
+        description: string,
+        message: Message,
+        callback: ErrorCallback
+    ): void {
         this.transport.abortWithError(statusCode, description, () => {
             this.close(() => {
                 callback(new Error(description + " statusCode = " + statusCode.toString()));
@@ -630,9 +637,11 @@ export class ServerSecureChannelLayer extends EventEmitter {
     public getRemoteIPAddress(): string {
         return (this.transport?._socket as Socket)?.remoteAddress || "";
     }
+
     public getRemotePort(): number {
         return (this.transport?._socket as Socket)?.remotePort || 0;
     }
+
     public getRemoteFamily(): string {
         return (this.transport?._socket as Socket)?.remoteFamily || "";
     }
@@ -645,7 +654,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
      * @async
      * @param callback
      */
-    public close(callback?: ErrorCallback) {
+    public close(callback?: ErrorCallback): void {
         if (!this.transport) {
             if (typeof callback === "function") {
                 callback();
@@ -670,7 +679,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         return endpoint_desc !== null;
     }
 
-    public _rememberClientAddressAndPort() {
+    public _rememberClientAddressAndPort(): void {
         if (this.transport && this.transport._socket) {
             this._remoteAddress = this.transport._socket.remoteAddress || "";
             this._remotePort = this.transport._socket.remotePort || 0;
@@ -838,6 +847,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         const securityPolicyStatus: StatusCode = isValidSecurityPolicy(securityPolicy);
         if (securityPolicyStatus !== StatusCodes.Good) {
             description = " Unsupported securityPolicyUri " + asymmetricSecurityHeader.securityPolicyUri;
+            warningLog("BadSecurityPolicyRejected: Unsupported securityPolicyUri", securityPolicy);
             return this._on_OpenSecureChannelRequestError(securityPolicyStatus, description, message, callback);
         }
         // check certificate
@@ -1116,7 +1126,9 @@ export class ServerSecureChannelLayer extends EventEmitter {
     protected checkCertificateCallback(
         certificate: Certificate | null,
         callback: (err: Error | null, statusCode?: StatusCode) => void
-    ): void {}
+    ): void {
+        /** */
+    }
 
     protected async checkCertificate(certificate: Certificate | null): Promise<StatusCode> {
         if (!certificate) {
@@ -1318,7 +1330,9 @@ export class ServerSecureChannelLayer extends EventEmitter {
             this.close();
         } else if (msgType === "OPN" && request.schema.name === "OpenSecureChannelRequest") {
             // intercept client request to renew security Token
-            this._handle_OpenSecureChannelRequest(StatusCodes.Good, message, (/* err?: Error*/) => {});
+            this._handle_OpenSecureChannelRequest(StatusCodes.Good, message, (/* err?: Error*/) => {
+                /** */
+            });
         } else {
             if (request.schema.name === "CloseSecureChannelRequest") {
                 warningLog("WARNING : RECEIVED a CloseSecureChannelRequest with msgType=", msgType);
@@ -1336,7 +1350,9 @@ export class ServerSecureChannelLayer extends EventEmitter {
                         StatusCodes.BadCommunicationError,
                         "Invalid Channel Id specified " + this.securityToken.channelId,
                         message,
-                        () => {}
+                        () => {
+                            /** */
+                        }
                     );
                 }
 

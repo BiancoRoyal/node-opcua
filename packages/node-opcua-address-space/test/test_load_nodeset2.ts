@@ -8,12 +8,12 @@ import { NodeId, NodeIdType } from "node-opcua-nodeid";
 import { nodesets } from "node-opcua-nodesets";
 import { getFixture } from "node-opcua-test-fixtures";
 import { DataType, Variant, VariantArrayType } from "node-opcua-variant";
-
 import { EnumDefinition } from "node-opcua-types";
+import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+
 import { AddressSpace, UADataType, UAVariable } from "..";
 import { generateAddressSpace } from "../nodeJS";
 
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
 
@@ -205,7 +205,7 @@ describe("testing NodeSet XML file loading", function (this: any) {
         try {
             await generateAddressSpace(addressSpace, xml_files);
         } catch (err) {
-            _err = err;
+            _err = err as Error;
         }
         should.exists(_err);
         _err!.message.should.match(/.*NODE-OPCUA-E.*/);
@@ -393,6 +393,9 @@ describe("testing NodeSet XML file loading", function (this: any) {
         await generateAddressSpace(addressSpace, xml_files);
         const dataType = addressSpace.findDataType("3DFrame", 0)!;
         should.exist(dataType, " expected to find 3DFrame DataType in addressSpace");
+
+        // now instantiate it
+        const frame = addressSpace.constructExtensionObject(dataType, {});
     });
 
     it("VV8 ----------", async () => {

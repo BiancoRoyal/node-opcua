@@ -1,23 +1,22 @@
-import * as should from "should";
 import * as fs from "fs";
-import * as path from "path";
+
+import * as should from "should";
 import sinon = require("sinon");
 
 import { AccessLevelFlag, coerceLocalizedText } from "node-opcua-data-model";
-import { DataType } from "node-opcua-variant";
-
-import { AddressSpace, Namespace, SessionContext, UAObject, UAObjectType } from "../..";
-import { UATwoStateDiscrete } from "../../dist/src/data_access/ua_two_state_discrete";
 import { nodesets } from "node-opcua-nodesets";
 import { getTempFilename } from "node-opcua-debug/nodeJS";
 import { CallbackT, StatusCode, StatusCodes } from "node-opcua-status-code";
-import { DataValue } from "node-opcua-data-value";
+import { DataValue, DataValueT } from "node-opcua-data-value";
 import { getCurrentClock } from "node-opcua-date-time";
-import { generateAddressSpace } from "../../source_nodejs";
+import { DataType } from "node-opcua-variant";
+
+import { AddressSpace, UAObject, UAObjectType, SessionContext, UATwoStateDiscreteEx } from "../..";
+import { generateAddressSpace } from "../../distNodeJS";
 
 const doDebug = false;
 
-export function subtest_two_state_discrete_type(mainTest: { addressSpace: AddressSpace }) {
+export function subtest_two_state_discrete_type(mainTest: { addressSpace: AddressSpace }): void {
     describe("TwoStateDiscreteType", () => {
         let addressSpace: AddressSpace;
         before(() => {
@@ -89,10 +88,10 @@ export function subtest_two_state_discrete_type(mainTest: { addressSpace: Addres
         });
 
         interface MyObjectWithTwoStateDiscreteType extends UAObjectType {
-            myState: UATwoStateDiscrete;
+            myState: UATwoStateDiscreteEx;
         }
         interface MyObjectWithTwoStateDiscrete extends UAObject {
-            myState: UATwoStateDiscrete;
+            myState: UATwoStateDiscreteEx;
         }
         it("ZZ2 should instantiate a DataType containing a TwoStateDiscreteType", async () => {
             const namespace = addressSpace.getOwnNamespace();
@@ -221,7 +220,7 @@ export function subtest_two_state_discrete_type(mainTest: { addressSpace: Addres
                     sourceTimestamp: clock.timestamp,
                     statusCode: StatusCodes.Good,
                     value: { dataType: DataType.Boolean, value: false }
-                })
+                }) as DataValueT<boolean, DataType.Boolean>
             );
 
             myObject.myState.getValueAsString().should.eql("SomeFalseState");
@@ -270,7 +269,7 @@ export function subtest_two_state_discrete_type(mainTest: { addressSpace: Addres
             const myObjectWithTwoStateDiscreteType = addressSpace.findObjectType("MyObjectWithTwoStateDiscreteType", ns);
 
             const o = myObjectWithTwoStateDiscreteType?.instantiate({ browseName: "MyObject" }) as MyObjectWithTwoStateDiscrete;
-            o.myState.constructor.name.should.eql("UATwoStateDiscrete");
+            o.myState.constructor.name.should.eql("UATwoStateDiscreteImpl");
 
             addressSpace.dispose();
         });

@@ -1,8 +1,6 @@
-import { AddressSpace } from "../../source/address_space_ts";
-import { UAVariable } from "../ua_variable";
+import { IAddressSpace, UAVariable } from "node-opcua-address-space-base";
 
-
-export function adjustNamespaceArray(addressSpace: AddressSpace) {
+export function adjustNamespaceArray(addressSpace: IAddressSpace): void {
     const namepsaceArrayVar = addressSpace.findNode("Server_NamespaceArray") as UAVariable;
     if (namepsaceArrayVar) {
         namepsaceArrayVar.setValueFromSource({
@@ -11,4 +9,3 @@ export function adjustNamespaceArray(addressSpace: AddressSpace) {
         });
     }
 }
-

@@ -1,17 +1,5 @@
-import * as should from "should";
 import * as fs from "fs";
-import {
-    AddressSpace,
-    extractEventFields,
-    UAObject,
-    SessionContext,
-    checkWhereClause,
-    RaiseEventData,
-    UAEventType,
-    UAVariable
-} from "../..";
-import { generateAddressSpace } from "../../nodeJS";
-
+import * as should from "should";
 import { nodesets } from "node-opcua-nodesets";
 import {
     EventFilter,
@@ -24,6 +12,18 @@ import {
 import { coerceQualifiedName, AttributeIds } from "node-opcua-data-model";
 import { coerceNodeId, resolveNodeId, NodeId } from "node-opcua-nodeid";
 import { Variant, DataType } from "node-opcua-variant";
+
+import {
+    AddressSpace,
+    extractEventFields,
+    UAObject,
+    SessionContext,
+    checkWhereClause,
+    RaiseEventData,
+    UAEventType,
+    UAVariable
+} from "../..";
+import { generateAddressSpace } from "../../nodeJS";
 
 interface This extends Mocha.Suite {
     variableWithAlarm: UAVariable;
@@ -198,7 +198,7 @@ describe("Testing extract EventField", function (this: Mocha.Suite) {
                         new SimpleAttributeOperand({
                             attributeId: AttributeIds.Value,
                             browsePath: [coerceQualifiedName("EventType")],
-                            typeDefinitionId: NodeId.nullNodeId
+                            typeDefinitionId: new NodeId(),
                         }),
                         new LiteralOperand({
                             value: new Variant({
@@ -220,7 +220,7 @@ describe("Testing extract EventField", function (this: Mocha.Suite) {
         const op = new SimpleAttributeOperand({
             attributeId: AttributeIds.Value,
             browsePath: [coerceQualifiedName("EventType")],
-            typeDefinitionId: NodeId.nullNodeId
+            typeDefinitionId:new NodeId(),
         });
 
         {

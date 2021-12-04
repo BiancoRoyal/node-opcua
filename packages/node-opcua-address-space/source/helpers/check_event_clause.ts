@@ -6,7 +6,7 @@ import { NodeClass } from "node-opcua-data-model";
 import { SimpleAttributeOperand } from "node-opcua-service-filter";
 import { constructBrowsePathFromQualifiedName } from "node-opcua-service-translate-browse-path";
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
-import { BaseNode, UAObjectType } from "../address_space_ts";
+import { BaseNode, UAObjectType } from "node-opcua-address-space-base";
 
 /**
  * @method checkSelectClause
@@ -14,10 +14,7 @@ import { BaseNode, UAObjectType } from "../address_space_ts";
  * @param selectClause
  * @return {Array<StatusCode>}
  */
-export function checkSelectClause(
-  parentNode: BaseNode,
-  selectClause: SimpleAttributeOperand
-): StatusCode {
+export function checkSelectClause(parentNode: BaseNode, selectClause: SimpleAttributeOperand): StatusCode {
     //
     const addressSpace = parentNode.addressSpace;
 
@@ -45,7 +42,6 @@ export function checkSelectClause(
     const browsePath = constructBrowsePathFromQualifiedName(eventTypeNode, selectClause.browsePath);
     const browsePathResult = addressSpace.browsePath(browsePath);
     return browsePathResult.statusCode;
-
 }
 
 /**
@@ -54,9 +50,6 @@ export function checkSelectClause(
  * @param selectClauses
  * @return an array of StatusCode
  */
-export function checkSelectClauses(
-  eventTypeNode: UAObjectType,
-  selectClauses: SimpleAttributeOperand[]
-): StatusCode[] {
+export function checkSelectClauses(eventTypeNode: UAObjectType, selectClauses: SimpleAttributeOperand[]): StatusCode[] {
     return selectClauses.map(checkSelectClause.bind(null, eventTypeNode));
 }

@@ -18,7 +18,7 @@ import "should";
 async function pause(ms: number) {
     return await new Promise((resolve) => setTimeout(resolve, ms));
 }
-const port = 2234;
+const port = 1310;
 const publishingInterval = 50;
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("[CLIENT] monitoredItem group when NotificationChange arrive before CreateMonitoredItemsResponse", () => {
@@ -72,7 +72,7 @@ describe("[CLIENT] monitoredItem group when NotificationChange arrive before Cre
         try {
             await f();
         } catch (err) {
-            _err = err;
+            _err = err as Error;
         }
         ServerSecureChannelLayer.prototype.send_response = old;
         if (_err) throw _err;
@@ -88,7 +88,7 @@ describe("[CLIENT] monitoredItem group when NotificationChange arrive before Cre
         client.on("after_reconnection", () => console.log("after reconnection"));
         client.on("connection_lost", () => console.log("connection lost"));
 
-        client.on("send_request", (request) => {});
+        client.on("send_request", (request) => {/** */});
 
         await client.connect(endpointUrl);
 
@@ -107,7 +107,7 @@ describe("[CLIENT] monitoredItem group when NotificationChange arrive before Cre
         try {
             await f(subscription);
         } catch (err) {
-            _err = err;
+            _err = err as Error;
         }
         await subscription.terminate();
         await session.close();

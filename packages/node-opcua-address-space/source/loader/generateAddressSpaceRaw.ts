@@ -1,9 +1,9 @@
 import * as async from "async";
 import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 import { CallbackT, ErrorCallback } from "node-opcua-status-code";
-import { AddressSpace } from "../../src/address_space";
+import { IAddressSpace } from "node-opcua-address-space-base";
+
 import { adjustNamespaceArray } from "../../src/nodeset_tools/adjust_namespace_array";
-import { AddressSpace as AddressSpacePublic, UAVariable } from "../address_space_ts";
 import { NodeSetLoader } from "./load_nodeset2";
 
 const doDebug = checkDebugFlag(__filename);
@@ -14,16 +14,16 @@ const debugLog = make_debugLog(__filename);
  * @param xmlLoader - a helper function to return the content of the xml file
  */
 export function generateAddressSpaceRawCallback(
-    addressSpace: AddressSpacePublic,
+    addressSpace: IAddressSpace,
     xmlFiles: string | string[],
     xmlLoader: (nodeset2xmlUri: string, callback: CallbackT<string>) => void,
     callback?: ErrorCallback
 ): void {
     // istanbul ignore next
     if (!callback) {
-        throw new Error("Internal Error");
+        throw new Error("Internal Error; :callback missing");
     }
-    const nodesetLoader = new NodeSetLoader(addressSpace as AddressSpace);
+    const nodesetLoader = new NodeSetLoader(addressSpace);
 
     if (!Array.isArray(xmlFiles)) {
         xmlFiles = [xmlFiles];
@@ -50,8 +50,10 @@ export function generateAddressSpaceRawCallback(
                     nodesetLoader.addNodeSet(xmlData!, callback1);
                 },
                 (err?: Error | null) => {
-                    adjustNamespaceArray(addressSpace);
-                    nodesetLoader.terminate(callback!);
+                    nodesetLoader.terminate(() => {
+                        adjustNamespaceArray(addressSpace);
+                        callback!();
+                    });
                 }
             );
         }
@@ -61,7 +63,7 @@ export function generateAddressSpaceRawCallback(
 export type XmlLoaderFunc = (nodeset2xmlUri: string, callback: CallbackT<string>) => void;
 
 export function generateAddressSpaceRaw(
-    addressSpace: AddressSpacePublic,
+    addressSpace: IAddressSpace,
     xmlFiles: string | string[],
     xmlLoader: XmlLoaderFunc
 ): Promise<void> {

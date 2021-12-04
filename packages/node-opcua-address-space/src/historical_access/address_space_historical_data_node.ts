@@ -1,14 +1,16 @@
 /**
  * @module node-opcua-address-space
- * @class AddressSpace
+ * @class IAddressSpace
  */
 // tslint:disable:no-console
 
 import * as chalk from "chalk";
+
 import { assert } from "node-opcua-assert";
 import { AccessLevelFlag, NodeClass, QualifiedNameLike } from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
 import { isMinDate } from "node-opcua-date-time";
+import { UAHistoricalDataConfiguration } from "node-opcua-nodeset-ua";
 import { NumericRange } from "node-opcua-numeric-range";
 import {
     HistoryData,
@@ -20,20 +22,20 @@ import {
 } from "node-opcua-service-history";
 import { StatusCodes } from "node-opcua-status-code";
 import { CallbackT } from "node-opcua-status-code";
-import { ObjectIds } from "node-opcua-constants";
-import { NodeId } from "node-opcua-nodeid";
-
 import { DataType } from "node-opcua-variant";
 import {
-    AddressSpace as AddressSpacePublic,
-    ContinuationPoint,
-    HistoricalDataConfiguration,
+    IAddressSpace,
     IVariableHistorian,
-    IVariableHistorianOptions
-} from "../../source";
-import { AddressSpace } from "../address_space";
-import { SessionContext } from "../session_context";
-import { UAVariable } from "../ua_variable";
+    IVariableHistorianOptions,
+    UAVariable,
+    ContinuationData
+} from "node-opcua-address-space-base";
+import { ISessionContext } from "node-opcua-address-space-base";
+
+import { UAVariableImpl } from "../ua_variable_impl";
+import { AddressSpace } from "../../source/address_space_ts";
+import { AddressSpacePrivate } from "../address_space_private";
+
 // tslint:disable:no-var-requires
 const Dequeue = require("dequeue");
 
@@ -158,18 +160,18 @@ export class VariableHistorian implements IVariableHistorian {
 
         if (this._timeline.length >= this._maxOnlineValues || this._timeline.length === 1) {
             const first = this._timeline.first();
-            this.node._update_startOfOnlineArchive(first.sourceTimestamp);
+            (this.node as UAVariableImpl)._update_startOfOnlineArchive(first.sourceTimestamp);
             // we update the node startOnlineDate
         }
     }
 
     public extractDataValues(
-        historyReadRawModifiedDetails: any,
+        historyReadRawModifiedDetails: ReadRawModifiedDetails,
         maxNumberToExtract: number,
         isReversed: boolean,
         reverseDataValue: boolean,
         callback: CallbackT<DataValue[]>
-    ) {
+    ): void {
         assert(callback instanceof Function);
 
         let dataValues = filter_dequeue(this._timeline, historyReadRawModifiedDetails, maxNumberToExtract, isReversed);
@@ -181,34 +183,32 @@ export class VariableHistorian implements IVariableHistorian {
     }
 }
 
-function _get_startOfOfflineArchive(node: UAVariable) {
+function _get_startOfOfflineArchive(node: UAVariableImpl) {
     if (!node.$historicalDataConfiguration) {
         throw new Error("this variable has no HistoricalDataConfiguration");
     }
-    return node.$historicalDataConfiguration.startOfArchive.readValue();
+    return node.$historicalDataConfiguration.startOfArchive?.readValue();
 }
 
-function _get_startOfArchive(node: UAVariable) {
+function _get_startOfArchive(node: UAVariableImpl) {
     if (!node.$historicalDataConfiguration) {
         throw new Error("this variable has no HistoricalDataConfiguration");
     }
-    return node.$historicalDataConfiguration!.startOfArchive.readValue();
+    return node.$historicalDataConfiguration!.startOfArchive?.readValue();
 }
 
-function _update_startOfArchive(this: UAVariable, newDate: Date): void {
-    const node = this;
-    if (!node.$historicalDataConfiguration) {
+function _update_startOfArchive(this: UAVariableImpl, newDate: Date): void {
+    if (!this.$historicalDataConfiguration) {
         throw new Error("this variable has no HistoricalDataConfiguration");
     }
-    node.$historicalDataConfiguration.startOfArchive.setValueFromSource({
+    this.$historicalDataConfiguration.startOfArchive?.setValueFromSource({
         dataType: DataType.DateTime,
         value: newDate
     });
 }
 
-function _update_startOfOnlineArchive(this: UAVariable, newDate: Date): void {
-    const node = this;
-    if (!node.$historicalDataConfiguration) {
+function _update_startOfOnlineArchive(this: UAVariableImpl, newDate: Date): void {
+    if (!this.$historicalDataConfiguration) {
         throw new Error("this variable has no HistoricalDataConfiguration");
     }
 
@@ -216,50 +216,45 @@ function _update_startOfOnlineArchive(this: UAVariable, newDate: Date): void {
     // in the archive either online or offline.
     // The StartOfOnlineArchive Variable specifies the date of the earliest data
     // in the online archive.
-    node.$historicalDataConfiguration.startOfOnlineArchive.setValueFromSource({
+    this.$historicalDataConfiguration.startOfOnlineArchive?.setValueFromSource({
         dataType: DataType.DateTime,
         value: newDate
     });
 
-    const startOfArchiveDataValue = _get_startOfOfflineArchive(node);
+    const startOfArchiveDataValue = _get_startOfOfflineArchive(this);
     if (
-        startOfArchiveDataValue.statusCode !== StatusCodes.Good ||
-        !startOfArchiveDataValue.value ||
-        !startOfArchiveDataValue.value.value ||
-        startOfArchiveDataValue.value.value.getTime() >= newDate.getTime()
+        startOfArchiveDataValue &&
+        (startOfArchiveDataValue.statusCode !== StatusCodes.Good ||
+            !startOfArchiveDataValue.value ||
+            !startOfArchiveDataValue.value.value ||
+            startOfArchiveDataValue.value.value.getTime() >= newDate.getTime())
     ) {
-        node._update_startOfArchive(newDate);
+        this._update_startOfArchive(newDate);
     }
 }
 
-UAVariable.prototype._update_startOfOnlineArchive = _update_startOfOnlineArchive;
-UAVariable.prototype._update_startOfArchive = _update_startOfArchive;
+UAVariableImpl.prototype._update_startOfOnlineArchive = _update_startOfOnlineArchive;
+UAVariableImpl.prototype._update_startOfArchive = _update_startOfArchive;
 
-function _historyPush(this: UAVariable, newDataValue: DataValue) {
-    const node = this;
-    if (!node.varHistorian) {
+function _historyPush(this: UAVariableImpl, newDataValue: DataValue) {
+    if (!this.varHistorian) {
         throw new Error("this variable has no HistoricalDataConfiguration");
     }
-    assert(node.hasOwnProperty("historizing"), "expecting a historizing attribute on node");
-    if (!node.historizing) {
+    assert(Object.prototype.hasOwnProperty.call(this, "historizing"), "expecting a historizing attribute on node");
+    if (!this.historizing) {
         return; //
     }
-    assert(node.historizing === true);
-    node.varHistorian.push(newDataValue);
-}
-
-function createContinuationPoint(): ContinuationPoint {
-    // todo: improve
-    return Buffer.from("ABCDEF");
+    assert(this.historizing === true);
+    this.varHistorian.push(newDataValue);
 }
 
 function _historyReadModify(
     this: UAVariable,
-    context: SessionContext,
-    historyReadRawModifiedDetails: any,
+    context: ISessionContext,
+    historyReadRawModifiedDetails: ReadRawModifiedDetails,
     indexRange: NumericRange | null,
     dataEncoding: QualifiedNameLike | null,
-    continuationPoint: ContinuationPoint | null,
+    continuationData: ContinuationData,
     callback: CallbackT<HistoryReadResult>
 ) {
     //
@@ -320,7 +315,7 @@ function _historyReadModify(
 }
 
 function _historyReadRawAsync(
-    this: UAVariable,
+    this: UAVariableImpl,
     historyReadRawModifiedDetails: ReadRawModifiedDetails,
     maxNumberToExtract: number,
     isReversed: boolean,
@@ -328,21 +323,18 @@ function _historyReadRawAsync(
     callback: CallbackT<DataValue[]>
 ) {
     assert(callback instanceof Function);
-    const node = this;
-
-    node.varHistorian!.extractDataValues(historyReadRawModifiedDetails, maxNumberToExtract, isReversed, reverseDataValue, callback);
+    this.varHistorian!.extractDataValues(historyReadRawModifiedDetails, maxNumberToExtract, isReversed, reverseDataValue, callback);
 }
 
 function _historyReadRaw(
     this: UAVariable,
-    context: SessionContext,
+    context: ISessionContext,
     historyReadRawModifiedDetails: ReadRawModifiedDetails,
     indexRange: NumericRange | null,
     dataEncoding: QualifiedNameLike | null,
-    continuationPoint: ContinuationPoint | null,
+    continuationData: ContinuationData,
     callback: CallbackT<HistoryReadResult>
 ): void {
-    const node = this;
     assert(historyReadRawModifiedDetails instanceof ReadRawModifiedDetails);
 
     // 6.4.3.2 Read raw functionality
@@ -425,27 +417,20 @@ function _historyReadRaw(
     // If the requested TimestampsToReturn is not supported for a Node, the operation shall return
     // the Bad_TimestampNotSupported StatusCode.
 
-    if (continuationPoint) {
-        const cnt = context.continuationPoints ? context.continuationPoints[continuationPoint.toString("hex")] : null;
-        if (!cnt) {
-            // invalid continuation point
-            const result1 = new HistoryReadResult({
-                historyData: new HistoryData({ dataValues: [] }),
-                statusCode: StatusCodes.BadContinuationPointInvalid
-            });
-            return callback(null, result1);
-        }
-        const dataValues = cnt.dataValues.splice(0, historyReadRawModifiedDetails.numValuesPerNode);
-        if (cnt.dataValues.length > 0) {
-            //
-        } else {
-            context.continuationPoints[continuationPoint.toString("hex")] = null;
-            continuationPoint = null;
-        }
+    const session = context.session;
+    if (!session) {
+        throw new Error("Internal Error: context.session not defined");
+    }
+    if (continuationData.continuationPoint) {
+        const cnt = session.continuationPointManager.getNextHistoryReadRaw(
+            historyReadRawModifiedDetails.numValuesPerNode,
+            continuationData
+        );
+        const { statusCode, values } = cnt;
         const result2 = new HistoryReadResult({
-            continuationPoint: continuationPoint || undefined,
-            historyData: new HistoryData({ dataValues }),
-            statusCode: StatusCodes.Good
+            continuationPoint: cnt.continuationPoint,
+            historyData: new HistoryData({ dataValues: values }),
+            statusCode
         });
         return callback(null, result2);
     }
@@ -493,7 +478,14 @@ function _historyReadRaw(
         }
     }
 
-    node._historyReadRawAsync(
+    /*
+    const maxHistoryContinuationPoints = this.engine.serverCapabilities.maxHistoryContinuationPoints;
+    if (session.continuationPointManager.hasReachedMaximum(maxHistoryContinuationPoints)) {
+        return new HistoryReadResult({ statusCode: StatusCodes.BadNoContinuationPoints });
+    }
+    */
+
+    (this as UAVariableImpl)._historyReadRawAsync(
         historyReadRawModifiedDetails,
         maxNumberToExtract,
         isReversed,
@@ -503,31 +495,15 @@ function _historyReadRaw(
                 return callback(err);
             }
 
-            // now make sure that only the requested number of value is returned
-            if (historyReadRawModifiedDetails.numValuesPerNode >= 1) {
-                if (dataValues.length === 0) {
-                    const result1 = new HistoryReadResult({
-                        historyData: new HistoryData({ dataValues: [] }),
-                        statusCode: StatusCodes.GoodNoData
-                    });
-                    return callback(null, result1);
-                } else {
-                    const remaining = dataValues;
-                    dataValues = remaining.splice(0, historyReadRawModifiedDetails.numValuesPerNode);
-
-                    if (remaining.length > 0 && !isMinDate(historyReadRawModifiedDetails.endTime)) {
-                        continuationPoint = createContinuationPoint();
-                        context.continuationPoints = context.continuationPoints || {};
-                        context.continuationPoints[continuationPoint.toString("hex")] = {
-                            dataValues: remaining
-                        };
-                    }
-                }
-            }
+            const cnt = session.continuationPointManager.registerHistoryReadRaw(
+                historyReadRawModifiedDetails.numValuesPerNode,
+                dataValues,
+                continuationData
+            );
             const result = new HistoryReadResult({
-                continuationPoint: continuationPoint || undefined,
-                historyData: new HistoryData({ dataValues }),
-                statusCode: StatusCodes.Good
+                continuationPoint: cnt.continuationPoint,
+                historyData: new HistoryData({ dataValues: cnt.values }),
+                statusCode: cnt.statusCode
             });
             callback(null, result);
         }
@@ -536,46 +512,44 @@ function _historyReadRaw(
 
 function _historyReadRawModify(
     this: UAVariable,
-    context: SessionContext,
+    context: ISessionContext,
     historyReadRawModifiedDetails: ReadRawModifiedDetails,
     indexRange: NumericRange | null,
     dataEncoding: QualifiedNameLike | null,
-    continuationPoint: ContinuationPoint | null,
+    continuationData: ContinuationData,
     callback: CallbackT<HistoryReadResult>
 ) {
-    const node = this;
+    const node = this as UAVariableImpl;
 
     assert(historyReadRawModifiedDetails instanceof ReadRawModifiedDetails);
 
     if (!historyReadRawModifiedDetails.isReadModified) {
-        return node._historyReadRaw(context, historyReadRawModifiedDetails, indexRange, dataEncoding, continuationPoint, callback);
+        return node._historyReadRaw(context, historyReadRawModifiedDetails, indexRange, dataEncoding, continuationData, callback);
     } else {
         return node._historyReadModify(
             context,
             historyReadRawModifiedDetails,
             indexRange,
             dataEncoding,
-            continuationPoint,
+            continuationData,
             callback
         );
     }
 }
 
 function _historyRead(
-    this: UAVariable,
-    context: SessionContext,
+    this: UAVariableImpl,
+    context: ISessionContext,
     historyReadDetails: ReadRawModifiedDetails | ReadEventDetails | ReadProcessedDetails | ReadAtTimeDetails,
     indexRange: NumericRange | null,
     dataEncoding: QualifiedNameLike | null,
-    continuationPoint: ContinuationPoint | null,
+    continuationData: ContinuationData,
     callback: CallbackT<HistoryReadResult>
 ) {
-    assert(context instanceof SessionContext);
     assert(callback instanceof Function);
-    const node = this;
     if (historyReadDetails instanceof ReadRawModifiedDetails) {
         // note: only ReadRawModifiedDetails supported at this time
-        return node._historyReadRawModify(context, historyReadDetails, indexRange, dataEncoding, continuationPoint, callback);
+        return this._historyReadRawModify(context, historyReadDetails, indexRange, dataEncoding, continuationData, callback);
     } else if (historyReadDetails instanceof ReadEventDetails) {
         // The ReadEventDetails structure is used to read the Events from the history database for the
         // specified time domain for one or more HistoricalEventNodes. The Events are filtered based on
@@ -622,7 +596,7 @@ function _historyRead(
         });
         return callback(null, result);
     } else if (historyReadDetails instanceof ReadProcessedDetails) {
-        const addressSpace = this.addressSpace;
+        const addressSpace = this.addressSpace as AddressSpacePrivate;
         if (!addressSpace._readProcessedDetails) {
             const result = new HistoryReadResult({
                 historyData: new HistoryData({}),
@@ -636,7 +610,7 @@ function _historyRead(
                 historyReadDetails,
                 indexRange,
                 dataEncoding,
-                continuationPoint,
+                continuationData,
                 callback
             );
         }
@@ -679,7 +653,7 @@ function _historyRead(
     }
 }
 
-function on_value_change(this: UAVariable, newDataValue: DataValue): void {
+function on_value_change(this: UAVariableImpl, newDataValue: DataValue): void {
     this._historyPush.call(this, newDataValue);
 }
 
@@ -689,8 +663,12 @@ function on_value_change(this: UAVariable, newDataValue: DataValue): void {
  * @param [options] {Object}
  * @param [options.maxOnlineValues = 1000]
  */
-export function AddressSpace_installHistoricalDataNode(this: AddressSpace, node: UAVariable, options?: IVariableHistorianOptions) {
-    AddressSpacePublic.historizerFactory = AddressSpacePublic.historizerFactory || {
+export function AddressSpace_installHistoricalDataNode(
+    this: IAddressSpace,
+    node: UAVariableImpl,
+    options?: IVariableHistorianOptions
+): void {
+    AddressSpace.historizerFactory = AddressSpace.historizerFactory || {
         create(node1: UAVariable, options1: IVariableHistorianOptions) {
             return new VariableHistorian(node1, options1);
         }
@@ -710,7 +688,7 @@ export function AddressSpace_installHistoricalDataNode(this: AddressSpace, node:
     node._historyReadRaw = _historyReadRaw;
     node._historyReadRawAsync = _historyReadRawAsync;
 
-    node.varHistorian = (options as any).historian || AddressSpacePublic.historizerFactory.create(node, options);
+    node.varHistorian = (options as any).historian || AddressSpace.historizerFactory.create(node, options);
 
     const historicalDataConfigurationType = addressSpace.findObjectType("HistoricalDataConfigurationType");
     if (!historicalDataConfigurationType) {
@@ -720,7 +698,7 @@ export function AddressSpace_installHistoricalDataNode(this: AddressSpace, node:
 
     // tslint:disable:no-bitwise
     node.accessLevel = node.accessLevel | AccessLevelFlag.CurrentRead | AccessLevelFlag.HistoryRead;
-    if (node.userAccessLevel!== undefined) {
+    if (node.userAccessLevel !== undefined) {
         node.userAccessLevel = node.userAccessLevel | AccessLevelFlag.CurrentRead | AccessLevelFlag.HistoryRead;
     }
 
@@ -731,7 +709,7 @@ export function AddressSpace_installHistoricalDataNode(this: AddressSpace, node:
     const historicalDataConfiguration = historicalDataConfigurationType.instantiate({
         browseName: { name: "HA Configuration", namespaceIndex: 0 },
         optionals
-    }) as HistoricalDataConfiguration;
+    }) as UAHistoricalDataConfiguration;
 
     // All Historical Configuration Objects shall be referenced using the HasHistoricalConfiguration ReferenceType.
     node.addReference({
@@ -750,18 +728,18 @@ export function AddressSpace_installHistoricalDataNode(this: AddressSpace, node:
 
     // The MaxTimeInterval Variable specifies the maximum interval between data points in the
     // history repository regardless of their value change (see Part 3 for definition of Duration).
-    historicalDataConfiguration.maxTimeInterval.setValueFromSource({ dataType: "Duration", value: 10 * 1000 });
+    historicalDataConfiguration.maxTimeInterval?.setValueFromSource({ dataType: "Duration", value: 10 * 1000 });
 
     // The MinTimeInterval Variable specifies the minimum interval between data points in the
     // history repository regardless of their value change
-    historicalDataConfiguration.minTimeInterval.setValueFromSource({ dataType: "Duration", value: 0.1 * 1000 });
+    historicalDataConfiguration.minTimeInterval?.setValueFromSource({ dataType: "Duration", value: 0.1 * 1000 });
 
     // The StartOfArchive Variable specifies the date before which there is no data in the archive
     //  either online or offline.
 
     // The StartOfOnlineArchive Variable specifies the date of the earliest data in the online archive.
     const startOfOnlineArchive = new Date();
-    historicalDataConfiguration.startOfOnlineArchive.setValueFromSource({
+    historicalDataConfiguration.startOfOnlineArchive?.setValueFromSource({
         dataType: DataType.DateTime,
         value: startOfOnlineArchive
     });

@@ -1,12 +1,22 @@
+/* eslint-disable max-statements */
 /**
  * @module node-opcua-address-space
  */
 import * as chalk from "chalk";
-
-import { assert } from "node-opcua-assert";
 import * as ec from "node-opcua-basic-types";
+import {
+    AddReferenceTypeOptions,
+    BaseNode,
+    CreateNodeOptions,
+    IAddressSpace,
+    INamespace,
+    UADataType,
+    UAVariable,
+    UAVariableType
+} from "node-opcua-address-space-base";
+import { assert, renderError } from "node-opcua-assert";
+import { Int64, isValidGuid, StatusCodes } from "node-opcua-basic-types";
 import { ExtraDataTypeManager, populateDataTypeManager } from "node-opcua-client-dynamic-extension-object";
-import { EnumValueType } from "node-opcua-types";
 import { EUInformation } from "node-opcua-data-access";
 import {
     AccessLevelFlag,
@@ -14,57 +24,55 @@ import {
     makeAccessLevelFlag,
     NodeClass,
     QualifiedName,
-    QualifiedNameLike,
     QualifiedNameOptions,
     stringToQualifiedName
 } from "node-opcua-data-model";
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
 import { ExtensionObject } from "node-opcua-extension-object";
-import { findSimpleType, getStandardDataTypeFactory, DataTypeFactory } from "node-opcua-factory";
+import { DataTypeFactory, findSimpleType, getStandardDataTypeFactory } from "node-opcua-factory";
 import { NodeId, resolveNodeId } from "node-opcua-nodeid";
 import { Argument } from "node-opcua-service-call";
-import { EnumDefinition, Range, StructureDefinition, StructureType, StructureFieldOptions } from "node-opcua-types";
-import { DataType, VariantArrayType, VariantOptions, Variant } from "node-opcua-variant";
-import { ParserLike, ReaderState, ReaderStateParserLike, Xml2Json, XmlAttributes } from "node-opcua-xml2json";
-
+import { CallbackT, ErrorCallback } from "node-opcua-status-code";
+import {
+    EnumDefinition,
+    EnumFieldOptions,
+    EnumValueType,
+    Range,
+    StructureDefinition,
+    StructureFieldOptions,
+    StructureType
+} from "node-opcua-types";
+import { DataType, Variant, VariantArrayType, VariantOptions } from "node-opcua-variant";
 import {
     _definitionParser,
     Definition,
     FragmentClonerParser,
     InternalFragmentClonerReaderState,
-    makeExtensionObjectReader
+    makeExtensionObjectReader,
+    ParserLike,
+    ReaderState,
+    ReaderStateParserLike,
+    Xml2Json,
+    XmlAttributes,
+    SimpleCallback
 } from "node-opcua-xml2json";
-import { CallbackT, ErrorCallback, isValidGuid, StatusCodes } from "node-opcua-basic-types";
 
-import {
-    AddReferenceTypeOptions,
-    AddressSpace as AddressSpacePublic,
-    CreateNodeOptions,
-    Namespace,
-    PseudoSession
-} from "../../source";
-import { AddressSpace } from "../../src/address_space";
 import { AddressSpacePrivate } from "../../src/address_space_private";
-import { BaseNode } from "../../src/base_node";
 import { NamespacePrivate } from "../../src/namespace_private";
-import { UADataType } from "../../src/ua_data_type";
-import { UAVariable } from "../../src/ua_variable";
-import { UAVariableType } from "../../src/ua_variable_type";
-
-import * as PrettyError from "pretty-error";
+import { PseudoSession } from "../pseudo_session";
 import { promoteObjectsAndVariables } from "./namespace_post_step";
-const pe = new PrettyError();
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
+const errorLog = make_errorLog(__filename);
 
-export async function ensureDatatypeExtracted(addressSpace: any): Promise<ExtraDataTypeManager> {
-    const addressSpacePriv: any = addressSpace as any;
+export async function ensureDatatypeExtracted(addressSpace: IAddressSpace): Promise<ExtraDataTypeManager> {
+    const addressSpacePriv: any = addressSpace as AddressSpacePrivate;
     if (!addressSpacePriv.$$extraDataTypeManager) {
         const dataTypeManager = new ExtraDataTypeManager();
 
-        const namespaceArray = addressSpace.getNamespaceArray().map((n: Namespace) => n.namespaceUri);
-        debugLog("Namespace Array = ", namespaceArray.join("\n                   "));
+        const namespaceArray = addressSpace.getNamespaceArray().map((n: INamespace) => n.namespaceUri);
+        debugLog("INamespace Array = ", namespaceArray.join("\n                   "));
         dataTypeManager.setNamespaceArray(namespaceArray);
         addressSpacePriv.$$extraDataTypeManager = dataTypeManager;
 
@@ -76,21 +84,18 @@ export async function ensureDatatypeExtracted(addressSpace: any): Promise<ExtraD
 
         // now extract structure and enumeration from old form if
         const session = new PseudoSession(addressSpace);
-        await populateDataTypeManager(session, dataTypeManager);
+        await populateDataTypeManager(session, dataTypeManager, true);
     }
     return addressSpacePriv.$$extraDataTypeManager;
 }
 
-export function ensureDatatypeExtractedWithCallback(
-    addressSpace: AddressSpacePublic,
-    callback: CallbackT<ExtraDataTypeManager>
-): void {
+export function ensureDatatypeExtractedWithCallback(addressSpace: IAddressSpace, callback: CallbackT<ExtraDataTypeManager>): void {
     ensureDatatypeExtracted(addressSpace)
         .then((result: ExtraDataTypeManager) => callback(null, result))
         .catch((err) => callback(err));
 }
 
-function findDataTypeNode(addressSpace: AddressSpace, encodingNodeId: NodeId): UADataType {
+function findDataTypeNode(addressSpace: IAddressSpace, encodingNodeId: NodeId): UADataType {
     const encodingNode = addressSpace.findNode(encodingNodeId)!;
 
     // istanbul ignore next
@@ -116,7 +121,7 @@ function findDataTypeNode(addressSpace: AddressSpace, encodingNodeId: NodeId): U
 }
 
 async function decodeXmlObject(
-    addressSpace2: AddressSpace,
+    addressSpace2: IAddressSpace,
     xmlEncodingNodeId: NodeId,
     xmlBody: string
 ): Promise<ExtensionObject | null> {
@@ -137,7 +142,7 @@ async function decodeXmlObject(
             if (!name) {
                 return { name: "", fields: [] };
             }
-            return (dataTypeFactory.getStructuredTypeSchema(name) as any) as Definition;
+            return dataTypeFactory.getStructuredTypeSchema(name) as any as Definition;
         }
     };
     const reader = makeExtensionObjectReader(dataTypeName, definitionMap, {});
@@ -155,54 +160,19 @@ async function decodeXmlObject(
     return userDefinedExtensionObject;
 }
 
-function makeEnumDefinition(definitionFields: any[]) {
-    return new EnumDefinition({
-        fields: definitionFields.map((x) => ({
-            description: {
-                text: x.description
-            },
-            name: x.name,
-            value: x.value
-        }))
-    });
-}
-function makeStructureDefinition(name: string, definitionFields: StructureFieldOptions[], isUnion: boolean): StructureDefinition {
-    // Structure = 0,
-    // StructureWithOptionalFields = 1,
-    // Union = 2,
-    const hasOptionalFields = definitionFields.filter((field) => field.isOptional).length > 0;
-
-    const structureType = isUnion
-        ? StructureType.Union
-        : hasOptionalFields
-            ? StructureType.StructureWithOptionalFields
-            : StructureType.Structure;
-
-    const sd = new StructureDefinition({
-        baseDataType: undefined,
-        defaultEncodingId: undefined,
-        fields: definitionFields,
-        structureType
-    });
-
-    return sd;
-}
-
-function __make_back_references(namespace: NamespacePrivate) {
-    for (const node of namespace.nodeIterator()) {
+function __make_back_references(namespace: INamespace) {
+    const namespaceP = namespace as NamespacePrivate;
+    for (const node of namespaceP.nodeIterator()) {
         node.propagate_back_references();
     }
-    for (const node of namespace.nodeIterator()) {
+    for (const node of namespaceP.nodeIterator()) {
         node.install_extra_properties();
     }
 }
 
-/**
- * @method make_back_references
- * @param addressSpace  {AddressSpace}
- */
-function make_back_references(addressSpace: AddressSpace): void {
-    addressSpace.suspendBackReference = false;
+function make_back_references(addressSpace: IAddressSpace): void {
+    const addressSpacePrivate = addressSpace as AddressSpacePrivate;
+    addressSpacePrivate.suspendBackReference = false;
     addressSpace.getNamespaceArray().map(__make_back_references);
 }
 
@@ -216,27 +186,30 @@ function convertAccessLevel(accessLevel?: string | null): AccessLevelFlag {
     return makeAccessLevelFlag(accessLevelN);
 }
 
-type Task = (addressSpace: AddressSpace) => Promise<void>;
+type Task = (addressSpace: IAddressSpace) => Promise<void>;
 
-function makeDefaultVariant2(
-    addressSpace: AddressSpacePublic,
-    dataTypeNode: NodeId,
-    valueRank: number
-): VariantOptions | undefined {
+function makeDefaultVariant2(addressSpace: IAddressSpace, dataTypeNode: NodeId, valueRank: number): VariantOptions | undefined {
     const variant: VariantOptions = { dataType: DataType.Null };
     return variant;
 }
-function makeDefaultVariant(addressSpace: AddressSpacePublic, dataTypeNode: NodeId, valueRank: number): VariantOptions | undefined {
+function makeDefaultVariant(addressSpace: IAddressSpace, dataTypeNode: NodeId, valueRank: number): VariantOptions | undefined {
     let variant: VariantOptions = { dataType: DataType.Null };
 
-    const nodeDataType = addressSpace.findNode(dataTypeNode);
+    const nodeDataType = addressSpace.findNode(dataTypeNode) as UADataType;
     if (nodeDataType) {
-        const dataType = addressSpace.findCorrespondingBasicDataType(dataTypeNode);
-        if (dataType === DataType.ExtensionObject) {
+    
+        const basicDataType = nodeDataType.basicDataType;
+        if (basicDataType === DataType.Variant) {
+            /// we don't now what is the variant
+            return undefined
+        }
+
+        //  addressSpace.findCorrespondingBasicDataType(dataTypeNode);
+        if (basicDataType === DataType.ExtensionObject) {
             // console.log("xxxxxxxxxx ", dataTypeNode.toString(addressSpace as any));
             return { dataType: DataType.ExtensionObject, value: null };
         }
-        const dv = findSimpleType(DataType[dataType]).defaultValue;
+        const dv = findSimpleType(DataType[basicDataType]).defaultValue;
         if (dv === undefined || dv === null) {
             // return
             return { dataType: DataType.Null };
@@ -257,16 +230,16 @@ function makeDefaultVariant(addressSpace: AddressSpacePublic, dataTypeNode: Node
             case -2: // any
             case -1:
                 arrayType = VariantArrayType.Scalar;
-                variant = { dataType, value, arrayType };
+                variant = { dataType: basicDataType, value, arrayType };
                 break;
             case 0: // one or more dimension
             case 1: // one dimension
                 arrayType = VariantArrayType.Array;
-                variant = { dataType, value: [], arrayType };
+                variant = { dataType: basicDataType, value: [], arrayType };
                 break;
             default:
                 arrayType = VariantArrayType.Matrix;
-                variant = { dataType, value: [], arrayType, dimensions: [] };
+                variant = { dataType: basicDataType, value: [], arrayType, dimensions: [] };
                 break;
         }
         // console.log(variant, DataType[dataType], valueRank);
@@ -274,9 +247,8 @@ function makeDefaultVariant(addressSpace: AddressSpacePublic, dataTypeNode: Node
     return variant;
 }
 
-export function makeStuff(addressSpace: AddressSpacePublic) {
-    const addressSpace1 = addressSpace as AddressSpace;
-
+export function makeStuff(addressSpace: IAddressSpace): any {
+    const addressSpace1 = addressSpace as AddressSpacePrivate;
     addressSpace1.suspendBackReference = true;
 
     let postTasks: Task[] = [];
@@ -339,7 +311,7 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
         } // already translated
 
         const namespace = addressSpace1.getNamespace(params.nodeId.namespace);
-        return namespace._createNode(params) as BaseNode;
+        return namespace.internalCreateNode(params) as BaseNode;
     }
 
     function _register_namespace_uri(namespaceUri: string): NamespacePrivate {
@@ -453,8 +425,16 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
             this.obj.browseName = convertQualifiedName(attrs.BrowseName);
             this.obj.eventNotifier = ec.coerceByte(attrs.EventNotifier) || 0;
             this.obj.symbolicName = attrs.SymbolicName || null;
+
+            this.isDraft = attrs.ReleaseStatus === "Draft";
+            this.obj.isDeprecated = attrs.ReleaseStatus === "Deprecated";
         },
         finish(this: any) {
+            if (this.isDraft || this.isDeprecated) {
+                // ignore Draft or Deprecated element
+                debugLog("Ignoring Draft/Deprecated UAObject =", this.obj.browseName.toString());
+                return;
+            }
             _internal_createNode(this.obj);
         },
         parser: {
@@ -548,58 +528,64 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
             this.obj.displayName = "";
             this.obj.description = "";
             this.obj.symbolicName = attrs.SymbolicName;
+
             this.isDraft = attrs.ReleaseStatus === "Draft";
+            this.isDeprecated = attrs.ReleaseStatus === "Deprecated";
+
             this.definitionFields = [];
         },
         finish(this: any) {
-            if (this.isDraft) {
-                // ignore Draft element
-                debugLog("Ignoring Draft dataType =", this.obj.browseName.toString());
+            if (this.isDraft || this.isDeprecated) {
+                // ignore Draft or Deprecated element
+                debugLog("Ignoring Draft/Deprecated dataType =", this.obj.browseName.toString());
                 return;
             }
-            let definitionFields = this.definitionFields;
-            // replace DataType with nodeId
-            definitionFields = definitionFields.map((x: any) => {
+            /*
+            export interface StructureFieldOptions {
+                name?: UAString ; // **
+                description?: (LocalizedTextLike | null); // **
+                dataType?: (NodeIdLike | null);
+                valueRank?: Int32 ;
+                arrayDimensions?: UInt32 [] | null;
+                maxStringLength?: UInt32 ;
+                isOptional?: UABoolean ;
+            }
+            export interface EnumValueTypeOptions {
+                value?: Int64 ;
+                displayName?: (LocalizedTextLike | null);
+                description?: (LocalizedTextLike | null); // **
+            }
+            export interface EnumFieldOptions extends EnumValueTypeOptions {
+                name?: UAString ; // **
+            }
+            */
+
+            const definitionFields = this.definitionFields as StructureFieldOptions[] | EnumFieldOptions[];
+
+            // replace DataType with nodeId, and description to LocalizedText
+            definitionFields.map((x: any) => {
+                if (x.description) {
+                    x.description = { text: x.description };
+                }
+                if (x.displayName) {
+                    x.displayName = { text: x.displayName };
+                }
                 if (x.dataType) {
                     x.dataType = convertToNodeId(x.dataType);
                 }
                 return x;
             });
-
+            this.obj.partialDefinition = definitionFields;
+         
             const dataTypeNode = _internal_createNode(this.obj) as UADataType;
             assert(addressSpace1.findNode(this.obj.nodeId));
             const definitionName = dataTypeNode.browseName.name!;
 
-            let alreadyCalled = false;
-            const processBasicDataType = async (addressSpace2: AddressSpace) => {
-                assert(!alreadyCalled);
-                alreadyCalled = true;
-
-                const enumeration = addressSpace2.findDataType("Enumeration");
-                const structure = addressSpace2.findDataType("Structure");
-                const union = addressSpace2.findDataType("Union");
-
-                // we have a data type from a companion specification
-                // let's see if this data type need to be registered
-                const isEnumeration = enumeration && dataTypeNode.isSupertypeOf(enumeration);
-                const isStructure = structure && dataTypeNode.isSupertypeOf(structure);
-                const isUnion = !!(structure && union && dataTypeNode.isSupertypeOf(union!));
-
-                if (definitionFields.length) {
-                    // remove <namespace>:
-                    const nameWithoutNamespace = definitionName.split(":").slice(-1)[0];
-
-                    if (isStructure /*&& dataTypeNode.nodeId.namespace !== 0*/) {
-                        // note: at this stage, structure definition will be incomplete as we do not know
-                        //       what is the subType yet, encodings are also unknown...
-                        //       structureType may also be inaccurate
-                        debugLog("setting structure $definition for ", definitionName, nameWithoutNamespace);
-                        (dataTypeNode as any).$definition = makeStructureDefinition(definitionName, definitionFields, isUnion);
-                    } else if (isEnumeration /* && dataTypeNode.nodeId.namespace !== 0 */) {
-                        (dataTypeNode as any).$definition = makeEnumDefinition(definitionFields);
-                    }
-                }
-                if (!isEnumeration && !isStructure && this.obj.nodeId.namespace !== 0) {
+            const processBasicDataType = async (addressSpace2: IAddressSpace) => {
+                const isStructure = dataTypeNode.isStructure();
+                const isEnumeration = dataTypeNode.isEnumeration();
+                if (!isEnumeration && !isStructure && dataTypeNode.nodeId.namespace !== 0) {
+                    // add a custom basic type that is not a structure nor a enumeration
                     pendingSimpleTypeToRegister.push({ name: definitionName, dataTypeNodeId: dataTypeNode.nodeId });
                 }
             };
@@ -644,8 +630,8 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
     };
     interface QualifiedNameParserChild {
         parent: {
-            qualifiedName: QualifiedNameOptions
-        },
+            qualifiedName: QualifiedNameOptions;
+        };
         text: string;
     }
     const qualifiedName_parser = {
@@ -665,7 +651,7 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                 NamespaceIndex: {
                     finish(this: QualifiedNameParserChild) {
                         const ns = parseInt(this.text, 10);
-                        const t = _translateNodeId(resolveNodeId(`ns=${ns};i=1`).toString())
+                        const t = _translateNodeId(resolveNodeId(`ns=${ns};i=1`).toString());
                         this.parent.qualifiedName.namespaceIndex = t.namespace;
                     }
                 }
@@ -873,7 +859,7 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                 self.extensionObject = null;
                 self.extensionObjectPojo = null;
 
-                if (!this.parser.hasOwnProperty(elementName)) {
+                if (!Object.prototype.hasOwnProperty.call(this.parser, elementName)) {
                     // treat it as a opaque XML bloc for the time being
                     // until we find the definition of this object, so we know how to interpret the fields
                     this._cloneFragment = new InternalFragmentClonerReaderState();
@@ -924,7 +910,7 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                             debugLog("xxxx ", chalk.yellow(xmlBody));
                         }
                         const postTaskData = self.postTaskData;
-                        const task = async (addressSpace2: AddressSpace) => {
+                        const task = async (addressSpace2: IAddressSpace) => {
                             const extensionObject: ExtensionObject | null = await decodeXmlObject(
                                 addressSpace2,
                                 xmlEncodingNodeId,
@@ -1245,7 +1231,7 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                     if (!data.variant) {
                         data.nodeId = this.parent.parent.obj.nodeId;
                         this.postTaskData = null;
-                        const task = async (addressSpace2: AddressSpace) => {
+                        const task = async (addressSpace2: IAddressSpace) => {
                             data.variant.value = data.postponedExtensionObject;
                             assert(data.nodeId, "expecting a nodeid");
                             const node = addressSpace2.findNode(data.nodeId)!;
@@ -1255,7 +1241,7 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                             }
                             if (node.nodeClass === NodeClass.VariableType) {
                                 const v = node as UAVariableType;
-                                v.value.value = data.variant.value;
+                                (v as any) /*fix me*/.value.value = data.variant.value;
                             }
                         };
                         postTasks3.push(task);
@@ -1285,8 +1271,15 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
 
             this.obj.accessLevel = convertAccessLevel(attrs.AccessLevel);
             this.obj.userAccessLevel = this.obj.accessLevel; // convertAccessLevel(attrs.UserAccessLevel || attrs.AccessLevel);
+
+            this.isDraft = attrs.ReleaseStatus === "Draft";
+            this.isDeprecated = attrs.ReleaseStatus === "Deprecated";
         },
         finish(this: any) {
+            if (this.isDraft || this.isDeprecated) {
+                debugLog("Ignoring Draft/Deprecated UAVariable =", this.obj.browseName.toString());
+                return;
+            }
             /*
             // set default value based on obj data Type
             if (this.obj.value === undefined) {
@@ -1295,10 +1288,11 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                 this.obj.value = makeDefaultVariant(addressSpace, dataTypeNode, valueRank);
             }
             */
+            // eslint-disable-next-line prefer-const
             let variable: UAVariable;
             if (this.obj.value) {
                 const capturedValue = this.obj.value;
-                const task = async (addressSpace2: AddressSpace) => {
+                const task = async (addressSpace2: IAddressSpace) => {
                     if (false && doDebug) {
                         debugLog("1 setting value to ", variable.nodeId.toString(), new Variant(capturedValue).toString());
                     }
@@ -1306,7 +1300,9 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                 };
                 postTaskInitializeVariable.push(task);
             } else {
-                const task = async (addressSpace2: AddressSpace) => {
+                const captureName = this.obj.browseName.toString();
+                const captureNodeId = this.obj.nodeId;
+                const task = async (addressSpace2: IAddressSpace) => {
                     const dataTypeNode = variable.dataType;
                     const valueRank = variable.valueRank;
                     const value = makeDefaultVariant(addressSpace, dataTypeNode, valueRank);
@@ -1361,8 +1357,15 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
 
             this.obj.historizing = false;
             this.obj.nodeId = convertToNodeId(attrs.NodeId) || null;
+
+            this.isDraft = attrs.ReleaseStatus === "Draft";
+            this.isDeprecated = attrs.ReleaseStatus === "Deprecated";
         },
         finish(this: any) {
+            if (this.isDraft || this.isDeprecated) {
+                debugLog("Ignoring Draft/Deprecated UAVariableType =", this.obj.browseName.toString());
+                return;
+            }
             try {
                 _internal_createNode(this.obj);
             } /* istanbul ignore next */ catch (err) {
@@ -1399,8 +1402,15 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
             this.obj.parentNodeId = attrs.ParentNodeId || null;
             this.obj.nodeId = convertToNodeId(attrs.NodeId) || null;
             this.obj.methodDeclarationId = attrs.MethodDeclarationId ? _translateNodeId(attrs.MethodDeclarationId) : null;
+
+            this.isDraft = attrs.ReleaseStatus === "Draft";
+            this.isDeprecated = attrs.ReleaseStatus === "Deprecated";
         },
         finish(this: any) {
+            if (this.isDraft || this.isDeprecated) {
+                debugLog("Ignoring Draft/Deprecated UAMethod =", this.obj.browseName.toString());
+                return;
+            }
             _internal_createNode(this.obj);
         },
         parser: {
@@ -1486,13 +1496,13 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
 
     const parser = new Xml2Json(state_0);
 
-    function terminate(callback: ErrorCallback) {
+    function terminate(callback: SimpleCallback) {
         make_back_references(addressSpace1);
 
         // setting up Server_NamespaceArray
 
-        if (addressSpace.rootFolder?.objects?.server?.namespaceArray) {
-            addressSpace.rootFolder.objects.server.namespaceArray.setValueFromSource({
+        if (addressSpace1.rootFolder?.objects?.server?.namespaceArray) {
+            addressSpace1.rootFolder.objects.server.namespaceArray.setValueFromSource({
                 arrayType: VariantArrayType.Array,
                 dataType: DataType.String,
                 value: addressSpace1.getNamespaceArray().map((ns) => ns.namespaceUri)
@@ -1501,7 +1511,7 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
             if (doDebug) {
                 debugLog(
                     "addressSpace NS = ",
-                    addressSpace.rootFolder.objects.server.namespaceArray.readValue().value.value.join(" ")
+                    addressSpace1.rootFolder.objects.server.namespaceArray.readValue().value.value.join(" ")
                 );
             }
         }
@@ -1516,7 +1526,9 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
                 } catch (err) {
                     // istanbul ignore next
                     // tslint:disable:no-console
-                    console.log(" performPostLoadingTasks Err  => ", err.message, "\n", err);
+                    if (err instanceof Error) {
+                        console.log(" performPostLoadingTasks Err  => ", err.message, "\n", err);
+                    }
                     await task(addressSpace1);
                 }
             }
@@ -1565,11 +1577,11 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
         finalSteps()
             .then(() => callback!())
             .catch((err1: Error) => {
-                console.log("Error ", pe.render(err1));
+                console.log("Error ", renderError(err1));
                 callback!(err1);
             });
     }
-    function addNodeSet(xmlData: string, callback1: ErrorCallback) {
+    function addNodeSet(xmlData: string, callback1: SimpleCallback) {
         _reset_namespace_translation();
         parser.parseString(xmlData, callback1);
     }
@@ -1581,10 +1593,10 @@ export function makeStuff(addressSpace: AddressSpacePublic) {
 }
 export class NodeSetLoader {
     _s: any;
-    constructor(addressSpace: AddressSpace) {
+    constructor(addressSpace: IAddressSpace) {
         this._s = makeStuff(addressSpace);
     }
-    addNodeSet(xmlData: string, callback: ErrorCallback) {
+    addNodeSet(xmlData: string, callback: ErrorCallback): void {
         if (!callback) {
             throw new Error("Expecting callback function");
         }
@@ -1599,7 +1611,7 @@ export class NodeSetLoader {
         });
     }
 
-    terminate(callback: ErrorCallback) {
+    terminate(callback: ErrorCallback): void {
         this._s.terminate(callback);
     }
 }

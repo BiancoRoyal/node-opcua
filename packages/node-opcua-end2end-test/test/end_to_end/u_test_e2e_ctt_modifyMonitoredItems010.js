@@ -4,7 +4,8 @@ const {
     AttributeIds,
     ClientMonitoredItemGroup,
     StatusCodes,
-    ClientSidePublishEngine
+    ClientSidePublishEngine,
+    Subscription
 } = require("node-opcua");
 const { perform_operation_on_session_async } = require("../../test_helpers/perform_operation_on_client_session");
 const sinon = require("sinon");
@@ -14,7 +15,6 @@ const itemsToMonitor1 = [
     { nodeId: "ns=2;s=Static_Scalar_Byte", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Scalar_ByteString", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Scalar_DateTime", attributeId: AttributeIds.Value },
-    { nodeId: "ns=2;s=Static_Scalar_Time", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Scalar_SByte", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Scalar_Int16", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Scalar_UInt16", attributeId: AttributeIds.Value },
@@ -44,7 +44,6 @@ const itemsToMonitor2 = [
     { nodeId: "ns=2;s=Static_Array_Byte", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Array_ByteString", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Array_DateTime", attributeId: AttributeIds.Value },
-    { nodeId: "ns=2;s=Static_Array_Time", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Array_SByte", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Array_Int16", attributeId: AttributeIds.Value },
     { nodeId: "ns=2;s=Static_Array_UInt16", attributeId: AttributeIds.Value },
@@ -203,8 +202,11 @@ module.exports = function(test) {
 
                 dumpNotificationResult();
 
-                subscription_raw_notification_event.getCall(0).args[0].notificationData[0].monitoredItems.length.should.eql(
-                    Math.min(itemsToMonitor.length, 5000));
+                subscription_raw_notification_event
+                    .getCall(0)
+                    .args[0].notificationData[0].monitoredItems.length.should.eql(
+                        Math.min(itemsToMonitor.length, Subscription.maxNotificationPerPublishHighLimit)
+                    );
 
                 subscription_raw_notification_event.resetHistory();
                 subscription_raw_notification_event.callCount.should.eql(0);

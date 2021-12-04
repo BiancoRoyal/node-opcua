@@ -65,8 +65,7 @@ import { makeExpandedNodeId, makeNodeId } from "node-opcua-nodeid";
 import { coerceStatusCode, decodeStatusCode, encodeStatusCode, StatusCodes } from "node-opcua-status-code";
 import { BasicTypeDefinition, BasicTypeDefinitionOptions, FieldCategory, TypeSchemaBase } from "./types";
 
-// tslint:disable:no-empty
-// tslint:enable:no-unused-variable
+// eslint-disable-next-line @typescript-eslint/no-empty-function
 function defaultEncode(value: any, stream: OutputBinaryStream): void {}
 
 function defaultDecode(stream: BinaryStream): any {
@@ -109,6 +108,7 @@ function decodeAny(stream: BinaryStream) {
     assert(false, "type 'Any' cannot be decoded");
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-function
 function encodeNull(value: any, stream: OutputBinaryStream): void {}
 
 function decodeNull(stream: BinaryStream): any {
@@ -272,7 +272,7 @@ const _defaultType: any[] = [
     // Simple  DataTypes
     // ( see OPCUA Part III v1.02 - $5.8.2 )
     // Simple DataTypes are subtypes of the Built-in DataTypes. They are handled on the wire like the
-    // Built-in   DataType, i.e. they cannot be distinguished on the wire from their  Built-in supertypes.
+    // Built-in   DataType, i.e. they cannot be distinguished on the wire from their  Built-in super types.
     // Since they are handled like  Built-in   DataTypes  regarding the encoding they cannot have encodings
     // defined  in the  AddressSpace.  Clients  can read the  DataType  Attribute  of a  Variable  or  VariableType  to
     // identify the  Simple  DataType  of the  Value  Attribute. An example of a  Simple  DataType  is  Duration. It
@@ -306,6 +306,10 @@ const _defaultType: any[] = [
         defaultValue: StatusCodes.Good
     }
 ];
+
+// populate the default type map
+const _defaultTypeMap: Map<string, BasicTypeSchema> = new Map<string, BasicTypeSchema>();
+_defaultType.forEach(registerType);
 
 /**
  * @method registerType
@@ -346,10 +350,6 @@ export function findSimpleType(name: string): BasicTypeDefinition {
     return typeSchema as BasicTypeDefinition;
 }
 
-// populate the default type map
-const _defaultTypeMap: Map<string, BasicTypeSchema> = new Map<string, BasicTypeSchema>();
-_defaultType.forEach(registerType);
-
 export function hasBuiltInType(name: string): boolean {
     return _defaultTypeMap.has(name);
 }
@@ -376,6 +376,6 @@ export function findBuiltInType(dataTypeName: string): BasicTypeDefinition {
     return t;
 }
 
-export function getTypeMap() {
+export function getTypeMap(): Map<string, BasicTypeSchema> {
     return _defaultTypeMap;
 }

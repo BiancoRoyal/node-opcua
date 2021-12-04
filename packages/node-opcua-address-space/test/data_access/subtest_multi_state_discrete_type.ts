@@ -1,14 +1,15 @@
 import * as should from "should";
 
-import { DataValue } from "node-opcua-data-value";
+import { DataValue, DataValueOptionsT, DataValueT } from "node-opcua-data-value";
 import { CallbackT, StatusCode, StatusCodes } from "node-opcua-status-code";
 import { Variant } from "node-opcua-variant";
 import { DataType } from "node-opcua-variant";
-import { AddressSpace, SessionContext, UAMultiStateDiscrete } from "../..";
 import { getCurrentClock } from "node-opcua-date-time";
 import * as sinon from "sinon";
 
-export function subtest_multi_state_discrete_type(mainTest: { addressSpace: AddressSpace }) {
+import { AddressSpace, SessionContext, UAMultiStateDiscrete, UAMultiStateDiscreteEx } from "../..";
+
+export function subtest_multi_state_discrete_type(mainTest: { addressSpace: AddressSpace }): void {
     describe("MultiStateDiscreteType", () => {
         let addressSpace: AddressSpace;
         before(() => {
@@ -27,7 +28,7 @@ export function subtest_multi_state_discrete_type(mainTest: { addressSpace: Addr
             const objectsFolder = addressSpace.findNode("ObjectsFolder")!;
             objectsFolder.browseName.toString().should.eql("Objects");
 
-            const multiStateDiscreteVariable = namespace.addMultiStateDiscrete({
+            const multiStateDiscreteVariable = namespace.addMultiStateDiscrete<number, DataType.UInt32>({
                 browseName: "MyMultiStateVariable",
                 enumStrings: ["Red", "Orange", "Green"],
                 organizedBy: objectsFolder,
@@ -89,8 +90,8 @@ export function subtest_multi_state_discrete_type(mainTest: { addressSpace: Addr
                 enumStrings: ["Red", "Orange", "Green"],
 
                 value: {
-                    timestamped_get: timestamped_get as any,
-                    timestamped_set: timestamped_set as any
+                    timestamped_get,
+                    timestamped_set
                 }
             });
 
@@ -148,7 +149,7 @@ export function subtest_multi_state_discrete_type(mainTest: { addressSpace: Addr
         });
 
         describe("edge case tests", () => {
-            let multiStateDiscreteVariable: UAMultiStateDiscrete;
+            let multiStateDiscreteVariable: UAMultiStateDiscreteEx<number, DataType.UInt32>;
             before(() => {
                 const namespace = addressSpace.getOwnNamespace();
 
@@ -163,7 +164,7 @@ export function subtest_multi_state_discrete_type(mainTest: { addressSpace: Addr
             });
 
             it("writing a value exceeding EnumString length shall return BadOutOfRange", async () => {
-                const dataValue = new DataValue({
+                const dataValue = new DataValueT<number, DataType.UInt32>({
                     value: new Variant({ dataType: DataType.UInt32, value: 100 }) // out of range
                 });
                 const statusCode = await multiStateDiscreteVariable.writeValue(SessionContext.defaultContext, dataValue);
@@ -171,20 +172,23 @@ export function subtest_multi_state_discrete_type(mainTest: { addressSpace: Addr
             });
 
             it("writing a value within EnumString length shall return Good", async () => {
-                const dataValue = new DataValue({
-                    value: new Variant({ dataType: DataType.UInt32, value: 2 }) // OK
+                const dataValue = new DataValueT<number, DataType.UInt32>({
+                    value: { dataType: DataType.UInt32, value: 2 } // OK
                 });
                 const statusCode = await multiStateDiscreteVariable.writeValue(SessionContext.defaultContext, dataValue);
                 statusCode.should.eql(StatusCodes.Good);
             });
             it("writing a value which has not the correct type shall return BadTypeMismatch", async () => {
-                const dataValue = new DataValue({
-                    value: new Variant({
+                const dataValue = new DataValueT<string, DataType.String>({
+                    value: {
                         dataType: DataType.String,
                         value: "2"
-                    }) // OK
+                    } // OK
                 });
-                const statusCode = await multiStateDiscreteVariable.writeValue(SessionContext.defaultContext, dataValue);
+                const statusCode = await multiStateDiscreteVariable.writeValue(
+                    SessionContext.defaultContext,
+                    dataValue as any /* to force wrong value to be sent */
+                );
                 statusCode.should.eql(StatusCodes.BadTypeMismatch);
             });
 

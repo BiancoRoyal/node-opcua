@@ -1,5 +1,5 @@
-const webpack = require("webpack");
 const path = require("path");
+const webpack = require("webpack");
 const nodeExternals = require("webpack-node-externals");
 const babiliWebpackPlugin = require("babili-webpack-plugin");
 const MinifyPlugin = require("babel-minify-webpack-plugin");
@@ -29,18 +29,19 @@ const simple_client = {
         //     "node-opcua": "./node-opcua"
         // }
     },
-    externals: [nodeExternals({
-        //xx whitelist: [/opcua/]
-    }),"node-opcua"],
-
+    externals: [
+        nodeExternals({
+            //xx whitelist: [/opcua/]
+        }),
+        "node-opcua"
+    ],
 
     module: {
         rules: [
             {
                 test: /.*\.js/,
-                loader: 'shebang-loader'
+                loader: "shebang-loader"
             }
-
         ]
     },
     // "spawn-sync", "camelcase", "string-width", "read-pkg-up", "os-locale", "memcpy", "yargs", "ursa", "usage", "require-main-filename"],
@@ -73,4 +74,4 @@ const simple_client = {
     ]
 };
 
-module.exports = [simple_client,];
+module.exports = [simple_client];

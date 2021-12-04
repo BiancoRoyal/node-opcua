@@ -1,9 +1,9 @@
-// tslint:disable: no-console
+/* eslint-disable max-statements */
+/* eslint-disable complexity */
 import * as chalk from "chalk";
 import { timestamp } from "node-opcua-utils";
 import { assert } from "node-opcua-assert";
 
-import { Request, Response } from "./common";
 import {
     BrowseNextRequest,
     BrowseNextResponse,
@@ -22,14 +22,26 @@ import {
     PublishResponse,
     DataChangeNotification,
     EventNotificationList,
-    StatusChangeNotification
+    StatusChangeNotification,
+    OpenSecureChannelRequest,
+    SecurityTokenRequestType,
+    MessageSecurityMode,
+    CreateSessionRequest,
+    CreateSessionResponse,
+    ActivateSessionRequest,
+    AnonymousIdentityToken,
+    UserNameIdentityToken,
+    X509IdentityToken,
+    ActivateSessionResponse,
+    PublishRequest
 } from "node-opcua-types";
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
+import { Request, Response } from "./common";
+import { SecurityPolicy } from ".";
 
 const clientFlag = (process.env?.NODEOPCUADEBUG?.match(/CLIENT{([^}]*)}/) || [])[1] || "";
 const serverFlag = (process.env?.NODEOPCUADEBUG?.match(/SERVER{([^}]*)}/) || [])[1] || "";
 const filter = new RegExp((process.env?.NODEOPCUADEBUG?.match(/FILTER{([^}]*)}/) || [])[1] || ".*");
-
 
 // console.log("serverFlag", serverFlag);
 // console.log("clientFlag", clientFlag);
@@ -38,10 +50,13 @@ export const doTraceRequest = serverFlag.match(/REQUEST/);
 export const doTraceResponse = serverFlag.match(/RESPONSE/);
 export const doPerfMonitoring = serverFlag.match(/PERF/);
 
-///
-export const doTraceClientMessage = clientFlag.match(/TRACE/);
-export const doTraceClientRequestContent = clientFlag.match(/REQUEST/);
-export const doTraceClientResponseContent = clientFlag.match(/RESPONSE/);
+
+// eslint-disable-next-line prefer-const
+export let doTraceClientMessage = clientFlag.match(/TRACE/);
+// eslint-disable-next-line prefer-const
+export let doTraceClientRequestContent = clientFlag.match(/REQUEST/);
+// eslint-disable-next-line prefer-const
+export let doTraceClientResponseContent = clientFlag.match(/RESPONSE/);
 
 export const doTraceStatistics = process.env.NODEOPCUADEBUG && !!process.env.NODEOPCUADEBUG.match("STATS");
 // const doPerfMonitoring = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("PERF") >= 0;
@@ -56,7 +71,7 @@ export interface ServerTransactionStatistics {
 }
 
 // istanbul ignore next
-export function _dump_transaction_statistics(stats?: ServerTransactionStatistics) {
+export function _dump_transaction_statistics(stats?: ServerTransactionStatistics): void {
     if (stats) {
         console.log("                Bytes Read : ", stats.bytesRead);
         console.log("             Bytes Written : ", stats.bytesWritten);
@@ -81,7 +96,7 @@ export interface ClientTransactionStatistics {
     lap_processing_response: number;
 }
 
-export function _dump_client_transaction_statistics(stats: ClientTransactionStatistics) {
+export function _dump_client_transaction_statistics(stats: ClientTransactionStatistics): void {
     function w(str: string | number) {
         return ("                  " + str).substr(-12);
     }
@@ -137,6 +152,24 @@ function __get_extraInfo(req: Response | Request): string {
     if (req instanceof BrowseNextResponse) {
         return " results.length        =" + req.results?.length;
     }
+    if (req instanceof CreateSessionRequest) {
+        return " " + req.sessionName + " to:" + req.requestedSessionTimeout + "ms";
+    }
+    if (req instanceof CreateSessionResponse) {
+        return " " + req.sessionId + " to:" + req.revisedSessionTimeout + "ms";
+    }
+    if (req instanceof ActivateSessionRequest) {
+        if (req.userIdentityToken instanceof AnonymousIdentityToken) {
+            return " Anonymous";
+        } else if (req.userIdentityToken instanceof UserNameIdentityToken) {
+            return " UserName";
+        } else if (req.userIdentityToken instanceof X509IdentityToken) {
+            return " X509";
+        }
+    }
+    if (req instanceof ActivateSessionResponse) {
+        return (req.results || []).map((p) => p.toString()).join(" ");
+    }
     if (req instanceof CreateMonitoredItemsRequest) {
         return " itemsToCreate.length  =" + req.itemsToCreate?.length;
     }
@@ -152,8 +185,22 @@ function __get_extraInfo(req: Response | Request): string {
     if (req instanceof RegisterNodesRequest) {
         return " nodesToRegister.length=" + req.nodesToRegister?.length;
     }
+    if (req instanceof OpenSecureChannelRequest) {
+        return (
+            " " +
+            SecurityTokenRequestType[req.requestType] +
+            " " +
+            MessageSecurityMode[req.securityMode] +
+            " lt:" +
+            req.requestedLifetime +
+            "ms"
+        );
+    }
     if (req instanceof RegisterNodesResponse) {
         return " nodesToRegister.length=" + req.registeredNodeIds?.length;
+    }
+    if (req instanceof PublishRequest) {
+        return " " + req.requestHeader.timeoutHint + "ms";
     }
     if (req instanceof PublishResponse) {
         let t = "";
@@ -173,10 +220,11 @@ function __get_extraInfo(req: Response | Request): string {
                 t = t.replace(/Notification/g, "Nt°");
             }
         }
-        return " " + t + " seqn=" + req.notificationMessage.sequenceNumber;
+        return " " + t + " seq#=" + req.notificationMessage.sequenceNumber;
     }
     return "";
 }
+
 function _get_extraInfo(req: Response | Request): string {
     return __get_extraInfo(req).padEnd(30);
 }
@@ -202,8 +250,8 @@ function statusCodeToString(s: StatusCode): string {
 }
 
 // istanbul ignore next
-export function traceRequestMessage(request: Request, channelId: number, instance: number) {
-    if (doTraceServerMessage ) {
+export function traceRequestMessage(request: Request, channelId: number, instance: number): void {
+    if (doTraceServerMessage) {
         const extra = _get_extraInfo(request);
         const size = evaluateBinarySize(request);
         const requestId = request.requestHeader.requestHandle;
@@ -224,9 +272,9 @@ export function traceRequestMessage(request: Request, channelId: number, instanc
 }
 
 // istanbul ignore next
-export function traceResponseMessage(response: Response, channelId: number, instance: number) {
+export function traceResponseMessage(response: Response, channelId: number, instance: number): void {
     assert(response.responseHeader.requestHandle >= 0);
-    if (doTraceServerMessage ) {
+    if (doTraceServerMessage) {
         const extra = _get_extraInfo(response);
         const size = evaluateBinarySize(response);
         const requestId = response.responseHeader.requestHandle;
@@ -249,7 +297,7 @@ export function traceResponseMessage(response: Response, channelId: number, inst
 
 // istanbul ignore next
 // istanbul ignore next
-export function traceClientRequestMessage(request: Request, channelId: number, instance: number) {
+export function traceClientRequestMessage(request: Request, channelId: number, instance: number): void {
     const extra = _get_extraInfo(request);
     const size = evaluateBinarySize(request);
     const requestId = request.requestHeader.requestHandle;
@@ -264,7 +312,7 @@ export function traceClientRequestMessage(request: Request, channelId: number, i
     );
 }
 
-export function traceClientResponseMessage(response: Response, channelId: number, instance: number) {
+export function traceClientResponseMessage(response: Response, channelId: number, instance: number): void {
     const extra = _get_extraInfo(response);
     const size = evaluateBinarySize(response);
     const requestId = response.responseHeader.requestHandle;

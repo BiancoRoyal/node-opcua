@@ -2,8 +2,8 @@ import { assert } from "node-opcua-assert";
 import { NodeClass, QualifiedName } from "node-opcua-data-model";
 import { makeNodeId, NodeId, NodeIdLike, NodeIdType, resolveNodeId, sameNodeId } from "node-opcua-nodeid";
 
-import { BaseNode as BaseNodePublic, UAReferenceType as UAReferenceTypePublic } from "../source";
-import { Reference } from "./reference";
+import { BaseNode, UAReference, UAReferenceType } from "node-opcua-address-space-base";
+import { getReferenceType } from "./base_node_impl";
 
 export const NamespaceOptions = {
     nodeIdNameSeparator: "-"
@@ -18,8 +18,8 @@ const hasPropertyRefId = resolveNodeId("HasProperty");
 const hasComponentRefId = resolveNodeId("HasComponent");
 const hasEncoding = resolveNodeId("HasEncoding");
 
-function _identifyParentInReference(references: Reference[]): [NodeId, string] | null {
-    const candidates = references.filter((r: Reference) => {
+function _identifyParentInReference(references: UAReference[]): [NodeId, string] | null {
+    const candidates = references.filter((r: UAReference) => {
         return (
             !r.isForward &&
             (sameNodeId(r.referenceType, hasComponentRefId) ||
@@ -39,14 +39,14 @@ function _identifyParentInReference(references: Reference[]): [NodeId, string] |
 }
 
 export interface AddressSpacePartial {
-    findNode(nodeId: NodeIdLike): BaseNodePublic | null;
-    findReferenceType(refType: NodeIdLike, namespaceIndex?: number): UAReferenceTypePublic | null;
+    findNode(nodeId: NodeIdLike): BaseNode | null;
+    findReferenceType(refType: NodeIdLike, namespaceIndex?: number): UAReferenceType | null;
 }
 export interface ConstructNodeIdOptions {
     nodeId?: string | NodeIdLike | null;
     browseName: QualifiedName;
     nodeClass: NodeClass;
-    references?: Reference[];
+    references?: UAReference[];
 }
 export type NodeEntry = [string, number, NodeClass];
 export type NodeEntry1 = [string, number, string /*"Object" | "Variable" etc...*/];
@@ -65,7 +65,7 @@ export class NodeIdManager {
         this.addressSpace = addressSpace;
     }
 
-    public setCache(cache: NodeEntry[]) {
+    public setCache(cache: NodeEntry[]): void {
         this._cache = {};
         this._reverseCache = {};
         for (const [key, value, nodeClass] of cache) {
@@ -114,10 +114,7 @@ export class NodeIdManager {
     public constructNodeId(options: ConstructNodeIdOptions): NodeId {
         function prepareName(browseName: QualifiedName): string {
             assert(browseName instanceof QualifiedName);
-            const m = browseName
-                .name!.toString()
-                .replace(/[ ]/g, "")
-                .replace(/(\<|\>)/g, "");
+            const m = browseName.name!.toString().replace(/[ ]/g, "").replace(/(<|>)/g, "");
             return m;
         }
         let nodeId = options.nodeId;
@@ -191,10 +188,10 @@ export class NodeIdManager {
         for (const ref of options.references) {
             (ref as any)._referenceType = this.addressSpace.findReferenceType(ref.referenceType);
             /* istanbul ignore next */
-            if (!ref._referenceType) {
+            if (!getReferenceType(ref)) {
                 throw new Error("Cannot find referenceType " + JSON.stringify(ref));
             }
-            ref.referenceType = (ref as any)._referenceType.nodeId;
+            (ref as any).referenceType = (ref as any)._referenceType.nodeId;
         }
         // find HasComponent, or has Property reverse
         return _identifyParentInReference(options.references);

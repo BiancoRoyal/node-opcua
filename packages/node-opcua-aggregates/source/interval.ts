@@ -117,7 +117,7 @@ export class Interval {
     /**
      * returns true if a raw data exists at start
      */
-    public hasRawDataAsStart() {
+    public hasRawDataAsStart(): boolean {
         const index = this.index;
         if (index < 0) {
             return false;
@@ -131,15 +131,15 @@ export class Interval {
      * just preceding this interval
      * @returns {*}
      */
-    public beforeStartDataValue(bTreatUncertainAsBad: boolean) {
+    public beforeStartDataValue(bTreatUncertainAsBad: boolean): DataValueWithIndex {
         return _findGoodDataValueBefore(this.dataValues, this.index, bTreatUncertainAsBad);
     }
 
-    public nextStartDataValue(bTreatUncertainAsBad: boolean) {
+    public nextStartDataValue(bTreatUncertainAsBad: boolean): DataValueWithIndex {
         return _findGoodDataValueAfter(this.dataValues, this.index, bTreatUncertainAsBad);
     }
 
-    public toString() {
+    public toString(): string {
         let str = "";
         str += "startTime " + this.startTime.toUTCString() + "\n";
         str += "start     " + this.index + "  ";

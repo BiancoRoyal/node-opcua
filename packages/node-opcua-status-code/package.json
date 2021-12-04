@@ -1,20 +1,22 @@
 {
     "name": "node-opcua-status-code",
-    "version": "2.42.0",
+    "version": "2.56.0",
     "description": "pure nodejs OPCUA SDK - module -status-code",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
         "build": "tsc -b",
+        "lint": "eslint source test",
+        "format": "prettier --write source test",
         "clean": "node -e \"require('rimraf').sync('dist');\"",
         "test": "mocha"
     },
     "dependencies": {
-        "node-opcua-assert": "2.42.0",
-        "node-opcua-constants": "2.42.0"
+        "node-opcua-assert": "2.55.0",
+        "node-opcua-constants": "2.52.0"
     },
     "devDependencies": {
-        "node-opcua-binary-stream": "2.42.0",
+        "node-opcua-binary-stream": "2.55.0",
         "should": "^13.2.3"
     },
     "author": "Etienne Rossignon",

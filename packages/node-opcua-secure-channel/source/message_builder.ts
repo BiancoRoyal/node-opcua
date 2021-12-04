@@ -2,7 +2,6 @@
  * @module node-opcua-secure-channel
  */
 // tslint:disable:variable-name
-// tslint:disable:no-console
 // tslint:disable:max-line-length
 
 import * as chalk from "chalk";
@@ -32,8 +31,9 @@ import {
 } from "node-opcua-service-secure-channel";
 import { decodeStatusCode } from "node-opcua-status-code";
 import { MessageBuilderBase } from "node-opcua-transport";
-
+import { timestamp } from "node-opcua-utils";
 import { SequenceHeader } from "node-opcua-chunkmanager";
+
 import { chooseSecurityHeader, SymmetricAlgorithmSecurityHeader } from "./secure_channel_service";
 
 import { SecurityHeader } from "./secure_message_chunk_manager";
@@ -46,7 +46,6 @@ import {
     getCryptoFactory,
     SecurityPolicy
 } from "./security_policy";
-import { timestamp } from "node-opcua-utils";
 
 const debugLog = make_debugLog(__filename);
 const doDebug = checkDebugFlag(__filename);
@@ -129,7 +128,7 @@ export class MessageBuilder extends MessageBuilderBase {
         this._tokenStack = [];
     }
 
-    public setSecurity(securityMode: MessageSecurityMode, securityPolicy: SecurityPolicy) {
+    public setSecurity(securityMode: MessageSecurityMode, securityPolicy: SecurityPolicy): void {
         assert(this.securityMode === MessageSecurityMode.Invalid, "security already set");
         this.securityPolicy = coerceSecurityPolicy(securityPolicy);
         this.securityMode = coerceMessageSecurityMode(securityMode);
@@ -137,7 +136,7 @@ export class MessageBuilder extends MessageBuilderBase {
         assert(this.securityMode !== MessageSecurityMode.Invalid);
     }
 
-    public dispose() {
+    public dispose(): void {
         super.dispose();
         // xx this.securityPolicy = undefined;
         // xx this.securityMode = null;
@@ -148,8 +147,8 @@ export class MessageBuilder extends MessageBuilderBase {
         this.privateKey = invalidPrivateKey;
     }
 
-    public pushNewToken(securityToken: SecurityToken, derivedKeys: DerivedKeys | null) {
-        assert(securityToken.hasOwnProperty("tokenId"));
+    public pushNewToken(securityToken: SecurityToken, derivedKeys: DerivedKeys | null): void {
+        assert(Object.prototype.hasOwnProperty.call(securityToken, "tokenId"));
 
         // TODO: make sure this list doesn't grow indefinitely
         this._tokenStack = this._tokenStack || [];
@@ -193,7 +192,7 @@ export class MessageBuilder extends MessageBuilderBase {
                     debugLog(hexDump(binaryStream.buffer));
                 }
                 if (doTraceChunk) {
-                    console.log(
+                    warningLog(
                         timestamp(),
                         chalk.red("   >$$ "),
                         chalk.red(this.messageHeader.msgType),
@@ -228,7 +227,7 @@ export class MessageBuilder extends MessageBuilderBase {
                     debugLog(" Sequence Header", this.sequenceHeader);
                 }
                 if (doTraceChunk) {
-                    console.log(
+                    warningLog(
                         timestamp(),
                         chalk.green("   >$$ "),
                         chalk.green(this.messageHeader.msgType),
@@ -278,7 +277,7 @@ export class MessageBuilder extends MessageBuilderBase {
         }
 
         const binaryStream = new BinaryStream(fullMessageBody);
-    
+
         // read expandedNodeId:
         let id: ExpandedNodeId;
         try {
@@ -286,7 +285,7 @@ export class MessageBuilder extends MessageBuilderBase {
         } catch (err) {
             // this may happen if the message is not well formed or has been altered
             // we better off reporting an error and abort the communication
-            return this._report_error(err.message);
+            return this._report_error(err instanceof Error ? err.message : " err");
         }
 
         if (!this.objectFactory.hasConstructor(id)) {
@@ -340,8 +339,10 @@ export class MessageBuilder extends MessageBuilderBase {
                     if (doDebug) {
                         debugLog(err);
                     }
-                    debugLog(chalk.red("MessageBuilder : ERROR DETECTED IN event handler"));
-                    debugLog(err.stack);
+                    warningLog(chalk.red("MessageBuilder : ERROR DETECTED IN 'message' event handler"));
+                    if (err instanceof Error) {
+                        debugLog(err.stack);
+                    }
                 }
             } else {
                 warningLog("cannot decode message  for valid object of type " + id.toString() + " " + objMessage.constructor.name);
@@ -385,6 +386,7 @@ export class MessageBuilder extends MessageBuilderBase {
         this._previousSequenceNumber = sequenceNumber;
     }
 
+    // eslint-disable-next-line max-statements
     private _decrypt_OPN(binaryStream: BinaryStream): boolean {
         assert(this.securityPolicy !== SecurityPolicy.None);
         assert(this.securityPolicy !== SecurityPolicy.Invalid);
@@ -424,7 +426,7 @@ export class MessageBuilder extends MessageBuilderBase {
         }
         if (doTraceChunk) {
             const thumb = makeSHA1Thumbprint(asymmetricAlgorithmSecurityHeader.senderCertificate).toString("hex");
-            console.log(timestamp(), ` >$$ securityPolicyId:  ${asymmetricAlgorithmSecurityHeader.securityPolicyUri} ${thumb} `);
+            warningLog(timestamp(), ` >$$ securityPolicyId:  ${asymmetricAlgorithmSecurityHeader.securityPolicyUri} ${thumb} `);
         }
 
         if (!this.cryptoFactory) {
@@ -549,13 +551,16 @@ export class MessageBuilder extends MessageBuilderBase {
     }
 
     private _decrypt_MSG(binaryStream: BinaryStream): boolean {
-        assert(this.securityHeader instanceof SymmetricAlgorithmSecurityHeader);
+        // istanbul ignore next
+        if (!(this.securityHeader instanceof SymmetricAlgorithmSecurityHeader)) {
+            throw new Error("Internal error : expecting a SymmetricAlgorithmSecurityHeader");
+        }
         assert(this.securityMode !== MessageSecurityMode.None);
         assert(this.securityMode !== MessageSecurityMode.Invalid);
         assert(this.securityPolicy !== SecurityPolicy.None);
         assert(this.securityPolicy !== SecurityPolicy.Invalid);
 
-        const symmetricAlgorithmSecurityHeader = this.securityHeader as SymmetricAlgorithmSecurityHeader;
+        const symmetricAlgorithmSecurityHeader = this.securityHeader;
         // Check  security token
         // securityToken may have been renewed
         const securityTokenData = this._select_matching_token(symmetricAlgorithmSecurityHeader.tokenId);
@@ -566,7 +571,7 @@ export class MessageBuilder extends MessageBuilderBase {
             return false;
         }
 
-        assert(securityTokenData.hasOwnProperty("derivedKeys"));
+        assert(Object.prototype.hasOwnProperty.call(securityTokenData, "derivedKeys"));
 
         // SecurityToken may have expired, in this case the MessageBuilder shall reject the message
         if (securityTokenData.securityToken.expired) {
@@ -656,20 +661,22 @@ export class MessageBuilder extends MessageBuilderBase {
             const options = this.objectFactory;
             objMessage.decode(binaryStream, options);
         } catch (err) {
-            warningLog("Decode message error : ", err.message);
+            if (err instanceof Error) {
+                warningLog("Decode message error : ", err.message);
 
-            // istanbul ignore next
-            if (doDebug) {
-                debugLog(err.stack);
-                debugLog(hexDump(fullMessageBody));
-                analyseExtensionObject(fullMessageBody, 0, 0);
+                // istanbul ignore next
+                if (doDebug) {
+                    debugLog(err.stack);
+                    debugLog(hexDump(fullMessageBody));
+                    analyseExtensionObject(fullMessageBody, 0, 0);
 
-                debugLog(" ---------------- block");
-                let i = 0;
-                this.messageChunks.forEach((messageChunk) => {
-                    debugLog(" ---------------- chunk i=", i++);
-                    debugLog(hexDump(messageChunk));
-                });
+                    debugLog(" ---------------- block");
+                    let i = 0;
+                    this.messageChunks.forEach((messageChunk) => {
+                        debugLog(" ---------------- chunk i=", i++);
+                        debugLog(hexDump(messageChunk));
+                    });
+                }
             }
             return false;
         }

@@ -5,47 +5,48 @@ import { ExtraDataTypeManager } from "node-opcua-client-dynamic-extension-object
 import { NodeClass, QualifiedNameLike } from "node-opcua-data-model";
 import { ExtensionObject } from "node-opcua-extension-object";
 import { NodeId, NodeIdLike } from "node-opcua-nodeid";
-import { BrowsePath, ModelChangeStructureDataType, ReadProcessedDetails, HistoryReadResult } from "node-opcua-types";
-import { ConstructorFuncWithSchema } from "node-opcua-factory";
+import { ModelChangeStructureDataType, ReadProcessedDetails, HistoryReadResult } from "node-opcua-types";
 import { NumericRange } from "node-opcua-numeric-range";
 import { CallbackT } from "node-opcua-status-code";
 
 import {
-    AddReferenceOpts,
-    AddressSpace,
-    BaseNode as BaseNodePublic,
+    IAddressSpace,
+    BaseNode,
     UADataType,
     UAView,
-    SessionContext,
-    ContinuationPoint
-} from "../source";
-import { NamespacePrivate } from "./namespace_private";
-import { Reference } from "./reference";
-import { UAObjectType } from "./ua_object_type";
-import { UAVariableType } from "./ua_variable_type";
-import { ExtensionObjectConstructorFuncWithSchema } from "./ua_data_type";
-import { UAVariable } from "./ua_variable";
+    ISessionContext,
+    AddReferenceOpts,
+    UAVariableType,
+    UAObjectType,
+    UAReference,
+    UAVariable,
+    ContinuationData
+} from "node-opcua-address-space-base";
 
-export interface AddressSpacePrivate extends AddressSpace {
+import { UARootFolder } from "../source/ua_root_folder";
+
+import { NamespacePrivate } from "./namespace_private";
+import { ExtensionObjectConstructorFuncWithSchema } from "./ua_data_type_impl";
+import { NamespaceImpl } from "./namespace_impl";
+
+export interface AddressSpacePrivate extends IAddressSpace {
+    rootFolder: UARootFolder;
+
     isFrugal: boolean;
     suspendBackReference: boolean;
 
     _condition_refresh_in_progress: boolean;
 
-    _coerceNode(node: string | BaseNodePublic | NodeId): BaseNodePublic | null;
+    _coerceNode(node: string | BaseNode | NodeIdLike): BaseNode | null;
 
-    _coerceFolder(folder: string | BaseNodePublic | NodeId): BaseNodePublic | null;
+    _coerceFolder(folder: string | BaseNode | NodeId): BaseNode | null;
 
-    _coerce_DataType(dataType: NodeIdLike | BaseNodePublic): NodeId;
+    _coerce_DataType(dataType: NodeIdLike | BaseNode): NodeId;
 
-    _coerceType(
-        baseType: string | NodeId | BaseNodePublic,
-        topMostBaseType: string,
-        nodeClass: NodeClass
-    ): UAVariableType | UAObjectType;
+    _coerceType(baseType: string | NodeId | BaseNode, topMostBaseType: string, nodeClass: NodeClass): UAVariableType | UAObjectType;
     _coerceTypeDefinition(typeDefinition: string | NodeId): NodeId;
 
-    _coerce_VariableTypeIds(dataType: NodeId | string | BaseNodePublic): NodeId;
+    _coerce_VariableTypeIds(dataType: NodeId | string | BaseNode): NodeId;
 
     getDefaultNamespace(): NamespacePrivate;
 
@@ -61,11 +62,11 @@ export interface AddressSpacePrivate extends AddressSpace {
 
     constructExtensionObject(dataType: UADataType | NodeId, options?: any): ExtensionObject;
 
-    normalizeReferenceType(params: AddReferenceOpts | Reference): Reference;
+    normalizeReferenceType(params: AddReferenceOpts | UAReference): UAReference;
 
-    normalizeReferenceTypes(references: AddReferenceOpts[] | Reference[] | null): Reference[];
+    normalizeReferenceTypes(references: AddReferenceOpts[] | UAReference[] | null): UAReference[];
 
-    _register(node: BaseNodePublic): void;
+    _register(node: BaseNode): void;
 
     resolveNodeId(nodeIdLike: NodeIdLike): NodeId;
 
@@ -80,11 +81,11 @@ export interface AddressSpacePrivate extends AddressSpace {
     ///
     _readProcessedDetails?: (
         variable: UAVariable,
-        context: SessionContext,
+        context: ISessionContext,
         historyReadDetails: ReadProcessedDetails,
         indexRange: NumericRange | null,
         dataEncoding: QualifiedNameLike | null,
-        continuationPoint: ContinuationPoint | null,
+        continuationData: ContinuationData,
         callback: CallbackT<HistoryReadResult>
     ) => void;
 

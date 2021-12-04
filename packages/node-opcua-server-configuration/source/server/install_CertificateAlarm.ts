@@ -3,7 +3,8 @@
  */
 import {
     AddressSpace,
-    UACertificateExpirationAlarm
+    UACertificateExpirationAlarm,
+    UACertificateExpirationAlarmImpl
 } from "node-opcua-address-space";
 import {
     checkDebugFlag,
@@ -13,6 +14,7 @@ import {
 import {
     NodeId
 } from "node-opcua-nodeid";
+import { DataType } from "node-opcua-variant";
 
 const debugLog = make_debugLog("ServerConfiguration");
 const errorLog = make_errorLog("ServerConfiguration");
@@ -32,12 +34,17 @@ export function installCertificateExpirationAlarm(addressSpace: AddressSpace) {
         browseName: "ServerCertificateAlarm",
         conditionSource: null,
         eventSourceOf: server,
-        inputNode: NodeId.nullNodeId,
-        normalState: NodeId.nullNodeId
+        inputNode: new NodeId(),
+        normalState: new NodeId()
     };
     const data = {};
-    const alarm = UACertificateExpirationAlarm.instantiate(namespace, options, data);
+    const alarm = UACertificateExpirationAlarmImpl.instantiate(namespace, options, data);
     // const alarm = namespace.instantiateOffNormalAlarm({) as UACertificateExpirationAlarm;
     alarm.currentBranch().setRetain(true);
-    alarm.activeState.setValue(true);
+    alarm.activeState.setValue(false);
+    alarm.ackedState.setValue(false);
+    alarm.suppressedState?.setValue(false);
+    alarm.certificate.setValueFromSource({dataType: DataType.ByteString, value: null });
+    alarm.eventId.setValueFromSource({dataType: DataType.ByteString, value: null });
+
 }

@@ -1,12 +1,12 @@
 import * as fs from "fs";
 
 import * as mocha from "mocha";
-
 import * as should from "should";
 
 import { standardUnits } from "node-opcua-data-access";
 import { nodesets } from "node-opcua-nodesets";
 import { encode_decode_round_trip_test } from "node-opcua-packet-analyzer/dist/test_helpers";
+
 import { AddressSpace } from "../..";
 import { generateAddressSpace } from "../../nodeJS";
 
@@ -147,7 +147,7 @@ describe("DataAccess", () => {
 // Part 8 5.3.2
 // The  StatusCode SemanticsChanged  bit shall be set if any of the  EURange  ( could change the
 // behaviour of a  Subscription  if a  PercentDeadband  filter is used)   or  EngineeringUnits  (could create
-// problems if the client uses the value to perform calcul ations)  Properties  are changed (see section
+// problems if the client uses the value to perform calculations)  Properties  are changed (see section
 // 5.2  for additional information).
 
 // todo:

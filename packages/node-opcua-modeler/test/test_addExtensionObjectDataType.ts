@@ -2,14 +2,13 @@ Error.stackTraceLimit = 100000;
 // tslint:disable: no-console
 import * as fs from "fs";
 // node 14 onward : import {  writeFile } from "fs/promises";
-const { writeFile }= fs.promises;
+const { writeFile } = fs.promises;
 
 import * as os from "os";
 import * as path from "path";
 import * as should from "should";
-import { promisify } from "util";
+import { generateAddressSpace } from "node-opcua-address-space/nodeJS";
 import {
-    getDataTypeDictionary,
     addExtensionObjectDataType,
     AddressSpace,
     addVariableTypeForDataType,
@@ -18,10 +17,8 @@ import {
     ExtensionObjectDefinition,
     NodeId,
     nodesets,
-    StructureDefinitionOptions,
-    BaseNode
+    StructureDefinitionOptions
 } from "..";
-import { generateAddressSpace } from "node-opcua-address-space/nodeJS";
 
 const doDebug = false;
 
@@ -80,7 +77,7 @@ describe("addExtensionObjectDataType", function (this: any) {
 
         // const tmpFile = await fs.promises.mkdtemp(os.tmpdir() + "test.NodeSet2.xml", "utf-8");
         const tmpFile = path.join(os.tmpdir(), "test.NodeSet2.xml");
-        // xx console.log("tmpFile =", tmpFile);
+        console.log("tmpFile =", tmpFile);
 
         // istanbul ignore next
         if (doDebug) {
@@ -133,6 +130,7 @@ describe("addExtensionObjectDataType", function (this: any) {
 
         await testReloadGeneratedNodeset();
 
+        /*
         // make sure that bsd is correct
         const dataTypeDictionary = getDataTypeDictionary(ns);
         const bsd = dataTypeDictionary.readValue().value.value.toString();
@@ -148,6 +146,7 @@ describe("addExtensionObjectDataType", function (this: any) {
     </opc:StructuredType>
 </opc:TypeDictionary>`
         );
+*/
     });
 });
 describe("addVariableTypeForDataType", function (this: any) {
@@ -280,6 +279,7 @@ describe("addVariableTypeForDataType", function (this: any) {
         // xx console.log("e.", e.toString());
         // xx console.log("statusType.", statusType.toString());
 
+        /*
         // make sure that bsd is correct
         const dataTypeDictionary = getDataTypeDictionary(ns);
         const bsd = dataTypeDictionary.readValue().value.value.toString();
@@ -302,5 +302,6 @@ describe("addVariableTypeForDataType", function (this: any) {
     </opc:StructuredType>
 </opc:TypeDictionary>`
         );
+        */
     });
 });

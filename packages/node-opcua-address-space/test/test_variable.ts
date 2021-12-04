@@ -1,4 +1,3 @@
-import * as mocha from "mocha";
 import * as path from "path";
 import * as should from "should";
 import * as sinon from "sinon";
@@ -7,7 +6,7 @@ import { DataTypeIds } from "node-opcua-constants";
 import { AttributeIds, makeAccessLevelFlag, NodeClass } from "node-opcua-data-model";
 import { DataValue, sameDataValue } from "node-opcua-data-value";
 import { NodeId, makeNodeId } from "node-opcua-nodeid";
-import { StatusCode, StatusCodes } from "node-opcua-status-code";
+import { CallbackT, StatusCode, StatusCodes } from "node-opcua-status-code";
 import { DataType, Variant, VariantArrayType } from "node-opcua-variant";
 import { NumericRange } from "node-opcua-numeric-range";
 import { WriteValue, WriteValueOptions } from "node-opcua-types";
@@ -18,23 +17,22 @@ const nodeset_filename = path.join(__dirname, "../test_helpers/test_fixtures/min
 import {
     AddressSpace,
     BindVariableOptionsVariation2,
-    DataValueCallback,
     Namespace,
     PseudoSession,
-    RootFolder,
+    UARootFolder,
     SessionContext,
     UAVariable
 } from "..";
 import { generateAddressSpace } from "../nodeJS";
 
 import { create_minimalist_address_space_nodeset } from "../testHelpers";
-import { assert } from "sinon";
 
 const context = SessionContext.defaultContext;
 
 // tslint:disable-next-line:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("testing Variables ", () => {
+    // eslint-disable-next-line max-statements
     it("ZZ1- a variable should return attributes with  the expected data type ", () => {
         const addressSpace = AddressSpace.create();
         create_minimalist_address_space_nodeset(addressSpace);
@@ -60,7 +58,6 @@ describe("testing Variables ", () => {
         value.value.dataType.should.eql(DataType.UInt32);
         value.value.value.should.eql(makeAccessLevelFlag("CurrentRead"));
         value.statusCode.should.eql(StatusCodes.Good);
-
 
         value = v.readAttribute(context, AttributeIds.UserAccessLevel);
         value.value.dataType.should.eql(DataType.Byte);
@@ -111,10 +108,10 @@ describe("testing Variables ", () => {
 
         value = v.readAttribute(context, AttributeIds.RolePermissions);
         value.statusCode.name.should.eql("BadAttributeIdInvalid");
- 
+
         value = v.readAttribute(context, AttributeIds.UserRolePermissions);
         value.statusCode.name.should.eql("BadAttributeIdInvalid");
-        
+
         addressSpace.dispose();
     });
 });
@@ -124,7 +121,7 @@ type Done = () => void;
 describe("Address Space : add Variable :  testing various variations for specifying dataType", () => {
     let addressSpace: AddressSpace;
     let namespace: Namespace;
-    let rootFolder: RootFolder;
+    let rootFolder: UARootFolder;
 
     before((done: Done) => {
         addressSpace = AddressSpace.create();
@@ -132,7 +129,7 @@ describe("Address Space : add Variable :  testing various variations for specify
             namespace = addressSpace.registerNamespace("Private");
             namespace.index.should.eql(1);
 
-            rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+            rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
             done();
         });
@@ -245,7 +242,7 @@ describe("Address Space : add Variable :  testing various variations for specify
 describe("testing Variable#bindVariable", () => {
     let addressSpace: AddressSpace;
     let namespace: Namespace;
-    let rootFolder: RootFolder;
+    let rootFolder: UARootFolder;
 
     before(async () => {
         addressSpace = AddressSpace.create();
@@ -255,7 +252,7 @@ describe("testing Variable#bindVariable", () => {
         addressSpace.registerNamespace("Private");
         namespace = addressSpace.getOwnNamespace();
         namespace.index.should.eql(1);
-        rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+        rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
     });
     after(() => {
         if (addressSpace) {
@@ -393,7 +390,7 @@ describe("testing Variable#bindVariable", () => {
             dataValueCheck1.statusCode.should.eql(StatusCodes.Good);
             dataValueCheck1.value.value.should.eql(100);
 
-            // When we write a differente value
+            // When we write a different value
             const dataValue = new DataValue({
                 value: {
                     dataType: DataType.Double,
@@ -616,7 +613,7 @@ describe("testing Variable#bindVariable", () => {
             timestamped_get() {
                 return value_with_timestamp;
             },
-            timestamped_set(dataValue1: DataValue, callback: (err: Error | null, statusCode: StatusCode) => void) {
+            timestamped_set(dataValue1: DataValue, callback: CallbackT<StatusCode>) {
                 value_with_timestamp.value = dataValue1.value;
                 value_with_timestamp.sourceTimestamp = dataValue1.sourceTimestamp;
                 value_with_timestamp.sourcePicoseconds = dataValue1.sourcePicoseconds;
@@ -655,7 +652,7 @@ describe("testing Variable#bindVariable", () => {
             });
 
             const value_options: BindVariableOptionsVariation2 = {
-                timestamped_get(callback: DataValueCallback) {
+                timestamped_get(callback: CallbackT<DataValue>) {
                     setTimeout(() => {
                         callback(null, value_with_timestamp);
                     }, 100);
@@ -702,7 +699,7 @@ describe("testing Variable#bindVariable", () => {
 describe("testing Variable#writeValue Scalar", () => {
     let addressSpace: AddressSpace;
     let namespace: Namespace;
-    let rootFolder: RootFolder;
+    let rootFolder: UARootFolder;
     let variable: UAVariable;
 
     before((done: (err?: Error) => void) => {
@@ -714,7 +711,7 @@ describe("testing Variable#writeValue Scalar", () => {
 
             namespace = addressSpace.getOwnNamespace();
 
-            rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+            rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
             variable = namespace.addVariable({
                 accessLevel: "CurrentRead | CurrentWrite",
@@ -779,7 +776,7 @@ describe("testing Variable#writeValue Scalar", () => {
 describe("testing Variable#writeValue Array", () => {
     let addressSpace: AddressSpace;
     let namespace: Namespace;
-    let rootFolder: RootFolder;
+    let rootFolder: UARootFolder;
     let variable: UAVariable;
 
     before((done: (err?: Error) => void) => {
@@ -788,7 +785,7 @@ describe("testing Variable#writeValue Array", () => {
             addressSpace.registerNamespace("Private");
             namespace = addressSpace.getOwnNamespace();
 
-            rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+            rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
             variable = addressSpace.getOwnNamespace().addVariable({
                 accessLevel: "CurrentRead | CurrentWrite",
@@ -954,7 +951,7 @@ describe("testing Variable#writeValue Array", () => {
     });
 
     it("A6 - should write a ByteString into a Array of Byte", async () => {
-        // as  per CTT write Attibute test 007
+        // as  per CTT write Attribute test 007
 
         const variable2 = namespace.addVariable({
             browseName: "SomeArrayOfByte",
@@ -999,7 +996,7 @@ describe("testing Variable#writeValue Array", () => {
 describe("testing Variable#writeValue on Integer", () => {
     let addressSpace: AddressSpace;
     let namespace: Namespace;
-    let rootFolder: RootFolder;
+    let rootFolder: UARootFolder;
     let variableNotInteger: UAVariable;
     let variableInt32: UAVariable;
 
@@ -1009,7 +1006,7 @@ describe("testing Variable#writeValue on Integer", () => {
             addressSpace.registerNamespace("Private");
             namespace = addressSpace.getOwnNamespace();
 
-            rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+            rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
             variableNotInteger = namespace.addVariable({
                 accessLevel: "CurrentRead | CurrentWrite",
@@ -1125,7 +1122,7 @@ describe("testing Variable#writeValue on Integer", () => {
 describe("testing UAVariable ", () => {
     let addressSpace: AddressSpace;
     let namespace: Namespace;
-    let rootFolder: RootFolder;
+    let rootFolder: UARootFolder;
     let variableInteger: UAVariable;
     let notReadableVariable: UAVariable;
 
@@ -1138,7 +1135,7 @@ describe("testing UAVariable ", () => {
 
             if (!err) {
                 addressSpace.registerNamespace("Private");
-                rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+                rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
                 variableInteger = namespace.addVariable({
                     accessLevel: "CurrentRead | CurrentWrite",
@@ -1181,7 +1178,7 @@ describe("testing UAVariable ", () => {
         variableInteger.readValue().value.dataType.should.eql(DataType.Int32);
         variableInteger.readValue().value.value.should.eql(1);
 
-        const variableIntegerClone = variableInteger.clone();
+        const variableIntegerClone = variableInteger.clone({ namespace: variableInteger.namespace! });
         variableIntegerClone.nodeId.toString().should.not.eql(variableInteger.nodeId.toString());
 
         variableIntegerClone.browseName.toString().should.eql("1:some INTEGER Variable");
@@ -1191,10 +1188,13 @@ describe("testing UAVariable ", () => {
         variableIntegerClone.readValue().value.should.eql(variableInteger.readValue().value);
     });
 
+    interface UAVariablePrivate extends UAVariable {
+        $dataValue: DataValue;
+    }
     it("UAVariable#readValue should return an error if value is not readable", () => {
-        (notReadableVariable as any)._dataValue.value.dataType.should.eql(DataType.Int32);
-        (notReadableVariable as any)._dataValue.value.value.should.eql(2);
-        (notReadableVariable as any)._dataValue.statusCode.should.eql(StatusCodes.Good);
+        (notReadableVariable as UAVariablePrivate).$dataValue.value.dataType.should.eql(DataType.Int32);
+        (notReadableVariable as UAVariablePrivate).$dataValue.value.value.should.eql(2);
+        (notReadableVariable as UAVariablePrivate).$dataValue.statusCode.should.eql(StatusCodes.Good);
 
         const dataValue = notReadableVariable.readValue();
 
@@ -1207,9 +1207,9 @@ describe("testing UAVariable ", () => {
     });
 
     it("UAVariable#readValueAsync should return an error if value is not readable", async () => {
-        (notReadableVariable as any)._dataValue.value.dataType.should.eql(DataType.Int32);
-        (notReadableVariable as any)._dataValue.value.value.should.eql(2);
-        (notReadableVariable as any)._dataValue.statusCode.should.eql(StatusCodes.Good);
+        (notReadableVariable as UAVariablePrivate).$dataValue.value.dataType.should.eql(DataType.Int32);
+        (notReadableVariable as UAVariablePrivate).$dataValue.value.value.should.eql(2);
+        (notReadableVariable as UAVariablePrivate).$dataValue.statusCode.should.eql(StatusCodes.Good);
 
         const dataValue = await notReadableVariable.readValueAsync(context);
 
@@ -1222,7 +1222,7 @@ describe("testing UAVariable ", () => {
     });
 
     it("UAVariable#readValueAsync should cope with faulty refreshFunc -- calling callback with an error", async () => {
-        rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+        rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
         const temperatureVar = namespace.addVariable({
             browseName: "BadVar",
@@ -1247,36 +1247,36 @@ describe("testing UAVariable ", () => {
         try {
             const dataValue = await temperatureVar.readValueAsync(context);
         } catch (err) {
-            _err = err;
+            _err = err as Error;
         }
         should.exist(_err);
     });
 
     it("UAVariable#readValueAsync should cope with faulty refreshFunc - crashing inside refreshFunc", async () => {
-        rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+        rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
         const temperatureVar = namespace.addVariable({
             browseName: "BadVar2",
             dataType: "Double",
             nodeId: "ns=1;s=BadVar2",
             organizedBy: rootFolder,
             value: {
-                refreshFunc(callback: DataValueCallback) {
+                refreshFunc(callback: CallbackT<DataValue>) {
                     throw new Error("Something goes wrong here");
                 }
             }
         });
 
-        let _err: any;
+        let _err: Error;
         try {
             await temperatureVar.readValueAsync(context);
         } catch (err) {
-            _err = err;
+            _err = err as Error;
         }
         should.exist(_err);
     });
 
     it("UAVariable#readValueAsync  should be re-entrant", async () => {
-        rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+        rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
         const temperatureVar = namespace.addVariable({
             browseName: "Temperature",
@@ -1406,7 +1406,7 @@ describe("testing UAVariable ", () => {
                 }
             },
             nodeId
-        }
+        };
         const statusCode1 = await temperatureVar.writeAttribute(context, writeValue);
         statusCode1.should.eql(StatusCodes.Good);
     });
