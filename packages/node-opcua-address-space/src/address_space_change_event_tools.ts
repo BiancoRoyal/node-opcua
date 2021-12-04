@@ -3,15 +3,15 @@
  */
 import * as chalk from "chalk";
 
+import { UAReference, BaseNode, UAObject, UAVariable } from "node-opcua-address-space-base";
 import { assert } from "node-opcua-assert";
-import { ModelChangeStructureDataType } from "node-opcua-types";
-import { NodeClass } from "node-opcua-data-model";
-import { BrowseDirection } from "node-opcua-data-model";
+import { BrowseDirection, NodeClass } from "node-opcua-data-model";
 import { Enum, EnumItem } from "node-opcua-enum";
 import { NodeId } from "node-opcua-nodeid";
-import { UAReference } from "../source";
+import { ModelChangeStructureDataType } from "node-opcua-types";
+
 import { AddressSpacePrivate } from "./address_space_private";
-import { BaseNode } from "./base_node";
+import { BaseNodeImpl } from "./base_node_impl";
 
 const verbFlags = new Enum({
     //                         NodeAdded        0         Indicates the affected Node has been added.
@@ -42,7 +42,7 @@ function makeVerb(verbs: any): number {
     return e.value;
 }
 
-export function _handle_add_reference_change_event(node1: BaseNode, node2id: NodeId) {
+export function _handle_add_reference_change_event(node1: BaseNode, node2id: NodeId): void {
     const addressSpace = node1.addressSpace as AddressSpacePrivate;
 
     const node2 = addressSpace.findNode(node2id)! as BaseNode;
@@ -52,7 +52,7 @@ export function _handle_add_reference_change_event(node1: BaseNode, node2id: Nod
         addressSpace.modelChangeTransaction(() => {
             function _getTypeDef(node: BaseNode) {
                 if (node.nodeClass === NodeClass.Object || node.nodeClass === NodeClass.Variable) {
-                    return node.typeDefinitionObj.nodeId;
+                    return (<UAVariable | UAObject>node).typeDefinitionObj.nodeId;
                 }
                 return null;
             }
@@ -98,12 +98,12 @@ try {
     //
 }
 
-export function _handle_model_change_event(node: BaseNode) {
-    const addressSpace = node.addressSpace;
+export function _handle_model_change_event(node: BaseNodeImpl): void {
+    const addressSpace = node.addressSpace as AddressSpacePrivate;
     //
     const parent = node.parent!;
 
-    if (parent && (parent as any).nodeVersion) {
+    if (parent && (parent as BaseNode).nodeVersion) {
         addressSpace.modelChangeTransaction(() => {
             let typeDefinitionNodeId = null;
 
@@ -126,7 +126,7 @@ export function _handle_model_change_event(node: BaseNode) {
             addressSpace._collectModelChange(null, modelChangeSrc);
 
             // bidirectional
-            if (node.nodeVersion) {
+            if ((node as BaseNode).nodeVersion) {
                 const modelChangeTgt = new ModelChangeStructureDataType({
                     affected: node.nodeId,
                     affectedType: typeDefinitionNodeId,
@@ -138,8 +138,8 @@ export function _handle_model_change_event(node: BaseNode) {
     }
 }
 
-export function _handle_delete_node_model_change_event(node: BaseNode) {
-    const addressSpace = node.addressSpace;
+export function _handle_delete_node_model_change_event(node: BaseNode): void {
+    const addressSpace = node.addressSpace as AddressSpacePrivate;
 
     // get backward references
     const references = node.findReferencesEx("HierarchicalReferences", BrowseDirection.Inverse)!;
@@ -148,7 +148,7 @@ export function _handle_delete_node_model_change_event(node: BaseNode) {
         return addressSpace.findNode(r.nodeId)! as BaseNode;
     });
 
-    const versionableNodes = parentNodes.filter((n: BaseNode) => !!n.nodeVersion);
+    const versionableNodes = parentNodes.filter((n: BaseNode) => !!n?.nodeVersion);
 
     if (versionableNodes.length >= 1 || !!node.nodeVersion) {
         addressSpace.modelChangeTransaction(() => {
@@ -167,7 +167,7 @@ export function _handle_delete_node_model_change_event(node: BaseNode) {
 
             const modelChangeSrc = new ModelChangeStructureDataType({
                 affected: node.nodeId,
-                affectedType: node.typeDefinition,
+                affectedType: (<UAVariable | UAObject>node).typeDefinition,
                 verb: makeVerb("NodeDeleted")
             });
 

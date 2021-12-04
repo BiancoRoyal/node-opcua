@@ -3,8 +3,8 @@ import * as chalk from "chalk";
 import { nodesets } from "node-opcua-nodesets";
 import * as should from "should";
 import { generateAddressSpace } from "../nodeJS";
-import { SessionContext, StateMachine } from "..";
-import { AddressSpace, BaseNode, Namespace, ProgramFiniteStateMachine, promoteToStateMachine } from "..";
+import { SessionContext, UAStateMachineEx } from "..";
+import { AddressSpace, BaseNode, Namespace, UAProgramStateMachineEx, promoteToStateMachine } from "..";
 
 import { createBoilerType, makeBoiler } from "../testHelpers";
 
@@ -36,7 +36,7 @@ describe("Testing Boiler System", () => {
 
         const psm = programStateMachine.instantiate({
             browseName: "MyStateMachine#2"
-        }) as ProgramFiniteStateMachine;
+        }) as UAProgramStateMachineEx;
         promoteToStateMachine(psm);
 
         psm.getStates().map(getBrowseName).sort().should.eql(["Halted", "Ready", "Running", "Suspended"]);
@@ -50,7 +50,7 @@ describe("Testing Boiler System", () => {
 
         const psm = myProgramStateMachine.instantiate({
             browseName: "MyStateMachine#2"
-        }) as ProgramFiniteStateMachine;
+        }) as UAProgramStateMachineEx;
 
         promoteToStateMachine(psm);
 
@@ -71,6 +71,7 @@ describe("Testing Boiler System", () => {
             ]);
     });
 
+    // eslint-disable-next-line max-statements
     it("should create a boiler system", async () => {
         const context = SessionContext.defaultContext;
 
@@ -91,10 +92,11 @@ describe("Testing Boiler System", () => {
 
         // xx boiler.inputPipe.displayName.text.toString().should.eql("Pipe1001");
 
-        boiler.inputPipe.modellingRule!.should.eql("Mandatory");
-        boiler.outputPipe.modellingRule!.should.eql("Mandatory");
-        boiler.boilerDrum.modellingRule!.should.eql("Mandatory");
-        boiler.simulation.modellingRule!.should.eql("Mandatory");
+        // proper instances should not have modellingRule specified
+        should.not.exist(boiler.inputPipe.modellingRule);
+        should.not.exist(boiler.outputPipe.modellingRule);
+        should.not.exist(boiler.boilerDrum.modellingRule);
+        should.not.exist(boiler.simulation.modellingRule);
 
         boiler.getNotifiers().length.should.eql(3);
         boiler.getEventSources().length.should.eql(1);
@@ -138,7 +140,7 @@ describe("Testing Boiler System", () => {
         startMethod.getExecutableFlag(context).should.eql(true);
         suspendMethod.getExecutableFlag(context).should.eql(false);
 
-        const callMethodResponse2 = await startMethod.execute(null,[], context);
+        const callMethodResponse2 = await startMethod.execute(null, [], context);
 
         if (doDebug) {
             console.log(chalk.bgWhite.cyan(" startMethod has been called"), callMethodResponse2.statusCode!.toString());
@@ -148,7 +150,7 @@ describe("Testing Boiler System", () => {
         startMethod.getExecutableFlag(context).should.eql(false);
         suspendMethod.getExecutableFlag(context).should.eql(true);
 
-        const callMethodResponse3 = await suspendMethod.execute(null,[], context);
+        const callMethodResponse3 = await suspendMethod.execute(null, [], context);
 
         if (doDebug) {
             console.log(chalk.bgWhite.cyan("suspendMethod has been called"), callMethodResponse3.statusCode!.toString());
@@ -157,5 +159,42 @@ describe("Testing Boiler System", () => {
         resetMethod.getExecutableFlag(context).should.eql(true);
         startMethod.getExecutableFlag(context).should.eql(true);
         suspendMethod.getExecutableFlag(context).should.eql(false);
+    });
+
+    it("boiler test", async () => {
+        const context = SessionContext.defaultContext;
+
+        const boilerType = createBoilerType(namespace);
+
+        boilerType.getNotifiers().length.should.eql(3);
+        boilerType.getEventSources().length.should.eql(1);
+
+        const boiler = makeBoiler(addressSpace, {
+            browseName: "Boiler#2",
+            organizedBy: addressSpace.rootFolder.objects
+        });
+
+        const boilerStateMachine = boiler.simulation;
+
+        const haltedState = boilerStateMachine.getStateByName("Halted")!;
+        haltedState.browseName.toString().should.eql("Halted");
+
+        const readyState = boilerStateMachine.getStateByName("Ready")!;
+        readyState.browseName.toString().should.eql("Ready");
+
+        const runningState = boilerStateMachine.getStateByName("Running")!;
+        runningState.browseName.toString().should.eql("Running");
+
+        // when state is "Halted" , the Halt method is not executable
+        boilerStateMachine.setState(haltedState);
+        boilerStateMachine.currentStateNode.browseName.toString().should.eql("Halted");
+
+        const haltMethod = boilerStateMachine.getMethodByName("Halt")!;
+        // halt method should not be executable when current State is Halted
+        haltMethod.getExecutableFlag(context).should.eql(false);
+
+        // when state is "Reset" , the Halt method becomes executable
+        boilerStateMachine.setState(readyState);
+        haltMethod.getExecutableFlag(context).should.eql(true);
     });
 });

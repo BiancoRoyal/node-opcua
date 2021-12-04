@@ -24,7 +24,7 @@ const client = OPCUAClient.create({
   connectionStrategy: connectionStrategy,
   securityMode: MessageSecurityMode.None,
   securityPolicy: SecurityPolicy.None,
-  endpoint_must_exist: false
+  endpointMustExist: false
 });
 //const endpointUrl = "opc.tcp://opcuademo.sterfive.com:26543";
 const endpointUrl = "opc.tcp://" + require("os").hostname() + ":4334/UA/MyLittleServer";
@@ -137,7 +137,9 @@ async function main() {
     await client.disconnect();
     console.log("done !");
   } catch(err) {
-    console.log("An error has occured : ",err);
+    if (err instanceof Error) {
+        console.log("An error has occurred : ", err);
+    }
   }
 }
 main();

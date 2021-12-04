@@ -1,5 +1,3 @@
-// tslint:disable:no-console
-// tslint:disable:max-line-length
 import * as fs from "fs";
 import * as should from "should";
 
@@ -8,16 +6,16 @@ import { DataType, VariantArrayType } from "node-opcua-variant";
 import { Variant } from "node-opcua-variant";
 import { nodesets } from "node-opcua-nodesets";
 import { coerceLocalizedText, coerceQualifiedName, makeAccessLevelFlag } from "node-opcua-data-model";
+import { checkDebugFlag } from "node-opcua-debug";
 
-import { AddressSpace, dumpXml, Namespace, RootFolder, UAVariable } from "..";
+import { AddressSpace, dumpXml, Namespace, UAVariable, UARootFolder } from "..";
 import { createBoilerType, getMiniAddressSpace } from "../testHelpers";
 import { generateAddressSpace } from "../nodeJS";
-import { checkDebugFlag } from "node-opcua-debug";
-const { createTemperatureSensorType  } = require("./fixture_temperature_sensor_type");
+const { createTemperatureSensorType } = require("./fixture_temperature_sensor_type");
 
 const doDebug = checkDebugFlag("TEST");
 
-// tslint:disable-next-line:no-var-requires
+// eslint-disable-next-line import/order
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("testing nodeset to xml", () => {
     let addressSpace: AddressSpace;
@@ -33,7 +31,7 @@ describe("testing nodeset to xml", () => {
         }
     });
 
-    it("should output a standard extension object datatype to xml (Argument)", () => {
+    it("KLKL1 should output a standard extension object datatype to xml (Argument)", () => {
         const argumentDataType = addressSpace.findDataType("Argument")!;
         if (doDebug) {
             console.log(argumentDataType.toString());
@@ -45,7 +43,7 @@ describe("testing nodeset to xml", () => {
         str.should.match(/Argument/);
     });
 
-    it("should output a standard Enum node to xml (ServerState)", () => {
+    it("KLKL2 should output a standard Enum node to xml (ServerState)", () => {
         // TemperatureSensorType
         const serverStateType = addressSpace.findDataType("ServerState")!;
         const str = dumpXml(serverStateType, {});
@@ -55,7 +53,7 @@ describe("testing nodeset to xml", () => {
         str.should.match(/CommunicationFault/);
     });
 
-    it("€€€ should output a custom Enum node to xml (MyEnumType) - Form1( with EnumStrings )", () => {
+    it("KLKL3 should output a custom Enum node to xml (MyEnumType) - Form1( with EnumStrings )", () => {
         const myEnumType = namespace.addEnumerationType({
             browseName: "MyEnumTypeForm1",
             enumeration: ["RUNNING", "STOPPED"]
@@ -75,7 +73,8 @@ describe("testing nodeset to xml", () => {
         str.should.match(/<Field Name="RUNNING" Value="0">/);
         str.should.match(/<Field Name="STOPPED" Value="1">/);
     });
-    it("€€ should output a custom Enum node to xml (MyEnumType) - Form2 ( with EnumValues )", () => {
+
+    it("KLKL4 should output a custom Enum node to xml (MyEnumType) - Form2 ( with EnumValues )", () => {
         const myEnumType = namespace.addEnumerationType({
             browseName: "MyEnumType",
             enumeration: [
@@ -94,7 +93,7 @@ describe("testing nodeset to xml", () => {
         str.should.match(/<Field Name="STOPPED" Value="20">/);
     });
 
-    it("should output a simple objectType node to xml", () => {
+    it("KLKL5 should output a simple objectType node to xml", () => {
         // TemperatureSensorType
         const temperatureSensorType = createTemperatureSensorType(addressSpace);
 
@@ -102,7 +101,7 @@ describe("testing nodeset to xml", () => {
         str.should.match(/UAObjectType/);
     });
 
-    it("should output a instance of a new ObjectType  to xml", () => {
+    it("KLKL6 should output a instance of a new ObjectType  to xml", () => {
         const ownNamespace = addressSpace.getOwnNamespace();
 
         // TemperatureSensorType
@@ -116,7 +115,7 @@ describe("testing nodeset to xml", () => {
             value: new Variant({ dataType: DataType.Double, value: 19.5 })
         });
 
-        const parentFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+        const parentFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
         parentFolder.browseName.toString().should.eql("Root");
 
         // variation 1
@@ -138,7 +137,7 @@ describe("testing nodeset to xml", () => {
         str.should.match(/UAObjectType/g);
     });
 
-    it("KLKL should output a instance of object with method  to xml", () => {
+    it("KLKL7 should output a instance of object with method  to xml", () => {
         const createCameraType = require("./fixture_camera_type").createCameraType;
 
         const cameraType = createCameraType(addressSpace);
@@ -157,10 +156,10 @@ describe("testing nodeset to xml", () => {
         str.should.match(/BrowseName="InputArguments"/);
         str.should.match(/BrowseName="OutputArguments"/);
         str.should.match(/<UAMethod NodeId="ns=1;i=1001" BrowseName="1:Trigger">/);
-        str.should.match(/<UAMethod NodeId="ns=1;i=1005" BrowseName="1:Trigger" MethodDeclarationId="ns=1;i=1001"/);
+        str.should.match(/<UAMethod NodeId="ns=1;i=[0-9]+" BrowseName="1:Trigger" MethodDeclarationId="ns=1;i=1001"/);
     });
 
-    it("should output an instance of variable type to xml", () => {
+    it("KLKL8 should output an instance of variable type to xml", () => {
         const ownNamespace = addressSpace.getOwnNamespace();
         const variableType = ownNamespace.addVariableType({ browseName: "MyCustomVariableType" });
 
@@ -171,7 +170,7 @@ describe("testing nodeset to xml", () => {
         str.should.match(/UAVariableType/g);
     });
 
-    it("should output a ReferenceType to xml", () => {
+    it("KLKL9 should output a ReferenceType to xml", () => {
         const ownNamespace = addressSpace.getOwnNamespace();
         const referenceType = ownNamespace.addReferenceType({
             browseName: "HasStuff",
@@ -187,10 +186,10 @@ describe("testing nodeset to xml", () => {
         str.should.match(/HasStuff/g);
     });
 
-    it("should output a Method to xml", () => {
+    it("KLKLA should output a Method to xml", () => {
         const ownNamespace = addressSpace.getOwnNamespace();
 
-        const rootFolder = addressSpace.findNode("RootFolder")! as RootFolder;
+        const rootFolder = addressSpace.findNode("RootFolder")! as UARootFolder;
 
         const obj1 = ownNamespace.addObject({
             browseName: "Object",
@@ -224,7 +223,7 @@ describe("testing nodeset to xml", () => {
             console.log(str);
         }
 
-        str = str.replace(/LastModified=\".*\" /g, 'LastModified="DATE" ');
+        str = str.replace(/LastModified=".*" /g, 'LastModified="DATE" ');
         str.should.eql(`<?xml version="1.0"?>
 <UANodeSet xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1.02" LastModified="DATE" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
     <Aliases>
@@ -270,7 +269,7 @@ describe("testing nodeset to xml", () => {
                                 <Identifier>ns=0;i=7</Identifier>
                             </DataType>
                             <ValueRank>-1</ValueRank>
-                            <ArrayDimensions>0</ArrayDimensions>
+                            <ArrayDimensions></ArrayDimensions>
                             <Description>
                                 <Locale/>
                                 <Text>specifies the number of seconds to wait before the picture is taken </Text>
@@ -301,7 +300,7 @@ describe("testing nodeset to xml", () => {
                                 <Identifier>ns=0;i=30</Identifier>
                             </DataType>
                             <ValueRank>-1</ValueRank>
-                            <ArrayDimensions>0</ArrayDimensions>
+                            <ArrayDimensions></ArrayDimensions>
                             <Description>
                                 <Locale/>
                                 <Text>the generated image</Text>
@@ -521,7 +520,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
 
         addressSpace
             .getNamespaceArray()
-            .map((x: Namespace) => x.namespaceUri)
+            .map((x) => x.namespaceUri)
             .should.eql([
                 "http://opcfoundation.org/UA/", // 0
                 "ServerNamespaceURI", // 1
@@ -544,7 +543,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         await generateAddressSpace(reloadedAddressSpace, theNodesets);
 
         const r_namespace = reloadedAddressSpace.getNamespace(namespace.namespaceUri);
-        r_namespace.constructor.name.should.eql("UANamespace");
+        r_namespace.constructor.name.should.eql("NamespaceImpl");
 
         const r_xml = r_namespace.toNodeset2XML();
         const r_xml2 = r_xml.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
@@ -606,10 +605,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
             value: {
                 dataType: DataType.LocalizedText,
                 arrayType: VariantArrayType.Array,
-                value: [
-                    coerceLocalizedText("Hello"),
-                    coerceLocalizedText("World"),
-                ]
+                value: [coerceLocalizedText("Hello"), coerceLocalizedText("World")]
             }
         });
 
@@ -626,7 +622,6 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         r_xml2.should.match(/<ListOfLocalizedText.*>/);
         r_xml2.should.match(/<\/LocalizedText>/);
         r_xml2.should.match(/<\/ListOfLocalizedText>/);
-
     });
     it("NSXML3 should output an XML file - with Variant XmlElement", async () => {
         const v1 = namespace.addVariable({
@@ -647,10 +642,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
             value: {
                 dataType: DataType.XmlElement,
                 arrayType: VariantArrayType.Array,
-                value: [
-                    "<tag>Hello</tag>",
-                    "<tag>World</tag>"
-                ]
+                value: ["<tag>Hello</tag>", "<tag>World</tag>"]
             }
         });
 
@@ -667,10 +659,8 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         r_xml2.should.match(/<ListOfXmlElement.*>/);
         r_xml2.should.match(/<\/XmlElement>/);
         r_xml2.should.match(/<\/ListOfXmlElement>/);
-
     });
     it("NSXML4 should output an XML file - with Variant QualifiedName", async () => {
-
         const v1 = namespace.addVariable({
             browseName: "TestQualifiedName",
             dataType: DataType.QualifiedName,
@@ -701,7 +691,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
                 dataType: DataType.QualifiedName,
                 value: [
                     coerceQualifiedName({ name: "Hello", namespaceIndex: 1 }),
-                    coerceQualifiedName({ name: "World", namespaceIndex: 1 }),
+                    coerceQualifiedName({ name: "World", namespaceIndex: 1 })
                 ]
             }
         });
@@ -720,7 +710,6 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         r_xml2.should.match(/<ListOfQualifiedName.*>/);
         r_xml2.should.match(/<\/QualifiedName>/);
         r_xml2.should.match(/<\/ListOfQualifiedName>/);
-
     });
     it("NSXML5 should output an XML file - with Variant Matrix UAVariable", async () => {
         const v = namespace.addVariable({
@@ -747,8 +736,8 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         const r_xml2 = await reloadedNodeSet(tmpFilename);
         r_xml2.split("\n").should.eql(xml2.split("\n"));
 
-        r_xml2.should.match(/ValueRank=\"2\"/);
-        r_xml2.should.match(/ArrayDimensions=\"1,4\"/);
+        r_xml2.should.match(/ValueRank="2"/);
+        r_xml2.should.match(/ArrayDimensions="1,4"/);
 
         // console.log(xml);
     });
@@ -765,7 +754,7 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
                 arrayType: VariantArrayType.Matrix,
                 dataType: DataType.UInt32,
                 dimensions: [2, 3],
-                value: [1, 2, 3, 4,5,6]
+                value: [1, 2, 3, 4, 5, 6]
             }
         });
 
@@ -777,8 +766,8 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         const r_xml2 = await reloadedNodeSet(tmpFilename);
         r_xml2.split("\n").should.eql(xml2.split("\n"));
 
-        r_xml2.should.match(/ValueRank=\"2\"/);
-        r_xml2.should.match(/ArrayDimensions=\"2,3"/);
+        r_xml2.should.match(/ValueRank="2"/);
+        r_xml2.should.match(/ArrayDimensions="2,3"/);
 
         // console.log(xml);
     });

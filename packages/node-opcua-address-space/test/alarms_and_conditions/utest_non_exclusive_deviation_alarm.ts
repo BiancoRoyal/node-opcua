@@ -1,13 +1,10 @@
 // tslint:disable:max-statements
 import * as should from "should";
 import { Variant } from "node-opcua-variant";
-import { AddressSpace, UAObject, UAVariable } from "../..";
-import { UANonExclusiveDeviationAlarm } from "../..";
+import { AddressSpace, UANonExclusiveDeviationAlarmEx, UAObject, UAVariable } from "../..";
 
-export function utest_non_exclusive_deviation_alarm(test: any) {
-
+export function utest_non_exclusive_deviation_alarm(test: any): void {
     describe("Deviation Alarms : Non ExclusiveDeviationAlarms", () => {
-
         let addressSpace: AddressSpace;
         let source: UAObject;
         let engine: UAObject;
@@ -26,8 +23,7 @@ export function utest_non_exclusive_deviation_alarm(test: any) {
         }
 
         describe("NonExclusiveDeviationAlarm", () => {
-
-            let alarm: UANonExclusiveDeviationAlarm;
+            let alarm: UANonExclusiveDeviationAlarmEx;
             before(() => {
                 setpointNodeNode.setValueFromSource({ dataType: "Double", value: 0 });
                 variableWithAlarm.setValueFromSource({ dataType: "Double", value: 0 });
@@ -69,7 +65,6 @@ export function utest_non_exclusive_deviation_alarm(test: any) {
             });
 
             it("should provide correct properties when set value is changed and back to orignal value", () => {
-
                 alarm.getInputNodeValue().should.eql(0);
 
                 alarm.getSetpointNodeNode().should.eql(setpointNodeNode);
@@ -90,7 +85,6 @@ export function utest_non_exclusive_deviation_alarm(test: any) {
             });
 
             it("NonExclusiveDeviationAlarm", () => {
-
                 alarm.getLowLowLimit().should.eql(-10);
                 alarm.getLowLimit().should.eql(-1.0);
                 alarm.getHighLimit().should.eql(10);

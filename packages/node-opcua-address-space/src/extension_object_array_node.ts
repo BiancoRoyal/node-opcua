@@ -11,16 +11,8 @@ import { DataType } from "node-opcua-variant";
 import { VariantArrayType } from "node-opcua-variant";
 
 import { ExtensionObject } from "node-opcua-extension-object";
-import {
-    AddressSpace,
-    UADynamicVariableArray,
-    UAObject,
-    UAReferenceType,
-    UAVariable as UAVariablePublic
-} from "../source/address_space_ts";
-
-import { UADataType } from "./ua_data_type";
-import { UAVariable } from "./ua_variable";
+import { UADataType, UADynamicVariableArray, UAObject, UAReferenceType, UAVariable } from "node-opcua-address-space-base";
+import { UAVariableImpl } from "./ua_variable_impl";
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
@@ -141,7 +133,7 @@ export function bindExtObjArrayNode<T extends ExtensionObject>(
     uaArrayVariableNode: UADynamicVariableArray<T>,
     variableTypeNodeId: string | NodeId,
     indexPropertyName: string
-): UAVariablePublic {
+): UAVariable {
     const addressSpace = uaArrayVariableNode.addressSpace;
 
     const variableType = addressSpace.findVariableType(variableTypeNodeId);
@@ -168,20 +160,20 @@ export function bindExtObjArrayNode<T extends ExtensionObject>(
 
     // verify that an object with same doesn't already exist
     dataType = addressSpace.findDataType(variableType.dataType)! as UADataType;
-    assert(dataType.isSupertypeOf(structure as any), "expecting a structure (= ExtensionObject) here ");
+    assert(dataType!.isSupertypeOf(structure as any), "expecting a structure (= ExtensionObject) here ");
 
-    uaArrayVariableNode.$$dataType = dataType as UADataType;
+    uaArrayVariableNode.$$dataType = dataType;
     uaArrayVariableNode.$$extensionObjectArray = [];
     uaArrayVariableNode.$$indexPropertyName = indexPropertyName;
 
-    uaArrayVariableNode.$$getElementBrowseName = function (this: any, extObj: ExtensionObject) {
+    uaArrayVariableNode.$$getElementBrowseName = function (this: UADynamicVariableArray<T>, extObj: ExtensionObject) {
         const indexPropertyName1 = this.$$indexPropertyName;
 
-        if (!extObj.hasOwnProperty(indexPropertyName1)) {
+        if (!Object.prototype.hasOwnProperty.call(extObj, indexPropertyName1)) {
             console.log(" extension object do not have ", indexPropertyName1, extObj);
         }
         // assert(extObj.constructor === addressSpace.constructExtensionObject(dataType));
-        assert(extObj.hasOwnProperty(indexPropertyName1));
+        assert(Object.prototype.hasOwnProperty.call(extObj, indexPropertyName1));
         const browseName = (extObj as any)[indexPropertyName1].toString();
         return browseName;
     };
@@ -236,7 +228,7 @@ export function addElement<T extends ExtensionObject>(
     let elVar = null;
     let browseName;
 
-    if (options instanceof UAVariable) {
+    if (options instanceof UAVariableImpl) {
         elVar = options;
         extensionObject = elVar.$extensionObject; // get shared extension object
 
@@ -263,7 +255,7 @@ export function addElement<T extends ExtensionObject>(
             browseName,
             componentOf: uaArrayVariableNode.nodeId,
             value: { dataType: DataType.ExtensionObject, value: extensionObject }
-        }) as UAVariable;
+        }) as UAVariableImpl;
         elVar.bindExtensionObject();
         elVar.$extensionObject = extensionObject;
     }

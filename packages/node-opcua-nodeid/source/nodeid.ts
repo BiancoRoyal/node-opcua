@@ -45,7 +45,19 @@ export enum NodeIdType {
      */
     BYTESTRING = 0x04
 }
-
+/*function defaultValue(identifierType: NodeIdType.BYTESTRING): null;
+function defaultValue(identifierType: NodeIdType.STRING): null;
+function defaultValue(identifierType: NodeIdType.NUMERIC): 0;
+function defaultValue(identifierType: NodeIdType.GUID): null;
+*/
+function defaultValue(identifierType: NodeIdType): string | number| Buffer {
+    switch(identifierType) {
+        case NodeIdType.GUID : return emptyGuid;
+        case NodeIdType.BYTESTRING : return null as any as Buffer;// Buffer.alloc(0);
+        case NodeIdType.STRING : return "";
+        case NodeIdType.NUMERIC : return 0;
+    }
+}
 /**
  * Construct a node ID
  *
@@ -64,7 +76,7 @@ export class NodeId {
     public static sameNodeId: (n1: NodeId, n2: NodeId) => boolean;
 
     public identifierType: NodeIdType;
-    public value: number | string | Buffer | Guid;
+    public value: number | string | Buffer | Guid;;
     public namespace: number;
 
     /**
@@ -72,21 +84,22 @@ export class NodeId {
      * @param value            - the node id value. The type of Value depends on identifierType.
      * @param namespace        - the index of the related namespace (optional , default value = 0 )
      */
-    constructor(identifierType?: NodeIdType | null, value?: any, namespace?: number) {
+    constructor(identifierType?: NodeIdType | null, value?: number | string | Buffer | Guid, namespace?: number) {
         if (identifierType === null || identifierType === undefined) {
             this.identifierType = NodeIdType.NUMERIC;
             this.value = 0;
             this.namespace = 0;
             return;
         }
+
         this.identifierType = identifierType;
-        this.value = value;
+        this.value = value || defaultValue(identifierType);
         this.namespace = namespace || 0;
 
         // namespace shall be a UInt16
         assert(this.namespace >= 0 && this.namespace <= 0xffff);
 
-        assert(this.identifierType !== NodeIdType.NUMERIC || (this.value >= 0 && this.value <= 0xffffffff));
+        assert(this.identifierType !== NodeIdType.NUMERIC || (this.value !== null && this.value >= 0 && this.value <= 0xffffffff));
         assert(this.identifierType !== NodeIdType.GUID || isValidGuid(this.value as string));
         assert(this.identifierType !== NodeIdType.STRING || typeof this.value === "string");
     }
@@ -135,7 +148,7 @@ export class NodeId {
         if (addressSpace) {
             if (this.namespace === 0 && this.identifierType === NodeIdType.NUMERIC) {
                 // find standard browse name
-                const name = reverse_map(this.value.toString()) || "<undefined>";
+                const name = reverse_map((this.value||0).toString()) || "<undefined>";
                 str += " " + chalk.green.bold(name);
             } else if (addressSpace.findNode) {
                 // let use the provided address space to figure out the browseNode of this node.
@@ -182,7 +195,17 @@ export class NodeId {
     }
 }
 
-NodeId.nullNodeId = new NodeId();
+NodeId.nullNodeId = new Proxy(
+    new NodeId(NodeIdType.NUMERIC, 0, 0),
+    {
+        get: (target: NodeId, prop: string) => {
+            return (target as any)[prop];
+        },
+        set: () => {
+            throw new Error("Cannot assign a value to  constant NodeId.nullNodeId");
+        }
+    });
+
 
 export type NodeIdLike = string | NodeId | number;
 
@@ -204,7 +227,7 @@ const regexNamespaceG = /ns=([0-9]+);g=(.*)/;
  * @param value
  * @param namespace {number}
  */
-export function coerceNodeId(value: any, namespace?: number): NodeId {
+export function coerceNodeId(value: unknown, namespace?: number): NodeId {
     let matches;
     let twoFirst;
     if (value instanceof NodeId) {
@@ -257,13 +280,13 @@ export function coerceNodeId(value: any, namespace?: number): NodeId {
         identifierType = NodeIdType.BYTESTRING;
     } else if (value instanceof Object) {
         // it could be a Enum or a NodeId Like object
-        const tmp = value;
+        const tmp = value as any;
         value = tmp.value;
         namespace = namespace || tmp.namespace;
         identifierType = tmp.identifierType || identifierType;
-        return new NodeId(identifierType, value, namespace);
+        return new NodeId(identifierType, value as any, namespace);
     }
-    return new NodeId(identifierType, value, namespace);
+    return new NodeId(identifierType, value as any, namespace);
 }
 
 const regEx1 = /^(s|g|b|i|ns)=/;
@@ -276,7 +299,7 @@ const regEx1 = /^(s|g|b|i|ns)=/;
  * @param [namespace]=0 {Number} the node id namespace
  * @return {NodeId}
  */
-export function makeNodeId(value: string | Buffer | number, namespace?: number) {
+export function makeNodeId(value: string | Buffer | number, namespace?: number): NodeId {
     value = value || 0;
     namespace = namespace || 0;
 
@@ -310,7 +333,7 @@ const regName = /[a-zA-Z_].*/;
 (function build_standard_nodeid_indexes() {
     function expand_map(directIndex: any) {
         for (const name in directIndex) {
-            if (directIndex.hasOwnProperty(name) && regName.exec(name) !== null) {
+            if (Object.prototype.hasOwnProperty.call(directIndex, name) && regName.exec(name) !== null) {
                 const value = directIndex[name];
                 _nodeIdToNameIndex[value] = name;
                 _nameToNodeIdIndex[name] = new NodeId(NodeIdType.NUMERIC, value, 0);
@@ -369,5 +392,5 @@ export function sameNodeId(n1: NodeId, n2: NodeId): boolean {
             return isEqual(n1.value, n2.value);
     }
 }
-
 NodeId.sameNodeId = sameNodeId;
+

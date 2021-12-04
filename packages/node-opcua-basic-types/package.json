@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-basic-types",
-    "version": "2.47.0",
+    "version": "2.61.0",
     "description": "pure nodejs OPCUA SDK - module -basic-types",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -8,23 +8,23 @@
         "build": "tsc -b",
         "test": "echo none",
         "clean": "node -e \"require('rimraf').sync('dist');\"",
-        "lint": "tslint source/*.ts"
+        "lint": "eslint source/*.ts"
     },
     "dependencies": {
-        "node-opcua-assert": "2.42.0",
-        "node-opcua-binary-stream": "2.42.0",
-        "node-opcua-buffer-utils": "2.42.0",
-        "node-opcua-date-time": "2.42.0",
-        "node-opcua-enum": "2.42.0",
-        "node-opcua-guid": "2.42.0",
-        "node-opcua-nodeid": "2.45.0",
-        "node-opcua-status-code": "2.42.0",
-        "node-opcua-utils": "2.44.0"
+        "node-opcua-assert": "2.55.0",
+        "node-opcua-binary-stream": "2.55.0",
+        "node-opcua-buffer-utils": "2.55.0",
+        "node-opcua-date-time": "2.61.0",
+        "node-opcua-enum": "2.55.0",
+        "node-opcua-guid": "2.55.0",
+        "node-opcua-nodeid": "2.61.0",
+        "node-opcua-status-code": "2.56.0",
+        "node-opcua-utils": "2.60.0"
     },
     "devDependencies": {
-        "@types/node": "15.6.1",
-        "node-opcua-benchmarker": "2.42.0",
-        "node-opcua-debug": "2.42.0",
+        "@types/node": "16.11.9",
+        "node-opcua-benchmarker": "2.55.0",
+        "node-opcua-debug": "2.61.0",
         "should": "^13.2.3"
     },
     "author": "Etienne Rossignon",

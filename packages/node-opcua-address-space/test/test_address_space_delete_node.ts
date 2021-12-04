@@ -1,11 +1,11 @@
 import * as should from "should";
 
+import { DataType } from "node-opcua-variant";
+import { nodesets } from "node-opcua-nodesets";
+
 import { AddressSpace, Namespace, UAObject, UAObjectType, UADiscreteAlarm, ensureDatatypeExtracted } from "..";
 import { generateAddressSpace } from "../nodeJS";
 import { getMiniAddressSpace } from "../testHelpers";
-
-import { DataType } from "node-opcua-variant";
-import { nodesets } from "node-opcua-nodesets";
 
 describe("AddressSpace#delete", () => {
     let addressSpace: AddressSpace;
@@ -108,7 +108,7 @@ describe("AddressSpace#deleteNode-b", () => {
         });
 
         // install inputNode Node monitoring for change
-        alarmNode._installInputNodeMonitoring(options.inputNode);
+        alarmNode.installInputNodeMonitoring(options.inputNode);
         alarmNode.activeState.setValue(false);
 
         return alarmNode;

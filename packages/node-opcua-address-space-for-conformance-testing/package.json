@@ -1,23 +1,26 @@
 {
 	"name": "node-opcua-address-space-for-conformance-testing",
-	"version": "2.47.0",
+	"version": "2.62.2",
 	"description": "pure nodejs OPCUA SDK - module -address-space-for-conformance-testing",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {
-		"build": "tsc -b"
+		"build": "tsc -b",
+		"lint": "eslint src",
+		"format": "prettier --write src",
+		"test": "mocha"
 	},
 	"dependencies": {
-		"node-opcua-address-space": "2.47.0",
-		"node-opcua-assert": "2.42.0",
-		"node-opcua-basic-types": "2.47.0",
-		"node-opcua-data-access": "2.47.0",
-		"node-opcua-data-model": "2.47.0",
-		"node-opcua-data-value": "2.47.0",
-		"node-opcua-factory": "2.47.0",
-		"node-opcua-nodeid": "2.45.0",
-		"node-opcua-status-code": "2.42.0",
-		"node-opcua-variant": "2.47.0"
+		"node-opcua-address-space": "2.62.2",
+		"node-opcua-assert": "2.55.0",
+		"node-opcua-basic-types": "2.61.0",
+		"node-opcua-data-access": "2.62.0",
+		"node-opcua-data-model": "2.61.0",
+		"node-opcua-data-value": "2.62.0",
+		"node-opcua-factory": "2.61.0",
+		"node-opcua-nodeid": "2.61.0",
+		"node-opcua-status-code": "2.56.0",
+		"node-opcua-variant": "2.62.0"
 	},
 	"author": "Etienne Rossignon",
 	"license": "MIT",

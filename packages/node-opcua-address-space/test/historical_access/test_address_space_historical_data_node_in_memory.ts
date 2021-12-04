@@ -1,30 +1,25 @@
 import * as fs from "fs";
 import * as should from "should";
 
-import { AddressSpace, SessionContext } from "../..";
-import { generateAddressSpace } from "../../nodeJS";
-
-const context = SessionContext.defaultContext;
-
 import { nodesets } from "node-opcua-nodesets";
 import { HistoryData, ReadRawModifiedDetails } from "node-opcua-service-history";
 import { StatusCodes } from "node-opcua-status-code";
+import { coerceNodeId } from "node-opcua-nodeid";
 
-// tslint:disable-next-line:no-var-requires
-require("date-utils");
-
-function date_add(date: Date, options: any): Date {
-    const tmp = new Date(date);
-    (tmp as any).add(options);
-    return tmp;
-}
+import { AddressSpace, ContinuationPoint, ContinuationPointManager, SessionContext } from "../..";
+import { generateAddressSpace } from "../../nodeJS";
+import { date_add } from "../../testHelpers";
 
 // make sure extra error checking is made on object constructions
-// tslint:disable-next-line:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("Testing Historical Data Node", () => {
+    const context = new SessionContext({
+        session: {
+            continuationPointManager: new ContinuationPointManager(),
+            getSessionId: () => coerceNodeId(1)
+        }
+    });
     let addressSpace: AddressSpace;
-
     before(async () => {
         addressSpace = AddressSpace.create();
         const xml_files = [nodesets.standard];
@@ -38,7 +33,8 @@ describe("Testing Historical Data Node", () => {
         addressSpace.dispose();
     });
 
-    it("HHH3- should keep values up to options.maxOnlineValues to provide historical reads", async () => {
+    // eslint-disable-next-line max-statements
+    it("HHM3- should keep values up to options.maxOnlineValues to provide historical reads", async () => {
         const node = addressSpace.getOwnNamespace().addVariable({
             browseName: "MyVar2",
             componentOf: addressSpace.rootFolder.objects.server.vendorServerInfo,
@@ -50,7 +46,7 @@ describe("Testing Historical Data Node", () => {
 
         (node as any)["hA Configuration"].browseName.toString().should.eql("HA Configuration");
 
-        // let's injects some values into the history
+        // let's inject some values into the history
         const today = new Date();
 
         const historyReadDetails = new ReadRawModifiedDetails({
@@ -62,7 +58,7 @@ describe("Testing Historical Data Node", () => {
         });
         const indexRange = null;
         const dataEncoding = null;
-        const continuationPoint = undefined;
+        const continuationPoint: ContinuationPoint | undefined = undefined;
 
         node.setValueFromSource(
             {
@@ -75,7 +71,9 @@ describe("Testing Historical Data Node", () => {
 
         (node as any)["hA Configuration"].startOfOnlineArchive.readValue().value.value.should.eql(date_add(today, { seconds: 0 }));
 
-        const historyReadResult1 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, continuationPoint);
+        const historyReadResult1 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, {
+            continuationPoint
+        });
 
         const dataValues1 = (historyReadResult1.historyData as HistoryData).dataValues!;
         dataValues1.length.should.eql(1);
@@ -91,7 +89,9 @@ describe("Testing Historical Data Node", () => {
         );
         (node as any)["hA Configuration"].startOfOnlineArchive.readValue().value.value.should.eql(date_add(today, { seconds: 0 }));
 
-        const historyReadResult2 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, continuationPoint);
+        const historyReadResult2 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, {
+            continuationPoint
+        });
 
         const dataValues2 = (historyReadResult2.historyData as HistoryData).dataValues!;
         dataValues2.length.should.eql(2);
@@ -108,7 +108,9 @@ describe("Testing Historical Data Node", () => {
         );
         (node as any)["hA Configuration"].startOfOnlineArchive.readValue().value.value.should.eql(date_add(today, { seconds: 0 }));
 
-        const historyReadResult3 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, continuationPoint);
+        const historyReadResult3 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, {
+            continuationPoint
+        });
 
         const dataValues3 = (historyReadResult3.historyData as HistoryData).dataValues!;
         dataValues3.length.should.eql(3);
@@ -128,7 +130,9 @@ describe("Testing Historical Data Node", () => {
         );
         (node as any)["hA Configuration"].startOfOnlineArchive.readValue().value.value.should.eql(date_add(today, { seconds: 1 }));
 
-        const historyReadResult4 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, continuationPoint);
+        const historyReadResult4 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, {
+            continuationPoint
+        });
 
         const dataValues4 = (historyReadResult4.historyData as HistoryData).dataValues!;
         dataValues4.length.should.eql(3);
@@ -148,7 +152,9 @@ describe("Testing Historical Data Node", () => {
         );
         (node as any)["hA Configuration"].startOfOnlineArchive.readValue().value.value.should.eql(date_add(today, { seconds: 2 }));
 
-        const historyReadResult5 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, continuationPoint);
+        const historyReadResult5 = await node.historyRead(context, historyReadDetails, indexRange, dataEncoding, {
+            continuationPoint
+        });
 
         const dataValues5 = (historyReadResult5.historyData as HistoryData).dataValues!;
         dataValues5.length.should.eql(3);

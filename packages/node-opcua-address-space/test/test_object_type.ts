@@ -2,13 +2,13 @@ import { AttributeIds } from "node-opcua-data-model";
 import { NodeId } from "node-opcua-nodeid";
 import { StatusCodes } from "node-opcua-status-code";
 import { DataType } from "node-opcua-variant";
-import { AddressSpace, SessionContext } from "..";
+import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 
+import { AddressSpace, SessionContext } from "..";
 import { create_minimalist_address_space_nodeset } from "../testHelpers";
 
 const context = SessionContext.defaultContext;
 
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
 
@@ -35,8 +35,7 @@ describe("testing UAObjectType", () => {
             isAbstract: false
         });
 
-        let value;
-        value = objType.readAttribute(context, AttributeIds.IsAbstract);
+        const value = objType.readAttribute(context, AttributeIds.IsAbstract);
         value.value.dataType.should.eql(DataType.Boolean);
         value.statusCode.should.eql(StatusCodes.Good);
         value.value.value.should.equal(false);
@@ -109,4 +108,33 @@ describe("testing UAObjectType", () => {
         debugLog(objType.toString());
         debugLog(variable.toString());
     });
+
+    it("ObjectType#instantiate and display name", () => {
+        const namespace = addressSpace.getOwnNamespace();
+        const objType = namespace.addObjectType({
+            browseName: "MyObject6",
+            displayName: "Some DisplayName",
+            isAbstract: false,
+            subtypeOf: "BaseObjectType"
+        });
+        
+        objType.displayName.toString().should.eql("locale=null text=Some DisplayName");
+
+
+        const instance1 =objType.instantiate({
+            browseName: "Instance1",
+        });
+        instance1.displayName.toString().should.eql("locale=null text=Some DisplayName");
+
+        const instance2 =objType.instantiate({
+            browseName: "Instance2",
+            displayName: "Instance2 DisplayName"
+        });
+        instance2.displayName.toString().should.eql("locale=null text=Instance2 DisplayName");
+
+
+        // tslint:disable:no-console
+        debugLog(objType.toString());
+        
+    }); 
 });

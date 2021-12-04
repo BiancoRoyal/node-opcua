@@ -1,13 +1,12 @@
+import { IAddressSpace, INamespace, UADataType } from "node-opcua-address-space-base";
 import { assert } from "node-opcua-assert";
 import { StructureDefinition, EnumDefinition, EnumDescription } from "node-opcua-types";
-import { constructNamespaceDependency } from "./construct_namespace_dependency";
 import { NodeId } from "node-opcua-nodeid";
-
-import { XmlWriter, Namespace } from "../../source/address_space_ts";
-import { UADataType } from "../ua_data_type";
-import { AddressSpace } from "../address_space";
 import { AddressSpacePrivate } from "../address_space_private";
-import { UANamespace } from "../namespace";
+import { XmlWriter } from "../../source/xml_writer";
+import { UADataTypeImpl } from "../ua_data_type_impl";
+import { NamespacePrivate } from "../namespace_private";
+import { constructNamespaceDependency } from "./construct_namespace_dependency";
 
 // tslint:disable-next-line: no-var-requires
 const XMLWriter = require("xml-writer");
@@ -19,18 +18,18 @@ function dumpEnumeratedType(xw: XmlWriter, e: EnumDefinition, name: string): voi
     for (const f of e.fields || []) {
         xw.startElement("opc:EnumeratedValue");
         xw.writeAttribute("Name", f.name!);
-        assert(f.value[0] === 0, "unsuppor 64 bit value !");
+        assert(f.value[0] === 0, "unsupported 64 bit value !");
         xw.writeAttribute("Value", f.value[1].toString());
         xw.endElement();
     }
     xw.endElement();
 }
-function buildXmlName(addressSpace: AddressSpacePrivate, map: { [key: number]: string }, nodeId: NodeId) {
+function buildXmlName(addressSpace: AddressSpacePrivate, map: { [key: number]: string }, nodeId: NodeId): string {
     if (NodeId.sameNodeId(nodeId, NodeId.nullNodeId)) {
         return "ua:ExtensionObject";
     }
     const node = addressSpace.findNode(nodeId);
-    // istanbull ignore next
+    // istanbul ignore next
     if (!node) {
         throw new Error("Cannot find Node for" + nodeId?.toString());
     }
@@ -38,25 +37,34 @@ function buildXmlName(addressSpace: AddressSpacePrivate, map: { [key: number]: s
     const prefix = node.nodeId.namespace === 0 ? (node.nodeId.value <= 15 ? "opc" : "ua") : map[node.nodeId.namespace];
     return prefix + ":" + (typeName === "Structure" && prefix === "ua" ? "ExtensionObject" : typeName);
 }
+
+// eslint-disable-next-line max-statements
 function dumpDataTypeStructure(
     xw: XmlWriter,
-    addressSpace: AddressSpacePrivate,
+    addressSpace: IAddressSpace,
     map: { [key: number]: string },
     structureDefinition: StructureDefinition,
+    structureDefinitionBase: StructureDefinition | undefined| null,
     name: string,
     doc?: string
-) {
+): void {
     xw.startElement("opc:StructuredType");
     xw.writeAttribute("Name", name);
-    xw.writeAttribute("BaseType", buildXmlName(addressSpace, map, structureDefinition.baseDataType));
+    xw.writeAttribute("BaseType", buildXmlName(addressSpace as AddressSpacePrivate, map, structureDefinition.baseDataType));
 
     if (doc) {
         xw.startElement("opc:Documentation");
         xw.text(doc);
         xw.endElement();
     }
+
+    const fields = structureDefinition.fields || [];
+    // get base class
+    const nbFieldsInBase = structureDefinitionBase? structureDefinitionBase.fields?.length || 0 : 0;
+
     let optionalsCount = 0;
-    for (const f of structureDefinition.fields || []) {
+    for (let index = nbFieldsInBase; index < fields.length; index ++) {
+        const f=  fields [index];
         if (f.isOptional) {
             xw.startElement("opc:Field");
             xw.writeAttribute("Name", f.name + "Specified");
@@ -89,7 +97,9 @@ function dumpDataTypeStructure(
             xw.endElement();
         }
     }
-    for (const f of structureDefinition.fields || []) {
+    for (let index = nbFieldsInBase; index < fields.length; index ++) {
+        const f=  fields [index];
+   
         const isArray = f.valueRank > 0 && f.arrayDimensions?.length;
 
         if (isArray) {
@@ -105,7 +115,7 @@ function dumpDataTypeStructure(
         xw.startElement("opc:Field");
         xw.writeAttribute("Name", f.name!);
 
-        const typeName = buildXmlName(addressSpace, map, f.dataType);
+        const typeName = buildXmlName(addressSpace as AddressSpacePrivate, map, f.dataType);
         xw.writeAttribute("TypeName", typeName);
         if (isArray) {
             xw.writeAttribute("LengthField", "NoOf" + f.name!);
@@ -123,20 +133,21 @@ function dumpDataTypeToBSD(xw: XmlWriter, dataType: UADataType, map: { [key: num
 
     const name: string = dataType.browseName.name!;
 
-    const def = dataType._getDefinition(false);
-    if (def instanceof StructureDefinition) {
-        dumpDataTypeStructure(xw, addressSpace, map, def, name);
+    const definition = dataType.getDefinition();
+    if (definition instanceof StructureDefinition) {
+        const structureDefinitionBase = dataType.subtypeOfObj?.getStructureDefinition();
+        dumpDataTypeStructure(xw, addressSpace, map, definition, structureDefinitionBase, name);
     }
-    if (def instanceof EnumDefinition) {
-        dumpEnumeratedType(xw, def, name);
+    if (definition instanceof EnumDefinition) {
+        dumpEnumeratedType(xw, definition, name);
     }
 }
 
-function shortcut(namespace: Namespace) {
+function shortcut(namespace: INamespace) {
     return "n" + namespace.index;
 }
-export function dumpToBSD(namespace: UANamespace) {
-    const dependency: Namespace[] = constructNamespaceDependency(namespace);
+export function dumpToBSD(namespace: NamespacePrivate): void {
+    const dependency: INamespace[] = constructNamespaceDependency(namespace);
 
     const addressSpace = namespace.addressSpace;
 

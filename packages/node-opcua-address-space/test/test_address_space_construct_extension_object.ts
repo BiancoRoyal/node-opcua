@@ -6,21 +6,20 @@
 // For instance if ServerStatus
 //    const ServerStatusDataType = addressSpace.findDataType("ServerStatus");
 //    const serverStatus  = addressSpace.constructExtensionObject(ServerStatusDataType);
-//    serverStatus.constructor.name.should.eql("ServerStatus");
+//    serverStatus.constructor.name.should.eql("<<ServerStatus");
 //
 //
 
 import * as fs from "fs";
+import * as path from "path";
 import * as mocha from "mocha";
-import * as utils from "node-opcua-utils";
+import * as should from "should";
 
+import * as utils from "node-opcua-utils";
 import { assert } from "node-opcua-assert";
 import { ExtensionObject } from "node-opcua-extension-object";
 import { makeNodeId } from "node-opcua-nodeid";
 import { StatusCodes } from "node-opcua-status-code";
-import * as path from "path";
-import * as should from "should";
-
 import { ServerState } from "node-opcua-types";
 import { AccessLevelFlag, NodeClass, makeAccessLevelFlag } from "node-opcua-data-model";
 import { AttributeIds } from "node-opcua-data-model";
@@ -28,14 +27,14 @@ import { DataType } from "node-opcua-variant";
 import { Variant } from "node-opcua-variant";
 import { VariableIds } from "node-opcua-constants";
 import { nodesets } from "node-opcua-nodesets";
-import { AddressSpace, BaseNode, Namespace, SessionContext, UAServerStatus } from "..";
-import { generateAddressSpace } from "../nodeJS";
 import { WriteValue } from "node-opcua-service-write";
 import { make_debugLog, checkDebugFlag } from "node-opcua-debug";
 
+import { AddressSpace, BaseNode, Namespace, SessionContext, UAServerStatus, DTServerStatus } from "..";
+import { generateAddressSpace } from "../nodeJS";
+
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
-
 
 // tslint:disable-next-line:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
@@ -209,7 +208,7 @@ describe("testing address space namespace loading", function (this: any) {
         // in this test, we verify that we can easily bind the Server_ServerStatus object
         // the process shall automatically bind variables and substructures recursively
 
-        const serverStatus = addressSpace.findNode(makeNodeId(VariableIds.Server_ServerStatus))! as UAServerStatus;
+        const serverStatus = addressSpace.findNode(makeNodeId(VariableIds.Server_ServerStatus))! as UAServerStatus<DTServerStatus>;
         serverStatus.browseName.toString().should.eql("ServerStatus");
 
         // before bindExtensionObject is called, startTime property exists but is not bound

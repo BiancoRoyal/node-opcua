@@ -8,17 +8,6 @@ const uu = require("underscore");
 const sameVariantSlow1 = ul.isEqual;
 const sameVariantSlow2 = uu.isEqual;
 
-const {
-    Variant,
-    DataType,
-    VariantArrayType,
-    isValidVariant,
-    buildVariantArray,
-    VARIANT_ARRAY_MASK,
-    coerceVariantType,
-    decodeVariant
-} = require("..");
-
 const ec = require("node-opcua-basic-types");
 const { QualifiedName, LocalizedText } = require("node-opcua-data-model");
 
@@ -526,10 +515,39 @@ describe("Variant", () => {
             stream.length.should.equal(137);
         });
     });
+    it("AAA Variant and status Code", () => {
+        const variant = new Variant({
+            dataType: DataType.StatusCode,
+            arrayType: VariantArrayType.Array,
+            value: [StatusCodes.Good, StatusCodes.BadConditionDisabled]
+        });
+
+        const binaryStream = new BinaryStream(1000);
+        variant.encode(binaryStream);
+
+        binaryStream.rewind();
+
+        const v = new Variant();
+        v.decode(binaryStream);
+
+        console.log(v.toString());
+        v.value[0].should.eql(StatusCodes.Good);
+        v.value[1].should.eql(StatusCodes.BadConditionDisabled);
+    });
 });
 
 const analyze_object_binary_encoding = require("node-opcua-packet-analyzer").analyze_object_binary_encoding;
 const makeNodeId = require("node-opcua-nodeid").makeNodeId;
+const {
+    Variant,
+    DataType,
+    VariantArrayType,
+    isValidVariant,
+    buildVariantArray,
+    VARIANT_ARRAY_MASK,
+    coerceVariantType,
+    decodeVariant
+} = require("..");
 
 describe("Variant - Analyser", function () {
     // increase timeout to cope with istanbul
@@ -589,6 +607,11 @@ describe("Variant - Analyser", function () {
             arrayType: VariantArrayType.Matrix,
             value: [1, 2, 3, 4, 5, 6],
             dimensions: [3, 2]
+        }),
+        new Variant({
+            dataType: DataType.StatusCode,
+            arrayType: VariantArrayType.Array,
+            value: [StatusCodes.Good, StatusCodes.BadConditionDisabled]
         })
     ];
 
@@ -992,26 +1015,8 @@ describe("Variant with Advanced Array", () => {
             arrayType: VariantArrayType.Matrix,
             dimensions: [5, 4],
             value: [
-                0x000,
-                0x001,
-                0x002,
-                0x003,
-                0x100,
-                0x101,
-                0x102,
-                0x103,
-                0x200,
-                0x201,
-                0x202,
-                0x203,
-                0x300,
-                0x301,
-                0x302,
-                0x303,
-                0x400,
-                0x401,
-                0x402,
-                0x403
+                0x000, 0x001, 0x002, 0x003, 0x100, 0x101, 0x102, 0x103, 0x200, 0x201, 0x202, 0x203, 0x300, 0x301, 0x302, 0x303,
+                0x400, 0x401, 0x402, 0x403
             ]
         });
 
@@ -1454,10 +1459,6 @@ describe("miscellaneous Variant tests", () => {
             value: undefined
         });
         var2.toString().should.eql("Variant(Scalar<ByteString>, value: <null>)");
-    });
-
-    it("coerceVariantType on EnumerationItem", () => {
-        coerceVariantType(DataType.Int32, { value: 26, key: "foo" }).should.eql(26);
     });
 
     it("decodeVariant", () => {

@@ -2,12 +2,11 @@
  * @module node-opcua-server
  */
 // tslint:disable:no-console
-import * as async from "async";
-import * as chalk from "chalk";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import * as envPaths from "env-paths";
+import * as async from "async";
+import * as chalk from "chalk";
 import { withLock } from "@ster5/global-mutex";
 import { assert } from "node-opcua-assert";
 import {
@@ -32,10 +31,10 @@ import { ApplicationDescriptionOptions } from "node-opcua-types";
 import { EndpointDescription, GetEndpointsRequest } from "node-opcua-types";
 import { matchUri } from "node-opcua-utils";
 
+import { performCertificateSanityCheck } from "node-opcua-client";
 import { OPCUAServerEndPoint } from "./server_end_point";
 import { IChannelData } from "./i_channel_data";
 import { ISocketData } from "./i_socket_data";
-import { performCertificateSanityCheck } from "node-opcua-client";
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
@@ -176,9 +175,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
 
         const __applicationUri = serverInfo.applicationUri || "";
 
-        (this.serverInfo as any).__defineGetter__("applicationUri", function (this: any) {
-            return resolveFullyQualifiedDomainName(__applicationUri);
-        });
+        (this.serverInfo as any).__defineGetter__("applicationUri", () => resolveFullyQualifiedDomainName(__applicationUri));
 
         this._preInitTask.push(async () => {
             const fqdn = await extractFullyQualifiedDomainName();
@@ -189,8 +186,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
         });
     }
 
-    protected async createDefaultCertificate() {
-
+    protected async createDefaultCertificate(): Promise<void> {
         if (fs.existsSync(this.certificateFile)) {
             return;
         }
@@ -227,7 +223,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
      * @async
      * @param {callback} done
      */
-    public start(done: (err?: Error | null) => void) {
+    public start(done: (err?: Error | null) => void): void {
         assert(typeof done === "function");
         this.startAsync()
             .then(() => done(null))
@@ -245,22 +241,22 @@ export class OPCUABaseServer extends OPCUASecureObject {
     protected async startAsync(): Promise<void> {
         await this.performPreInitialization();
 
-        const self = this;
         assert(Array.isArray(this.endpoints));
         assert(this.endpoints.length > 0, "We need at least one end point");
 
         installPeriodicClockAdjustment();
-
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const server = this;
         const _on_new_channel = function (this: OPCUAServerEndPoint, channel: ServerSecureChannelLayer) {
-            self.emit("newChannel", channel, this);
+            server.emit("newChannel", channel, this);
         };
 
         const _on_close_channel = function (this: OPCUAServerEndPoint, channel: ServerSecureChannelLayer) {
-            self.emit("closeChannel", channel, this);
+            server.emit("closeChannel", channel, this);
         };
 
         const _on_connectionRefused = function (this: OPCUAServerEndPoint, socketData: ISocketData) {
-            self.emit("connectionRefused", socketData, this);
+            server.emit("connectionRefused", socketData, this);
         };
 
         const _on_openSecureChannelFailure = function (
@@ -268,7 +264,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
             socketData: ISocketData,
             channelData: IChannelData
         ) {
-            self.emit("openSecureChannelFailure", socketData, channelData, this);
+            server.emit("openSecureChannelFailure", socketData, channelData, this);
         };
 
         const promises: Promise<void>[] = [];
@@ -288,9 +284,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
             endpoint._on_openSecureChannelFailure = _on_openSecureChannelFailure;
             endpoint.on("openSecureChannelFailure", endpoint._on_openSecureChannelFailure);
 
-            promises.push(
-                new Promise<void>((resolve, reject) => endpoint.start((err) => (err ? reject(err) : resolve())))
-            );
+            promises.push(new Promise<void>((resolve, reject) => endpoint.start((err) => (err ? reject(err) : resolve()))));
         }
         await Promise.all(promises);
     }
@@ -299,7 +293,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
      * shutdown all server endPoints
      * @async
      */
-    public shutdown(done: (err?: Error) => void) {
+    public shutdown(done: (err?: Error) => void): void {
         assert(typeof done === "function");
         uninstallPeriodicClockAdjustment();
         this.serverCertificateManager.dispose().then(() => {
@@ -350,7 +344,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
     /**
      * @private
      */
-    public on_request(message: Message, channel: ServerSecureChannelLayer) {
+    public on_request(message: Message, channel: ServerSecureChannelLayer): void {
         assert(message.request);
         assert(message.requestId !== 0);
         const request = message.request;
@@ -382,6 +376,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
             // handler must be named _on_ActionRequest()
             const handler = (this as any)["_on_" + request.schema.name];
             if (typeof handler === "function") {
+                // eslint-disable-next-line prefer-rest-params
                 handler.apply(this, arguments);
             } else {
                 errMessage = "[NODE-OPCUA-W07] Unsupported Service : " + request.schema.name;
@@ -395,15 +390,16 @@ export class OPCUABaseServer extends OPCUASecureObject {
             const errMessage1 = "[NODE-OPCUA-W08] EXCEPTION CAUGHT WHILE PROCESSING REQUEST !! " + request.schema.name;
             warningLog(chalk.red.bold(errMessage1));
             warningLog(request.toString());
-            displayTraceFromThisProjectOnly(err);
+            displayTraceFromThisProjectOnly(err as Error);
 
             let additional_messages = [];
             additional_messages.push("EXCEPTION CAUGHT WHILE PROCESSING REQUEST !!! " + request.schema.name);
-            additional_messages.push(err.message);
-            if (err.stack) {
-                additional_messages = additional_messages.concat(err.stack.split("\n"));
+            if (err instanceof Error) {
+                additional_messages.push(err.message);
+                if (err.stack) {
+                    additional_messages = additional_messages.concat(err.stack.split("\n"));
+                }
             }
-
             response = makeServiceFault(StatusCodes.BadInternalError, additional_messages);
 
             channel.send_response("MSG", response, message, emptyCallback);
@@ -500,15 +496,14 @@ export class OPCUABaseServer extends OPCUASecureObject {
     /**
      * @private
      */
-    protected _on_GetEndpointsRequest(message: Message, channel: ServerSecureChannelLayer) {
-        const server = this;
+    protected _on_GetEndpointsRequest(message: Message, channel: ServerSecureChannelLayer): void {
         const request = message.request as GetEndpointsRequest;
 
         assert(request.schema.name === "GetEndpointsRequest");
 
         const response = new GetEndpointsResponse({});
 
-        response.endpoints = server._get_endpoints(null);
+        response.endpoints = this._get_endpoints(null);
 
         response.endpoints = response.endpoints.filter((endpoint: EndpointDescription) => !(endpoint as any).restricted);
 
@@ -532,8 +527,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
     /**
      * @private
      */
-    protected _on_FindServersRequest(message: Message, channel: ServerSecureChannelLayer) {
-        const server = this;
+    protected _on_FindServersRequest(message: Message, channel: ServerSecureChannelLayer): void {
         // Release 1.02  13  OPC Unified Architecture, Part 4 :
         //   This  Service  can be used without security and it is therefore vulnerable to Denial Of Service (DOS)
         //   attacks. A  Server  should minimize the amount of processing required to send the response for this
@@ -548,7 +542,7 @@ export class OPCUABaseServer extends OPCUASecureObject {
                 throw new Error("Invalid request type");
             }
 
-            let servers = server.getServers(channel);
+            let servers = this.getServers(channel);
             // apply filters
             // TODO /
             if (request.serverUris && request.serverUris.length > 0) {

@@ -1,6 +1,7 @@
 /**
  * @module node-opcua-pseudo-session
  */
+import { assert } from "node-opcua-assert";
 import { AttributeIds, BrowseDirection, makeResultMask } from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
 import { NodeIdLike, resolveNodeId } from "node-opcua-nodeid";
@@ -11,11 +12,11 @@ import {
     BrowseResponse,
     BrowseResult
 } from "node-opcua-service-browse";
-import { CallMethodRequest, CallMethodRequestOptions, CallMethodResult } from "node-opcua-service-call";
+import { Argument, CallMethodRequest, CallMethodRequestOptions, CallMethodResult } from "node-opcua-service-call";
 import { ReadValueId, ReadValueIdOptions } from "node-opcua-service-read";
 import { WriteValueOptions } from "node-opcua-service-write";
 import { BrowsePath, BrowsePathResult } from "node-opcua-service-translate-browse-path";
-import { Variant } from "node-opcua-variant";
+import { DataType, Variant, VariantArrayType } from "node-opcua-variant";
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
 import { VariableIds } from "node-opcua-constants";
 
@@ -38,16 +39,17 @@ export interface IBasicSession {
      *
      * @param continuationPoint
      * @param releaseContinuationPoints  a Boolean parameter with the following values:
-     *      TRUE passed continuationPoints shall be reset to free resources in
+     *     * `true` passed continuationPoints shall be reset to free resources in
      *      the Server. The continuation points are released and the results
      *      and diagnosticInfos arrays are empty.
-     *      FALSE passed continuationPoints shall be used to get the next set of
+     *     * `false` passed continuationPoints shall be used to get the next set of
      *      browse information.
-     *      A Client shall always use the continuation point returned by a Browse or
-     *      BrowseNext response to free the resources for the continuation point in the
-     *      Server. If the Client does not want to get the next set of browse information,
-     *      BrowseNext shall be called with this parameter set to TRUE.
-     * @param callback
+     *
+     *   A Client shall always use the continuation point returned by a Browse or
+     *    BrowseNext response to free the resources for the continuation point in the
+     *    Server. If the Client does not want to get the next set of browse information,
+     *    BrowseNext shall be called with this parameter set to `true`.
+     *
      */
     browseNext(continuationPoint: Buffer, releaseContinuationPoints: boolean, callback: ResponseCallback<BrowseResult>): void;
 
@@ -74,8 +76,8 @@ export interface IBasicSession {
 export type MethodId = NodeIdLike;
 
 export interface ArgumentDefinition {
-    inputArguments: Variant[];
-    outputArguments: Variant[];
+    inputArguments: Argument[];
+    outputArguments: Argument[];
 }
 
 export interface IBasicSession {
@@ -104,19 +106,28 @@ export interface IBasicSession {
 
 export interface IBasicSession {
     write(nodeToWrite: WriteValueOptions, callback: ResponseCallback<StatusCode>): void;
-    
+
     write(nodesToWrite: WriteValueOptions[], callback: ResponseCallback<StatusCode[]>): void;
-    
+
     write(nodeToWrite: WriteValueOptions): Promise<StatusCode>;
 
     write(nodesToWrite: WriteValueOptions[]): Promise<StatusCode[]>;
+}
+
+function isValid(result: DataValue): boolean {
+    assert(result.statusCode === StatusCodes.Good);
+    if (result.value.dataType !== DataType.Null) {
+        assert(result.value.dataType === DataType.ExtensionObject);
+        assert(result.value.arrayType === VariantArrayType.Array);
+    }
+    return true;
 }
 
 export function getArgumentDefinitionHelper(
     session: IBasicSession,
     methodId: MethodId,
     callback: ResponseCallback<ArgumentDefinition>
-) {
+): void {
     const browseDescription = new BrowseDescription({
         browseDirection: BrowseDirection.Forward,
         includeSubtypes: true,
@@ -148,8 +159,8 @@ export function getArgumentDefinitionHelper(
         // note : OutputArguments property is optional thus may be missing
         const outputArgumentRef = outputArgumentRefArray.length === 1 ? outputArgumentRefArray[0] : null;
 
-        let inputArguments: Variant[] = [];
-        let outputArguments: Variant[] = [];
+        let inputArguments: Argument[] = [];
+        let outputArguments: Argument[] = [];
 
         const nodesToRead = [];
         const actions: any[] = [];
@@ -160,7 +171,9 @@ export function getArgumentDefinitionHelper(
                 nodeId: inputArgumentRef.nodeId
             });
             actions.push((result: DataValue) => {
-                inputArguments = result.value.value;
+                if (isValid(result)) {
+                    inputArguments = result.value.value as Argument[];
+                }
             });
         }
         if (outputArgumentRef) {
@@ -169,7 +182,10 @@ export function getArgumentDefinitionHelper(
                 nodeId: outputArgumentRef.nodeId
             });
             actions.push((result: DataValue) => {
-                outputArguments = result.value.value;
+                assert(result.statusCode === StatusCodes.Good);
+                if (isValid(result)) {
+                    outputArguments = result.value.value as Argument[];
+                }
             });
         }
 
@@ -196,15 +212,15 @@ export function getArgumentDefinitionHelper(
     });
 }
 
-export async function readNamespaceArray(session: IBasicSession): Promise<string[]>
-{
+export async function readNamespaceArray(session: IBasicSession): Promise<string[]> {
+    const nodeId = resolveNodeId(VariableIds.Server_NamespaceArray);
     const dataValue = await session.read({
-        nodeId: resolveNodeId(VariableIds.Server_NamespaceArray), 
+        nodeId,
         attributeId: AttributeIds.Value
     });
     if (dataValue.statusCode !== StatusCodes.Good) {
+        // errorLog("namespaceArray is not populated ! Your server must expose a list of namespaces in node ", nodeId.toString());
         return [];
     }
     return dataValue.value.value as string[];
 }
-

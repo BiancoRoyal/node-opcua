@@ -3,9 +3,8 @@
  */
 // tslint:disable:no-console
 
-import { Queue } from "./queue";
-import * as chalk from "chalk";
 import { EventEmitter } from "events";
+import * as chalk from "chalk";
 
 import { AddressSpace, BaseNode, Duration, UAObjectType } from "node-opcua-address-space";
 import { checkSelectClauses } from "node-opcua-address-space";
@@ -35,6 +34,7 @@ import {
 } from "node-opcua-service-subscription";
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
 import { AggregateFilterResult, ContentFilterResult, EventFieldList, EventFilterResult, NotificationData } from "node-opcua-types";
+import { Queue } from "./queue";
 
 import { MonitoredItem, MonitoredItemOptions, QueueItem } from "./monitored_item";
 import { ServerSession } from "./server_session";
@@ -407,12 +407,12 @@ export interface GetMonitoredItemsResult {
      * array of serverHandles for all MonitoredItems of the subscription
      * identified by subscriptionId.
      */
-    serverHandles: number[];
+    serverHandles: Uint32Array;
     /**
      *  array of clientHandles for all MonitoredItems of the subscription
      *  identified by subscriptionId.
      */
-    clientHandles: number[];
+    clientHandles: Uint32Array;
     statusCode: StatusCode;
 }
 
@@ -439,11 +439,11 @@ export type DeleteMonitoredItemHook = (subscription: Subscription, monitoredItem
  * The Subscription class used in the OPCUA server side.
  */
 export class Subscription extends EventEmitter {
-    public static minimumPublishingInterval: number = 50; // fastest possible
-    public static defaultPublishingInterval: number = 1000; // one second
+    public static minimumPublishingInterval = 50; // fastest possible
+    public static defaultPublishingInterval = 1000; // one second
     public static maximumPublishingInterval: number = 1000 * 60 * 60 * 24 * 15; // 15 days
-    public static maxNotificationPerPublishHighLimit: number = 5000;
-    public static maxMonitoredItemCount: number = 20000;
+    public static maxNotificationPerPublishHighLimit = 1000;
+    public static maxMonitoredItemCount = 20000;
 
     public static registry = new ObjectRegistry();
 
@@ -499,13 +499,13 @@ export class Subscription extends EventEmitter {
     public $session?: ServerSession;
 
     private _life_time_counter: number;
-    private _keep_alive_counter: number = 0;
+    private _keep_alive_counter = 0;
     private _pending_notifications: Queue<InternalNotification>;
     private _sent_notification_messages: NotificationMessage[];
     private readonly _sequence_number_generator: SequenceNumberGenerator;
     private readonly monitoredItems: { [key: number]: MonitoredItem };
     private timerId: any;
-    private _hasUncollectedMonitoredItemNotifications: boolean = false;
+    private _hasUncollectedMonitoredItemNotifications = false;
 
     constructor(options: SubscriptionOptions) {
         super();
@@ -649,14 +649,14 @@ export class Subscription extends EventEmitter {
      * the CreateSubscription Service( 5.13.2).
      * @private
      */
-    public resetLifeTimeCounter() {
+    public resetLifeTimeCounter(): void {
         this._life_time_counter = 0;
     }
 
     /**
      * @private
      */
-    public increaseLifeTimeCounter() {
+    public increaseLifeTimeCounter(): void {
         this._life_time_counter += 1;
     }
 
@@ -685,7 +685,7 @@ export class Subscription extends EventEmitter {
      * Calling this method will also remove any monitored items.
      *
      */
-    public terminate() {
+    public terminate(): void {
         assert(arguments.length === 0);
         debugLog("Subscription#terminate status", SubscriptionState[this.state]);
 
@@ -774,7 +774,7 @@ export class Subscription extends EventEmitter {
             removeResults
         };
     }
-    public dispose() {
+    public dispose(): void {
         if (doDebug) {
             debugLog("Subscription#dispose", this.id, this.monitoredItemCount);
         }
@@ -790,7 +790,7 @@ export class Subscription extends EventEmitter {
         this._pending_notifications.clear();
         this._sent_notification_messages = [];
 
-        this.sessionId = NodeId.nullNodeId;
+        this.sessionId = new NodeId();
 
         this.$session = undefined;
         this.removeAllListeners();
@@ -830,7 +830,7 @@ export class Subscription extends EventEmitter {
     /**
      * @internal
      */
-    public _flushSentNotifications() {
+    public _flushSentNotifications(): NotificationMessage[] {
         const tmp = this._sent_notification_messages;
         this._sent_notification_messages = [];
         return tmp;
@@ -864,7 +864,7 @@ export class Subscription extends EventEmitter {
      *  - otherwise the sampling is adjusted
      * @private
      */
-    public adjustSamplingInterval(samplingInterval: number, node: BaseNode) {
+    public adjustSamplingInterval(samplingInterval: number, node: BaseNode): number {
         if (samplingInterval < 0) {
             // - The value -1 indicates that the default sampling interval defined by the publishing
             //   interval of the Subscription is requested.
@@ -1034,7 +1034,7 @@ export class Subscription extends EventEmitter {
      */
     public removeMonitoredItem(monitoredItemId: number): StatusCode {
         debugLog("Removing monitoredIem ", monitoredItemId);
-        if (!this.monitoredItems.hasOwnProperty(monitoredItemId.toString())) {
+        if (!Object.prototype.hasOwnProperty.call(this.monitoredItems, monitoredItemId.toString())) {
             return StatusCodes.BadMonitoredItemIdInvalid;
         }
 
@@ -1079,7 +1079,7 @@ export class Subscription extends EventEmitter {
         return false;
     }
 
-    public get subscriptionId() {
+    public get subscriptionId(): number {
         return this.id;
     }
 
@@ -1092,8 +1092,8 @@ export class Subscription extends EventEmitter {
      * returns true if the notification has expired
      * @param notification
      */
-    public notificationHasExpired(notification: any): boolean {
-        assert(notification.hasOwnProperty("start_tick"));
+    public notificationHasExpired(notification: { start_tick: number }): boolean {
+        assert(Object.prototype.hasOwnProperty.call(notification, "start_tick"));
         assert(isFinite(notification.start_tick + this.maxKeepAliveCount));
         return notification.start_tick + this.maxKeepAliveCount < this.publishIntervalCount;
     }
@@ -1143,19 +1143,23 @@ export class Subscription extends EventEmitter {
      *
      */
     public getMonitoredItems(): GetMonitoredItemsResult {
+        const monitoredItems = Object.keys(this.monitoredItems);
+        const monitoredItemCount = monitoredItems.length;
         const result: GetMonitoredItemsResult = {
-            clientHandles: [] as number[],
-            serverHandles: [] as number[],
+            clientHandles: new Uint32Array(monitoredItemCount),
+            serverHandles: new Uint32Array(monitoredItemCount),
             statusCode: StatusCodes.Good
         };
-        for (const monitoredItemId of Object.keys(this.monitoredItems)) {
-            const monitoredItem = this.getMonitoredItem(parseInt(monitoredItemId, 10))!;
-            result.clientHandles.push(monitoredItem.clientHandle!);
+        for (let index = 0; index < monitoredItemCount; index++) {
+            const monitoredItemId = monitoredItems[index];
+            const serverHandle = parseInt(monitoredItemId, 10);
+            const monitoredItem = this.getMonitoredItem(serverHandle)!;
+            result.clientHandles[index] = monitoredItem.clientHandle;
             // TODO:  serverHandle is defined anywhere in the OPCUA Specification 1.02
             //        I am not sure what shall be reported for serverHandle...
             //        using monitoredItem.monitoredItemId instead...
             //        May be a clarification in the OPCUA Spec is required.
-            result.serverHandles.push(parseInt(monitoredItemId, 10));
+            result.serverHandles[index] = serverHandle;
         }
         return result;
     }
@@ -1213,7 +1217,7 @@ export class Subscription extends EventEmitter {
      *
      * @private
      */
-    public resetLifeTimeAndKeepAliveCounters() {
+    public resetLifeTimeAndKeepAliveCounters(): void {
         this.resetLifeTimeCounter();
         this.resetKeepAliveCounter();
     }
@@ -1260,8 +1264,8 @@ export class Subscription extends EventEmitter {
         // Update counters ....
         this._updateCounters(notificationMessage);
 
-        assert(notificationMessage.hasOwnProperty("sequenceNumber"));
-        assert(notificationMessage.hasOwnProperty("notificationData"));
+        assert(Object.prototype.hasOwnProperty.call(notificationMessage, "sequenceNumber"));
+        assert(Object.prototype.hasOwnProperty.call(notificationMessage, "notificationData"));
         // update diagnostics
         this.subscriptionDiagnostics.publishRequestCount += 1;
 
@@ -1310,7 +1314,7 @@ export class Subscription extends EventEmitter {
         }
     }
 
-    public process_subscription() {
+    public process_subscription(): void {
         assert(this.publishEngine!.pendingPublishRequestCount > 0);
 
         if (!this.publishingEnabled) {

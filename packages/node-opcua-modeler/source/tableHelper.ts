@@ -50,15 +50,15 @@ export class TableHelper {
         });
         this.head = head;
     }
-    public push(row: any) {
+    public push(row: unknown[]): void {
         this.table.push(row);
         const row2 = row.map((c: any) => (c.content) ? c.content : c);
         this.rows.push(row2);
     }
-    public toString() {
+    public toString(): string {
         return this.table.toString();
     }
-    public toMarkdownTable() {
+    public toMarkdownTable(): string {
         return toMarkdownTable({ head: this.head, rows: this.rows });
     }
 }

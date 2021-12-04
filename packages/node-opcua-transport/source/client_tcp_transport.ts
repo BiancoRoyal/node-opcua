@@ -1,21 +1,19 @@
 /**
  * @module node-opcua-transport
  */
-// tslint:disable:class-name
-// system
 import * as os from "os";
+import { createConnection, Socket } from "net";
 import * as chalk from "chalk";
 
-import { createConnection, Socket } from "net";
 import { assert } from "node-opcua-assert";
 import { BinaryStream } from "node-opcua-binary-stream";
 import { readMessageHeader } from "node-opcua-chunkmanager";
 import { ErrorCallback } from "node-opcua-status-code";
 
+import * as debug from "node-opcua-debug";
 import { getFakeTransport, TCP_transport } from "./tcp_transport";
 import { decodeMessage, packTcpMessage, parseEndpointUrl } from "./tools";
 
-import * as debug from "node-opcua-debug";
 import { AcknowledgeMessage } from "./AcknowledgeMessage";
 import { HelloMessage } from "./HelloMessage";
 import { TCPErrorMessage } from "./TCPErrorMessage";
@@ -23,6 +21,7 @@ import { doTraceHelloAck } from "./utils";
 
 const doDebug = debug.checkDebugFlag(__filename);
 const debugLog = debug.make_debugLog(__filename);
+const warningLog = debug.make_warningLog(__filename);
 const errorLog = debug.make_errorLog(__filename);
 const gHostname = os.hostname();
 
@@ -58,13 +57,13 @@ function createClientSocket(endpointUrl: string): Socket {
 }
 export interface ClientTCP_transport {
     on(eventName: "message", eventHandler: (message: Buffer) => void): this;
-    once(eventName: "message", eventHandler: (message: Buffer) => void): this;
     on(eventName: "socket_closed", eventHandler: (err: Error | null) => void): this;
-    once(eventName: "socket_closed", eventHandler: (err: Error | null) => void): this;
     on(eventName: "close", eventHandler: (err: Error | null) => void): this;
-    once(eventName: "close", eventHandler: (err: Error | null) => void): this;
-//
     on(eventName: "connection_break", eventHandler: () => void): this;
+
+    once(eventName: "message", eventHandler: (message: Buffer) => void): this;
+    once(eventName: "socket_closed", eventHandler: (err: Error | null) => void): this;
+    once(eventName: "close", eventHandler: (err: Error | null) => void): this;
     once(eventName: "connection_break", eventHandler: () => void): this;
 }
 
@@ -124,7 +123,7 @@ export class ClientTCP_transport extends TCP_transport {
         this.numberOfRetry = 0;
     }
 
-    public dispose() {
+    public dispose(): void {
         /* istanbul ignore next */
         if (doDebug) {
             debugLog(" ClientTCP_transport disposed");
@@ -132,7 +131,7 @@ export class ClientTCP_transport extends TCP_transport {
         super.dispose();
     }
 
-    public connect(endpointUrl: string, callback: ErrorCallback) {
+    public connect(endpointUrl: string, callback: ErrorCallback): void {
         assert(arguments.length === 2);
         assert(typeof callback === "function");
 
@@ -152,7 +151,7 @@ export class ClientTCP_transport extends TCP_transport {
             if (doDebug) {
                 debugLog("CreateClientSocket has failed");
             }
-            return callback(err);
+            return callback(err as Error);
         }
 
         const _on_socket_error_after_connection = (err: Error) => {
@@ -242,7 +241,7 @@ export class ClientTCP_transport extends TCP_transport {
         this._install_socket(this._socket);
     }
 
-    protected on_socket_ended(err: Error | null) {
+    protected on_socket_ended(err: Error | null): void {
         debugLog("on_socket_ended", this.name, err ? err.message : "");
         if (this.connected) {
             super.on_socket_ended(err);
@@ -274,7 +273,7 @@ export class ClientTCP_transport extends TCP_transport {
             (err as any).statusCode = response.statusCode;
             // istanbul ignore next
             if (doTraceHelloAck) {
-                console.log("receiving ERR instead of Ack", response.toString());
+                warningLog("receiving ERR instead of Ack", response.toString());
             }
             callback(err);
         } else {
@@ -285,9 +284,9 @@ export class ClientTCP_transport extends TCP_transport {
 
             // istanbul ignore next
             if (doTraceHelloAck) {
-                console.log("receiving Ack\n", response.toString());
+                warningLog("receiving Ack\n", response.toString());
             }
-    
+
             callback();
         }
     }
@@ -314,7 +313,7 @@ export class ClientTCP_transport extends TCP_transport {
         });
         // istanbul ignore next
         if (doTraceHelloAck) {
-            console.log(`sending Hello\n ${helloMessage.toString()}`);
+            warningLog(`sending Hello\n ${helloMessage.toString()}`);
         }
 
         const messageChunk = packTcpMessage("HEL", helloMessage);

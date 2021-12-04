@@ -34,11 +34,7 @@ function addVariableWithHumanizeText(namespace: Namespace, options: any) {
         value: {
             get() {
                 const v = options.value.get();
-                if (v instanceof Variant) {
-                    return v;
-                } else {
-                    return new Variant({ dataType: DataType.String, value: humanize.filesize(v.value) });
-                }
+                return new Variant({ dataType: DataType.String, value: humanize.filesize(v.value) });
             }
         }
     });
@@ -61,7 +57,9 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
         const usage_module = "usage"; // we use a variable here to prevent error in webpack
         usage = require(usage_module); // a warning will be generated here with webpack as the module name is not a litteral
     } catch (err) {
-        console.log("err", err.message);
+        if (err instanceof Error) {
+            console.log("err", err.message);
+        }
         usage = null;
         // xx return;
     }
@@ -92,7 +90,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
             componentOf: vendorServerInfo,
 
             browseName: "CPUUsage",
-            dataType: "Double",
+            dataType: DataType.Double,
             description: "Current CPU usage of the server process",
 
             minimumSamplingInterval: 1000,
@@ -111,7 +109,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
             componentOf: vendorServerInfo,
 
             browseName: "MemoryUsage",
-            dataType: "Number",
+            dataType: DataType.UInt32,
             description: "Current memory usage of the server process",
             minimumSamplingInterval: 1000,
             nodeId: "s=MemoryUsage",
@@ -132,7 +130,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
         componentOf: vendorServerInfo,
 
         browseName: "PercentageMemoryUsed",
-        dataType: "Number",
+        dataType: DataType.Double,
         description: "% of  memory used by the server",
         minimumSamplingInterval: 1000,
         nodeId: "s=PercentageMemoryUsed",
@@ -149,7 +147,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
 
         accessLevel: "CurrentRead",
         browseName: "SystemMemoryTotal",
-        dataType: "Number",
+        dataType: DataType.UInt64,
         description: "Total Memory usage of the server",
         minimumSamplingInterval: 1000,
         nodeId: "s=SystemMemoryTotal",
@@ -166,7 +164,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
 
         accessLevel: "CurrentRead",
         browseName: "SystemMemoryFree",
-        dataType: "Number",
+        dataType: "UInt64",
         description: "Free Memory usage of the server in MB",
         minimumSamplingInterval: 1000,
         nodeId: "s=SystemMemoryFree",
@@ -183,7 +181,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
 
         accessLevel: "CurrentRead",
         browseName: "NumberOfCPUs",
-        dataType: "Number",
+        dataType: "UInt32",
         description: "Number of cpus on the server",
         minimumSamplingInterval: 1000,
         nodeId: "s=NumberOfCPUs",
@@ -215,7 +213,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
 
         accessLevel: "CurrentRead",
         browseName: "BytesWritten",
-        dataType: "Number",
+        dataType: "UInt64",
         description: "number of bytes written by the server",
         minimumSamplingInterval: 1000,
         nodeId: "s=BytesWritten",
@@ -231,7 +229,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
 
         accessLevel: "CurrentRead",
         browseName: "BytesRead",
-        dataType: "Number",
+        dataType: "UInt64",
         description: "number of bytes read by the server",
         minimumSamplingInterval: 1000,
         nodeId: "s=BytesRead",
@@ -247,7 +245,7 @@ export function install_optional_cpu_and_memory_usage_node(server: any) {
 
         accessLevel: "CurrentRead",
         browseName: "TransactionsCount",
-        dataType: "Number",
+        dataType: "UInt32",
         description: "total number of transactions performed the server",
         minimumSamplingInterval: 1000,
         nodeId: "s=TransactionsCount",

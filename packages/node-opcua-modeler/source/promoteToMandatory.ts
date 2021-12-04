@@ -8,7 +8,7 @@ import {
     UAReferenceType,
     UAVariable,
     UAVariableType,
-    ModellingRuleType
+    ModellingRuleType,
 } from "node-opcua-address-space";
 import { NodeClass } from "node-opcua-data-model";
 import { makeBrowsePath } from "node-opcua-service-translate-browse-path";
@@ -96,20 +96,17 @@ export function promoteToMandatory(node: UAObjectType | UAVariableType, property
         return propInSuperType;
     }
 
-    const newRef: UAReference = {
+    const newRef = {
         isForward: false,
         nodeId: node.nodeId,
         referenceType: reference.referenceType
     };
 
-    const newProp = (propInSuperType as UAConcrete).clone(
-        {
-            modellingRule: "Mandatory",
-            references: [newRef]
-        },
-        null,
-        null
-    );
+    const newProp = (propInSuperType as UAConcrete).clone({
+        namespace: node.namespace,
+        modellingRule: "Mandatory",
+        references: [newRef]
+    });
     return newProp;
 }
 
@@ -131,13 +128,10 @@ export function promoteChild(
         referenceType: reference.referenceType
     };
 
-    const newProp = (propInSuperType as UAConcrete).clone(
-        {
-            modellingRule,
-            references: [newRef]
-        },
-        null,
-        null
-    );
+    const newProp = (propInSuperType as UAConcrete).clone({
+        namespace: node.namespace,
+        modellingRule,
+        references: [{...newRef}]
+    });
     return newProp;
 }

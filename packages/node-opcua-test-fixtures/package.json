@@ -1,9 +1,9 @@
 {
     "name": "node-opcua-test-fixtures",
-    "version": "2.42.0",
+    "version": "2.61.0",
     "description": "pure nodejs OPCUA SDK - module -test-fixtures",
     "main": "./dist/index.js",
-    "type": "./dist/index.d.ts",
+    "types": "./dist/index.d.ts",
     "private": true,
     "scripts": {
         "build": "tsc -b",
@@ -26,6 +26,6 @@
     ],
     "homepage": "http://node-opcua.github.io/",
     "dependencies": {
-        "node-opcua-debug": "2.42.0"
+        "node-opcua-debug": "2.61.0"
     }
 }

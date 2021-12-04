@@ -2,8 +2,8 @@ import * as fs from "fs";
 import { nodesets } from "node-opcua-nodesets";
 import * as should from "should";
 
+import { generateAddressSpace } from "../../distNodeJS";
 import { AddressSpace } from "../..";
-import { generateAddressSpace } from "../../nodeJS";
 
 import { utest_acknowledgeable_condition } from "./utest_acknowledgeable_condition";
 import { utest_alarm_condition } from "./utest_alarm_condition";
@@ -17,6 +17,7 @@ import { utest_off_normal_alarm } from "./utest_off_normal_alarm";
 // tslint:disable-next-line:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("AddressSpace : Conditions 1", function (this: any) {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const test = this;
 
     let addressSpace: AddressSpace;

@@ -3,16 +3,14 @@ import * as should from "should";
 import { AxisInformation, AxisScaleEnumeration, standardUnits } from "node-opcua-data-access";
 import { coerceLocalizedText } from "node-opcua-data-model";
 import { resolveNodeId } from "node-opcua-nodeid";
-import { AxisInformationOptions } from "node-opcua-types";
 import { Variant } from "node-opcua-variant";
 import { DataType } from "node-opcua-variant";
 import { VariantArrayType } from "node-opcua-variant";
-import { AddressSpace, Folder, Namespace } from "../..";
 
-export function subtest_Y_array_item_type(maintest: any) {
+import { AddressSpace, UAFolder, Namespace } from "../..";
 
+export function subtest_Y_array_item_type(maintest: any): void {
     describe("YArrayItemType", () => {
-
         let addressSpace: AddressSpace;
         let namespace: Namespace;
 
@@ -22,23 +20,19 @@ export function subtest_Y_array_item_type(maintest: any) {
             should(addressSpace).be.instanceof(AddressSpace);
         });
 
-        let objectsFolder: Folder;
+        let objectsFolder: UAFolder;
         before(() => {
-            objectsFolder = addressSpace.findNode("ObjectsFolder")! as Folder;
+            objectsFolder = addressSpace.findNode("ObjectsFolder")! as UAFolder;
             objectsFolder.browseName.toString().should.eql("Objects");
         });
 
         it("YArrayItemType should not be abstract", () => {
-
             const YArrayItemType = addressSpace.findVariableType("YArrayItemType")!;
             YArrayItemType.isAbstract.should.eql(false);
-
         });
 
         it("should add a YArrayItem", () => {
-
             const yArrayItem = namespace.addYArrayItem({
-
                 organizedBy: objectsFolder,
 
                 browseName: "MyYArrayItem",
@@ -55,7 +49,7 @@ export function subtest_Y_array_item_type(maintest: any) {
                     axisSteps: [0, 25, 50, 75, 100],
                     engineeringUnits: standardUnits.second,
                     euRange: { low: -10, high: 100 },
-                    title: coerceLocalizedText("the X axis legend"),
+                    title: coerceLocalizedText("the X axis legend")
                 },
 
                 value: new Variant({
@@ -75,7 +69,9 @@ export function subtest_Y_array_item_type(maintest: any) {
             yArrayItem.readValue().value.value[2].should.eql(3);
             yArrayItem.readValue().value.value[3].should.eql(2);
 
-            yArrayItem.hasOwnProperty("instrumentRange").should.eql(false, "optional instrument Range not expected");
+            Object.prototype.hasOwnProperty
+                .call(yArrayItem, "instrumentRange")
+                .should.eql(false, "optional instrument Range not expected");
 
             yArrayItem.euRange.readValue().value.value.low.should.eql(100);
             yArrayItem.euRange.readValue().value.value.high.should.eql(200);
@@ -83,7 +79,7 @@ export function subtest_Y_array_item_type(maintest: any) {
             yArrayItem.title.readValue().value.value.text!.should.eql("My Little YArray Item");
 
             // access xAxisDefinition from extension object
-            const x = yArrayItem.xAxisDefinition.readValue().value.value as AxisInformation;
+            const x = yArrayItem.xAxisDefinition.readValue().value.value;
 
             x.engineeringUnits.should.eql(standardUnits.second);
             x.title!.text!.should.eql("the X axis legend");
@@ -93,13 +89,10 @@ export function subtest_Y_array_item_type(maintest: any) {
             // xx console.log("xxxx ",yArrayItem.xAxisDefinition.toString())
             // xx yArrayItem.xAxisDefinition.euRange.readValue().value.value.should.eql(standardUnits.second);
             // xx yArrayItem.xAxisDefinition.engineeringUnits.readValue().value.value.should.eql(standardUnits.second);
-
         });
 
         it("should add a YArrayItem with optional instrument range", () => {
-
             const prop = namespace.addYArrayItem({
-
                 organizedBy: objectsFolder,
 
                 title: "SomeTitle",
@@ -117,7 +110,7 @@ export function subtest_Y_array_item_type(maintest: any) {
                     axisSteps: [0, 25, 50, 75, 100],
                     engineeringUnits: standardUnits.second,
                     euRange: { low: 0, high: 100 },
-                    title: coerceLocalizedText("the X axis legend"),
+                    title: coerceLocalizedText("the X axis legend")
                 },
 
                 value: new Variant({
@@ -133,7 +126,6 @@ export function subtest_Y_array_item_type(maintest: any) {
 
             prop.instrumentRange.readValue().value.value.low.should.eql(-100);
             prop.instrumentRange.readValue().value.value.high.should.eql(200);
-
         });
     });
 }

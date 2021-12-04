@@ -3,9 +3,13 @@
  */
 import { format } from "util";
 
-import assert from "node-opcua-assert";
-import { ConstructorFunc, DataTypeFactory, getStandardDataTypeFactory, StructuredTypeSchema } from "node-opcua-factory";
-import { ExpandedNodeId, NodeId } from "node-opcua-nodeid";
+import { assert } from "node-opcua-assert";
+import { 
+    ConstructorFunc, 
+    DataTypeFactory, 
+    getStandardDataTypeFactory 
+} from "node-opcua-factory";
+import { NodeId } from "node-opcua-nodeid";
 import { AnyConstructorFunc } from "node-opcua-schemas";
 
 export class ExtraDataTypeManager {
@@ -17,15 +21,15 @@ export class ExtraDataTypeManager {
         /* */
     }
 
-    public setNamespaceArray(namespaceArray: string[]) {
+    public setNamespaceArray(namespaceArray: string[]): void {
         this.namespaceArray = namespaceArray;
     }
 
     public hasDataTypeFactory(namespaceIndex: number): boolean {
-        return !!this.dataTypeFactoryMapByNamespace.hasOwnProperty(namespaceIndex);
+        return !!Object.prototype.hasOwnProperty.call(this.dataTypeFactoryMapByNamespace,namespaceIndex);
     }
 
-    public registerDataTypeFactory(namespaceIndex: number, dataTypeFactory: DataTypeFactory) {
+    public registerDataTypeFactory(namespaceIndex: number, dataTypeFactory: DataTypeFactory): void {
         /* istanbul ignore next */
         assert(namespaceIndex !== 0, "registerTypeDictionary cannot be used for namespace 0");
         if (this.hasDataTypeFactory(namespaceIndex)) {

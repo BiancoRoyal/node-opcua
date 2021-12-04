@@ -120,6 +120,7 @@ function makeVariant(dataTypeName: string, arrayType: VariantArrayType, dimensio
     return variant;
 }
 
+// eslint-disable-next-line max-params
 function _add_variable(
     namespace: Namespace,
     parent: UAObject,
@@ -341,7 +342,6 @@ const typeAndDefaultValue = [
             return new QualifiedName();
         }
     },
-    { type: "Time", realType: "String", defaultValue: "00:00:00" },
     { type: "UInt64", defaultValue: [0, 0] },
     { type: "Int64", defaultValue: [0, 0] },
     // xx {type: "Variant",   realType:   "Variant", defaultValue:  {} },
@@ -1462,7 +1462,7 @@ function add_sampleView(namespace: Namespace): void {
         nodeId: "s=SampleView"
     });
     view1.addReference({
-        nodeId: "i=2256",  // Server_Status
+        nodeId: "i=2256", // Server_Status
         referenceType: "Organizes"
     });
     view1.addReference({
@@ -1477,7 +1477,7 @@ function add_sampleView(namespace: Namespace): void {
     });
 }
 
-export function build_address_space_for_conformance_testing(addressSpace: AddressSpace, options: any) {
+export function build_address_space_for_conformance_testing(addressSpace: AddressSpace, options: any): void {
     const namespace = addressSpace.registerNamespace("urn://node-opcua-simulator");
 
     options = options || {};
@@ -1485,7 +1485,10 @@ export function build_address_space_for_conformance_testing(addressSpace: Addres
 
     const objectsFolder = addressSpace.findNode("ObjectsFolder") as UAObject;
 
-    const simulationFolder = namespace.addFolder(objectsFolder, "Simulation");
+    const simulationFolder = namespace.addFolder(objectsFolder, {
+        browseName: "Simulation",
+        nodeId: "s=SimulationFolder"
+    });
 
     add_access_right_variables(namespace, simulationFolder);
 

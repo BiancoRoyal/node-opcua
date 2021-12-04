@@ -3,20 +3,18 @@
  */
 // tslint:disable:no-empty
 import * as fs from "fs";
-import * as mkdirp from "mkdirp";
+import * as path from "path";
 
-import envPaths from "env-paths";
+import * as mkdirp from "mkdirp";
+import envPaths = require("env-paths");
 import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
 
 import {
      Certificate, 
-     exploreCertificateInfo, makeSHA1Thumbprint, readCertificate, split_der, toPem 
-    } from "node-opcua-crypto";
+     makeSHA1Thumbprint    } from "node-opcua-crypto";
 import { 
     CertificateManager, 
-    CertificateManagerOptions, 
-    CertificateStatus 
-} from "node-opcua-pki";
+    CertificateManagerOptions} from "node-opcua-pki";
 import { StatusCodes } from "node-opcua-status-code";
 import { StatusCode } from "node-opcua-status-code";
 
@@ -169,7 +167,6 @@ OPCUACertificateManager.prototype.checkCertificate = thenify.withCallback(OPCUAC
 OPCUACertificateManager.prototype.getTrustStatus = thenify.withCallback(OPCUACertificateManager.prototype.getTrustStatus, opts);
 OPCUACertificateManager.prototype.initialize = thenify.withCallback(OPCUACertificateManager.prototype.initialize, opts);
 
-import * as path from "path";
 export function getDefaultCertificateManager(name: "PKI" | "UserPKI"): OPCUACertificateManager {
     const config = envPaths("node-opcua-default").config;
     const pkiFolder = path.join(config, name);

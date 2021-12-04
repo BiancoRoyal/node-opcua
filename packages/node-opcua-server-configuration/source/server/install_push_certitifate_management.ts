@@ -1,14 +1,13 @@
 /**
  * @module node-opcua-server-configuration-server
  */
-import * as chalk from "chalk";
 import * as fs from "fs";
-// node 14 onward : import {  readFile } from "fs/promises";
-const { readFile } = fs.promises;
-
 import * as os from "os";
 import * as path from "path";
 
+import * as chalk from "chalk";
+
+import { UAServerConfiguration } from "node-opcua-address-space";
 import { assert } from "node-opcua-assert";
 import { OPCUACertificateManager } from "node-opcua-certificate-manager";
 import { Certificate, convertPEMtoDER, makeSHA1Thumbprint, PrivateKeyPEM, split_der } from "node-opcua-crypto";
@@ -18,8 +17,10 @@ import { ICertificateKeyPairProvider } from "node-opcua-secure-channel";
 import { OPCUAServer, OPCUAServerEndPoint } from "node-opcua-server";
 import { ApplicationDescriptionOptions } from "node-opcua-types";
 import { installPushCertificateManagement } from "./push_certificate_manager_helpers";
-import { ActionQueue } from "./push_certificate_manager_server_impl";
+import { ActionQueue, PushCertificateManagerServerImpl } from "./push_certificate_manager_server_impl";
 
+// node 14 onward : import {  readFile } from "fs/promises";
+const { readFile } = fs.promises;
 
 const debugLog = make_debugLog("ServerConfiguration");
 const errorLog = make_errorLog("ServerConfiguration");
@@ -76,9 +77,8 @@ async function getIpAddresses(): Promise<string[]> {
     return ipAddresses;
 }
 
-
 /**
- * 
+ *
  */
 async function install(this: OPCUAServerPartial): Promise<void> {
     debugLog("install push certificate management", this.serverCertificateManager.rootDir);
@@ -129,7 +129,6 @@ async function install(this: OPCUAServerPartial): Promise<void> {
 
         //  await this.serverCertificateManager.trustCertificate( this.$$certificateChain);
     }
-
 }
 
 function getCertificateChainEP(this: OPCUAServerEndPoint): Certificate {
@@ -164,7 +163,7 @@ async function onCertificateAboutToChange(server: OPCUAServer) {
 async function onCertificateChange(server: OPCUAServer) {
     debugLog("on CertificateChanged");
 
-    const _server = (server as any) as OPCUAServerPartial;
+    const _server = server as any as OPCUAServerPartial;
 
     _server.$$privateKeyPEM = fs.readFileSync(server.serverCertificateManager.privateKey, "utf8");
     const certificateFile = path.join(server.serverCertificateManager.rootDir, "own/certs/certificate.pem");
@@ -192,20 +191,25 @@ async function onCertificateChange(server: OPCUAServer) {
             debugLog(chalk.yellow("channels have been closed -> client should reconnect "));
         } catch (err) {
             // tslint:disable:no-console
-            errorLog("Error in CertificateChanged handler ", err.message);
+            if (err instanceof Error) {
+                errorLog("Error in CertificateChanged handler ", err.message);
+            }
             debugLog("err = ", err);
         }
     }, 2000);
 }
 
+interface UAServerConfigurationEx extends UAServerConfiguration {
+    $pushCertificateManager: PushCertificateManagerServerImpl;
+}
 export async function installPushCertificateManagementOnServer(server: OPCUAServer): Promise<void> {
     if (!server.engine || !server.engine.addressSpace) {
         throw new Error(
             "Server must have a valid address space." +
-            "you need to call installPushCertificateManagementOnServer after server has been initialized"
+                "you need to call installPushCertificateManagementOnServer after server has been initialized"
         );
     }
-    await install.call((server as any) as OPCUAServerPartial);
+    await install.call(server as any as OPCUAServerPartial);
 
     server.getCertificate = getCertificate;
     server.getCertificateChain = getCertificateChain;
@@ -234,27 +238,22 @@ export async function installPushCertificateManagementOnServer(server: OPCUAServ
         applicationUri: server.serverInfo.applicationUri! || "InvalidURI"
     });
 
-    const serverConfiguration = server.engine.addressSpace.rootFolder.objects.server.serverConfiguration;
-    const serverConfigurationPriv = serverConfiguration as any;
+    const serverConfiguration = server.engine.addressSpace.rootFolder.objects.server.getChildByName("ServerConfiguration")!;
+    const serverConfigurationPriv = serverConfiguration as UAServerConfigurationEx;
     assert(serverConfigurationPriv.$pushCertificateManager);
 
     serverConfigurationPriv.$pushCertificateManager.on("CertificateAboutToChange", (actionQueue: ActionQueue) => {
-        actionQueue.push(
-            async (): Promise<void> => {
-                debugLog("CertificateAboutToChange Event received");
-                await onCertificateAboutToChange(server);
-                debugLog("CertificateAboutToChange Event processed");
-            }
-        );
+        actionQueue.push(async (): Promise<void> => {
+            debugLog("CertificateAboutToChange Event received");
+            await onCertificateAboutToChange(server);
+            debugLog("CertificateAboutToChange Event processed");
+        });
     });
     serverConfigurationPriv.$pushCertificateManager.on("CertificateChanged", (actionQueue: ActionQueue) => {
-        actionQueue.push(
-            async (): Promise<void> => {
-                debugLog("CertificateChanged Event received");
-                await onCertificateChange(server);
-                debugLog("CertificateChanged Event processed");
-            }
-        );
+        actionQueue.push(async (): Promise<void> => {
+            debugLog("CertificateChanged Event received");
+            await onCertificateChange(server);
+            debugLog("CertificateChanged Event processed");
+        });
     });
-
 }

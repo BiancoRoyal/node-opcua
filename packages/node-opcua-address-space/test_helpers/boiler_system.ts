@@ -1,33 +1,31 @@
+/* eslint-disable max-statements */
 /**
  * @module node-opcua-address-space
  */
-// tslint:disable:no-empty-interface
 import { assert } from "node-opcua-assert";
 import { NodeClass } from "node-opcua-data-model";
 import { StatusCodes } from "node-opcua-status-code";
 import { CallMethodResultOptions } from "node-opcua-types";
 import { lowerFirstLetter } from "node-opcua-utils";
-import { VariantLike } from "node-opcua-variant";
+import { VariantLike, DataType } from "node-opcua-variant";
+import { UAFolder, UAAnalogItem } from "node-opcua-nodeset-ua";
 import {
     AddressSpace,
     BaseNode,
-    Folder,
-    FolderType,
     InstantiateObjectOptions,
     Namespace,
-    ProgramFiniteStateMachine,
-    ProgramFiniteStateMachineType,
-    SessionContext,
-    StateMachine,
-    TransitionEventType,
-    UAAnalogItem,
+    UATransitionEventType,
     UAMethod,
     UAObject,
     UAObjectType,
     UAReferenceType,
     UAVariable,
-    promoteToStateMachine
+    promoteToStateMachine,
+    ISessionContext,
+    UAProgramStateMachineEx
 } from "..";
+
+import { UAStateMachineImpl } from "../src/state_machine/finite_state_machine";
 
 export interface FlowToReference extends UAReferenceType {}
 
@@ -35,7 +33,7 @@ export interface HotFlowToReference extends UAReferenceType {}
 
 export interface SignalToReference extends UAReferenceType {}
 
-export interface BoilerHaltedEventType extends TransitionEventType {}
+export interface BoilerHaltedEventType extends UATransitionEventType {}
 
 export interface CustomControllerB {
     input1: UAVariable;
@@ -50,7 +48,7 @@ export interface CustomControllerType extends CustomControllerB, UAObjectType {}
 export interface CustomController extends CustomControllerB, UAObject {}
 
 export interface GenericSensorB {
-    output: UAAnalogItem;
+    output: UAAnalogItem<number, DataType.Double>;
 }
 
 export interface GenericSensorType extends GenericSensorB, UAObjectType {}
@@ -84,46 +82,46 @@ export interface LevelIndicatorType extends GenericSensorType {}
 export interface LevelIndicator extends GenericSensor {}
 
 export interface GenericActuatorType extends UAObjectType {
-    input: UAAnalogItem;
+    input: UAAnalogItem<number, DataType.Double>;
 }
 
 export interface GenericActuator extends UAObject {
-    input: UAAnalogItem;
+    input: UAAnalogItem<number, DataType.Double>;
 }
 
 export interface ValveType extends GenericActuatorType {}
 
 export interface Valve extends GenericActuator {}
 
-export interface BoilerInputPipeType extends FolderType {
+export interface BoilerInputPipeType extends UAObjectType {
     flowTransmitter: FlowTransmitter;
     valve: Valve;
 }
 
-export interface BoilerInputPipe extends Folder {
+export interface BoilerInputPipe extends UAFolder {
     flowTransmitter: FlowTransmitter;
     valve: Valve;
 }
 
-export interface BoilerOutputPipeType extends FolderType {
+export interface BoilerOutputPipeType extends UAObjectType {
     flowTransmitter: FlowTransmitter;
 }
 
-export interface BoilerOutputPipe extends Folder {
+export interface BoilerOutputPipe extends UAFolder {
     flowTransmitter: FlowTransmitter;
 }
 
-export interface BoilerDrumType extends FolderType {
+export interface BoilerDrumType extends UAObjectType {
     levelIndicator: LevelIndicator;
 }
 
-export interface BoilerDrum extends Folder {
+export interface BoilerDrum extends UAFolder {
     levelIndicator: LevelIndicator;
 }
 
-export interface BoilerStateMachineType extends ProgramFiniteStateMachineType {}
+export interface BoilerStateMachineType extends UAObjectType {}
 
-export interface BoilerStateMachine extends ProgramFiniteStateMachine {}
+export interface BoilerStateMachine extends UAObject, UAProgramStateMachineEx {}
 
 export interface BoilerType extends UAObjectType {
     customController: CustomController;
@@ -165,6 +163,7 @@ function implementProgramStateMachine(programStateMachine: UAObject): void {
                 methodToClone = programStateMachine.typeDefinitionObj!.subtypeOfObj!.getMethodByName(methodName)!;
             }
             methodToClone.clone({
+                namespace: programStateMachine.namespace,
                 componentOf: programStateMachine
             });
             method = programStateMachine.getMethodByName(methodName)!;
@@ -180,10 +179,10 @@ function implementProgramStateMachine(programStateMachine: UAObject): void {
         method.bindMethod(function (
             this: UAMethod,
             inputArguments: VariantLike[],
-            context: SessionContext,
+            context: ISessionContext,
             callback: (err: Error | null, callMethodResult: CallMethodResultOptions) => void
         ) {
-            const stateMachineW = this.parent! as StateMachine;
+            const stateMachineW = this.parent! as UAStateMachineImpl;
             stateMachineW.setState(toState);
             callback(null, {
                 outputArguments: [],
@@ -216,7 +215,6 @@ function addRelation(srcNode: BaseNode, referenceType: UAReferenceType | string,
     srcNode.addReference({ referenceType: referenceType.nodeId, nodeId: targetNode });
 }
 
-// tslint:disable:no-console
 export function createBoilerType(namespace: Namespace): BoilerType {
     // istanbul ignore next
     if (namespace.findObjectType("BoilerType")) {
@@ -463,9 +461,7 @@ export function createBoilerType(namespace: Namespace): BoilerType {
         notifierOf: boilerDrumType
     }) as LevelIndicator;
 
-    const programFiniteStateMachineType: ProgramFiniteStateMachineType = addressSpace.findObjectType(
-        "ProgramStateMachineType"
-    )! as ProgramFiniteStateMachineType;
+    const programFiniteStateMachineType = addressSpace.findObjectType("ProgramStateMachineType")!;
 
     // --------------------------------------------------------
     // define boiler State Machine
@@ -482,6 +478,7 @@ export function createBoilerType(namespace: Namespace): BoilerType {
         assert(!objectType.getMethodByName(methodName));
         const method = baseType.getMethodByName(methodName)!;
         const m = method.clone({
+            namespace,
             componentOf: objectType,
             modellingRule: "Mandatory"
         });
@@ -606,27 +603,8 @@ export function makeBoiler(
     promoteToStateMachine(boiler1.simulation);
 
     const boilerStateMachine = boiler1.simulation;
-
-    const haltedState = boilerStateMachine.getStateByName("Halted")!;
-    assert(haltedState.browseName.toString() === "Halted");
-
     const readyState = boilerStateMachine.getStateByName("Ready")!;
-    assert(readyState.browseName.toString() === "Ready");
-
-    const runningState = boilerStateMachine.getStateByName("Running")!;
-    assert(runningState.browseName.toString() === "Running");
-
-    // when state is "Halted" , the Halt method is not executable
-    boilerStateMachine.setState(haltedState);
-    assert(boilerStateMachine.currentStateNode.browseName.toString() === "Halted");
-
-    const context = SessionContext.defaultContext;
-    // halt method should not be executable when current State is Halted
-    assert(!boilerStateMachine.halt.getExecutableFlag(context));
-
-    // when state is "Reset" , the Halt method becomes executable
     boilerStateMachine.setState(readyState);
-    assert(boilerStateMachine.halt.getExecutableFlag(context));
 
     return boiler1;
 }

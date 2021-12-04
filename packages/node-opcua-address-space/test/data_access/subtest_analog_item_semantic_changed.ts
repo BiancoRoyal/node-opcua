@@ -7,13 +7,13 @@ import { DataValue } from "node-opcua-data-value";
 import { WriteValue } from "node-opcua-service-write";
 import { Variant } from "node-opcua-variant";
 import { DataType } from "node-opcua-variant";
+
 import { AddressSpace, SessionContext } from "../..";
 import { UAAnalogItem } from "../..";
 
 const context = SessionContext.defaultContext;
 
-async function modifyEURange(analogItem: UAAnalogItem) {
-
+async function modifyEURange<T, DT extends DataType>(analogItem: UAAnalogItem<T, DT>) {
     const dataValueOrg = analogItem.readAttribute(context, AttributeIds.Value);
 
     const dataValue = new DataValue({
@@ -21,7 +21,7 @@ async function modifyEURange(analogItem: UAAnalogItem) {
             dataType: DataType.ExtensionObject,
             value: new Range({
                 high: dataValueOrg.value.value.high + 1,
-                low:  dataValueOrg.value.value.low + 1,
+                low: dataValueOrg.value.value.low + 1
             })
         }
     });
@@ -34,14 +34,11 @@ async function modifyEURange(analogItem: UAAnalogItem) {
     await analogItem.euRange.writeAttribute(context, writeValue);
 }
 
-export function subtest_analog_item_semantic_changed(maintest: any) {
-
+export function subtest_analog_item_semantic_changed(maintest: any): void {
     describe("AnalogDataItem and semantic changes", () => {
-
         let addressSpace: AddressSpace;
-        let analogItem: UAAnalogItem;
+        let analogItem: UAAnalogItem<number, DataType.Double>;
         beforeEach(() => {
-
             addressSpace = maintest.addressSpace;
             should(addressSpace).be.instanceof(AddressSpace);
 
@@ -51,7 +48,6 @@ export function subtest_analog_item_semantic_changed(maintest: any) {
             const fakeValue = 1;
 
             analogItem = addressSpace.getOwnNamespace().addAnalogDataItem({
-
                 organizedBy: objectsFolder,
 
                 browseName: "TemperatureSensor1",
@@ -75,15 +71,13 @@ export function subtest_analog_item_semantic_changed(maintest: any) {
         });
 
         it("should increase semantic_version when EURange changes", async () => {
-
             analogItem.semantic_version.should.eql(0);
             const original_semantic_version = analogItem.semantic_version;
             await modifyEURange(analogItem);
             analogItem.semantic_version.should.eql(original_semantic_version + 1);
         });
-        
-        it("should increase 'semantic_' event when EURange changes", async () => {
 
+        it("should increase 'semantic_' event when EURange changes", async () => {
             analogItem.semantic_version.should.eql(0);
 
             const spy_on_semantic_changed = sinon.spy();
@@ -95,7 +89,6 @@ export function subtest_analog_item_semantic_changed(maintest: any) {
             analogItem.semantic_version.should.eql(original_semantic_version + 1);
         });
         it("should not emit a 'semantic_changed' event when value changes", async () => {
-
             analogItem.semantic_version.should.eql(0);
             const original_semantic_version = analogItem.semantic_version;
 
