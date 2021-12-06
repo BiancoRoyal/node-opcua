@@ -568,7 +568,7 @@ function _dumpValue(xw: XmlWriter, node: UAVariable | UAVariableType, value: Var
     } else {
         const encodeXml = _dumpVariantValue.bind(null, xw, value.dataType);
         if (value.arrayType === VariantArrayType.Matrix) {
-            console.log("Warning _dumpValue : Matrix not supported yet");
+            // console.log("Warning _dumpValue : Matrix not supported yet");
             xw.startElement("ListOf" + dataTypeName);
             xw.writeAttribute("xmlns", "http://opcfoundation.org/UA/2008/02/Types.xsd");
             value.value.forEach(encodeXml);
@@ -797,22 +797,18 @@ function _dumpStructureDefinition(
     }
 }
 function _dumpUADataTypeDefinition(xw: XmlWriter, uaDataType: UADataType) {
-    // to do remove DataType from base class
     const uaDataTypeBase = uaDataType.subtypeOfObj;
-    const definition = uaDataType.getDefinition();
-    if (!definition) {
-        return;
-    }
-    if (definition instanceof EnumDefinition) {
+
+    if (uaDataType.isEnumeration()) {
         xw.startElement("Definition");
         xw.writeAttribute("Name", uaDataType.browseName.name!);
-        _dumpEnumDefinition(xw, definition);
+        _dumpEnumDefinition(xw, uaDataType.getEnumDefinition());
         xw.endElement();
         return;
     }
-    if (definition instanceof StructureDefinition) {
-        const baseDefinition = uaDataTypeBase ? (uaDataTypeBase.getDefinition() as StructureDefinition | null) : null;
-
+    if (uaDataType.isStructure()) {
+        const definition = uaDataType.getStructureDefinition();
+        const baseDefinition = uaDataTypeBase ? (uaDataTypeBase.getStructureDefinition()) : null;
         xw.startElement("Definition");
         xw.writeAttribute("Name", uaDataType.browseName.name!);
         if (definition.structureType === StructureType.Union) {
@@ -822,7 +818,6 @@ function _dumpUADataTypeDefinition(xw: XmlWriter, uaDataType: UADataType) {
         xw.endElement();
         return;
     }
-    // throw new Error("_dumpUADataTypeDefinition: Should not get here !");
 }
 
 function dumpUADataType(xw: XmlWriter, node: UADataType) {
