@@ -1,3 +1,4 @@
+/* eslint-disable max-statements */
 /**
  * @module node-opcua-secure-channel
  */
@@ -16,7 +17,8 @@ import {
     PrivateKeyPEM,
     PublicKeyLength,
     rsa_length,
-    exploreCertificate
+    exploreCertificate,
+    hexDump
 } from "node-opcua-crypto";
 
 import { checkDebugFlag, make_debugLog, make_warningLog } from "node-opcua-debug";
@@ -29,13 +31,15 @@ import {
     SymmetricAlgorithmSecurityHeader
 } from "node-opcua-service-secure-channel";
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
-import { ServerTCP_transport } from "node-opcua-transport";
+import { ServerTCP_transport, StatusCodes2 } from "node-opcua-transport";
 import { get_clock_tick, timestamp } from "node-opcua-utils";
 import { Callback2, ErrorCallback } from "node-opcua-status-code";
 
 import { EndpointDescription } from "node-opcua-service-endpoints";
 import { ICertificateManager } from "node-opcua-certificate-manager";
 import { ObjectRegistry } from "node-opcua-object-registry";
+import { doTraceIncomingChunk } from "node-opcua-transport";
+
 import { SecureMessageChunkManagerOptions, SecurityHeader } from "../secure_message_chunk_manager";
 
 import { getThumbprint, ICertificateKeyPairProvider, Request, Response } from "../common";
@@ -175,6 +179,7 @@ export interface IServerSessionBase {
 export class ServerSecureChannelLayer extends EventEmitter {
     public static throttleTime = 100;
 
+    private static g_MinimumSecureTokenLifetime = 2500;
     private static g_counter = 0;
     private _counter: number = ServerSecureChannelLayer.g_counter++;
 
@@ -248,7 +253,9 @@ export class ServerSecureChannelLayer extends EventEmitter {
     public sessionTokens: { [key: string]: IServerSessionBase };
     public channelId: number | null;
     public timeout: number;
-    public readonly messageBuilder: MessageBuilder;
+
+    public messageBuilder?: MessageBuilder;
+
     public receiverCertificate: Buffer | null;
     public clientCertificate: Buffer | null;
     public clientNonce: Buffer | null;
@@ -347,22 +354,6 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         this.serverNonce = null; // will be created when needed
 
-        this.messageBuilder = new MessageBuilder({
-            name: "server",
-            objectFactory: options.objectFactory,
-            privateKey: this.getPrivateKey()
-        });
-
-        this.messageBuilder.on("error", (err) => {
-            // istanbul ignore next
-            if (doDebug) {
-                debugLog(chalk.red("xxxxx error "), err.message.yellow, err.stack);
-                debugLog(chalk.red("xxxxx Server is now closing socket, without further notice"));
-            }
-            // close socket immediately
-            this.close(undefined);
-        });
-
         // at first use a anonymous connection
         this.securityHeader = new AsymmetricAlgorithmSecurityHeader({
             receiverCertificateThumbprint: null,
@@ -372,7 +363,8 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         this.messageChunker = new MessageChunker({
             securityHeader: this.securityHeader, // for OPN
-            maxMessageSize: this.transport.maxMessageSize
+            maxMessageSize: this.transport.maxMessageSize,
+            maxChunkCount: this.transport.maxChunkCount
         });
 
         this._tick0 = 0;
@@ -390,7 +382,38 @@ export class ServerSecureChannelLayer extends EventEmitter {
         this._transactionsCount = 0;
 
         this.sessionTokens = {};
+
+        this.objectFactory = options.objectFactory;
+
         // xx #422 self.setMaxListeners(200); // increase the number of max listener
+    }
+
+    private _build_message_builder() {
+        this.messageBuilder = new MessageBuilder({
+            name: "server",
+            objectFactory: this.objectFactory,
+            privateKey: this.getPrivateKey(),
+            maxChunkSize: this.transport.receiveBufferSize,
+            maxChunkCount: this.transport.maxChunkCount,
+            maxMessageSize: this.transport.maxMessageSize
+        });
+        debugLog(" this.transport.maxChunkCount", this.transport.maxChunkCount);
+        debugLog(" this.transport.maxMessageSize", this.transport.maxMessageSize);
+
+        this.messageBuilder.on("error", (err, statusCode) => {
+            warningLog("ServerSecureChannel:MessageBuilder: ", err.message);
+
+            // istanbul ignore next
+            if (doDebug) {
+                debugLog(chalk.red("Error "), err.message, err.stack);
+                debugLog(chalk.red("Server is now closing socket, without further notice"));
+            }
+
+            this.transport.sendErrorMessage(statusCode, err.message);
+
+            // close socket immediately
+            this.close(undefined);
+        });
     }
 
     public dispose(): void {
@@ -401,7 +424,6 @@ export class ServerSecureChannelLayer extends EventEmitter {
         }
         assert(!this.timeoutId, "timeout must have been cleared");
         assert(!this._securityTokenTimeout, "_securityTokenTimeout must have been cleared");
-        assert(this.messageBuilder, "dispose already called ?");
 
         this.parent = null;
         this.serverNonce = null;
@@ -409,7 +431,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         if (this.messageBuilder) {
             this.messageBuilder.dispose();
-            // xx this.messageBuilder = null;
+            this.messageBuilder = undefined;
         }
         this.securityHeader = null;
 
@@ -419,7 +441,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         }
         if (this.transport) {
             this.transport.dispose();
-            (this as any).transport = null;
+            (this as any).transport = undefined;
         }
         this.channelId = 0xdeadbeef;
         this.timeoutId = null;
@@ -451,8 +473,12 @@ export class ServerSecureChannelLayer extends EventEmitter {
     }
 
     public setSecurity(securityMode: MessageSecurityMode, securityPolicy: SecurityPolicy): void {
+        if (!this.messageBuilder) {
+            this._build_message_builder();
+        }
+        assert(this.messageBuilder);
         // TODO verify that the endpoint really supports this mode
-        this.messageBuilder.setSecurity(securityMode, securityPolicy);
+        this.messageBuilder!.setSecurity(securityMode, securityPolicy);
     }
 
     /**
@@ -509,14 +535,21 @@ export class ServerSecureChannelLayer extends EventEmitter {
             if (err) {
                 callback(err);
             } else {
+                this._build_message_builder();
+
                 this._rememberClientAddressAndPort();
 
+                // adjust sizes;
                 this.messageChunker.maxMessageSize = this.transport.maxMessageSize;
+                this.messageChunker.maxChunkCount = this.transport.maxChunkCount;
 
                 // bind low level TCP transport to messageBuilder
-                this.transport.on("message", (messageChunk: Buffer) => {
-                    assert(this.messageBuilder);
-                    this.messageBuilder.feed(messageChunk);
+                this.transport.on("chunk", (messageChunk: Buffer) => {
+                    // istanbul ignore next
+                    if (doTraceIncomingChunk) {
+                        console.log(hexDump(messageChunk));
+                    }
+                    this.messageBuilder!.feed(messageChunk);
                 });
                 debugLog("ServerSecureChannelLayer : Transport layer has been initialized");
                 debugLog("... now waiting for OpenSecureChannelRequest...");
@@ -555,7 +588,6 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         // istanbul ignore next
         if (doDebug) {
-            assert(response.schema);
             assert(request.schema);
             assert(requestId > 0);
             // verify that response for a given requestId is only sent once.
@@ -615,18 +647,31 @@ export class ServerSecureChannelLayer extends EventEmitter {
             msgType,
             options as ChunkMessageOptions,
             response as any as BaseUAObject,
-            (messageChunk: Buffer | null) => {
-                return this._send_chunk(callback, messageChunk);
+            (err: Error | null, messageChunk: Buffer | null) => {
+                if (err) {
+                    // the response would be too large !!!!
+                    warningLog("Error while chunking response message : ", err.message);
+                    this._send_chunk(callback, messageChunk);
+                    /* this.send_response(
+                        "MSG",
+                        new ServiceFault({
+                            responseHeader: {
+                                requestHandle: request.requestHeader.requestHandle,
+                                serviceResult: StatusCodes.BadTcpMessageTooLarge
+                            }
+                        }),
+                        message,
+                        callback
+                    );
+                    */
+                } else {
+                    this._send_chunk(callback, messageChunk);
+                }
             }
         );
     }
 
-    public send_fatal_error_and_abort(
-        statusCode: StatusCode,
-        description: string,
-        message: Message,
-        callback: ErrorCallback
-    ): void {
+    private _sendFatalErrorAndAbort(statusCode: StatusCode, description: string, message: Message, callback: ErrorCallback): void {
         this.transport.abortWithError(statusCode, description, () => {
             this.close(() => {
                 callback(new Error(description + " statusCode = " + statusCode.toString()));
@@ -751,7 +796,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
             this.revisedLifetime = this.defaultSecureTokenLifetime;
         } else {
             this.revisedLifetime = Math.min(this.defaultSecureTokenLifetime, this.revisedLifetime);
-            this.revisedLifetime = Math.max(500, this.revisedLifetime);
+            this.revisedLifetime = Math.max(ServerSecureChannelLayer.g_MinimumSecureTokenLifetime, this.revisedLifetime);
         }
 
         // xx console.log('requestedLifetime,self.defaultSecureTokenLifetime, self.revisedLifetime',requestedLifetime,self.defaultSecureTokenLifetime, self.revisedLifetime);
@@ -799,16 +844,22 @@ export class ServerSecureChannelLayer extends EventEmitter {
         if (doTraceServerMessage) {
             traceRequestMessage(request, channelId, this._counter);
         }
+
+        /* istanbul ignore next */
+        if (!(this.messageBuilder && this.messageBuilder.sequenceHeader && this.messageBuilder.securityHeader)) {
+            return this._on_OpenSecureChannelRequestError(
+                StatusCodes.BadCommunicationError,
+                "internal error",
+                { request, requestId },
+                callback
+            );
+        }
+
         const message = {
             request,
             requestId,
             securityHeader: this.messageBuilder.securityHeader
         };
-
-        /* istanbul ignore next */
-        if (!(this.messageBuilder && this.messageBuilder.sequenceHeader && this.messageBuilder.securityHeader)) {
-            return this._on_OpenSecureChannelRequestError(StatusCodes.BadCommunicationError, "internal error", message, callback);
-        }
 
         requestId = this.messageBuilder.sequenceHeader.requestId;
         if (requestId <= 0) {
@@ -867,9 +918,14 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         this.messageBuilder
             .on("message", (request, msgType, requestId, channelId) => {
-                this._on_common_message(request, msgType, requestId, channelId);
+                this._on_common_message(request as Request, msgType, requestId, channelId);
             })
-            .on("start_chunk", () => {
+            .on("error", (err: Error, statusCode: StatusCode, requestId: number | null) => {
+                /** */
+                this.transport.sendErrorMessage(statusCode, err.message);
+                this.close();
+            })
+            .on("startChunk", () => {
                 if (doPerfMonitoring) {
                     // record tick 0: when the first chunk is received
                     this._tick0 = get_clock_tick();
@@ -910,18 +966,18 @@ export class ServerSecureChannelLayer extends EventEmitter {
         const errorHandler = (err: Error) => {
             this._cancel_wait_for_open_secure_channel_request_timeout();
 
-            this.messageBuilder.removeListener("message", messageHandler);
+            this.messageBuilder!.removeListener("message", messageHandler);
             this.close(() => {
                 callback(new Error("/Expecting OpenSecureChannelRequest to be valid " + err.message));
             });
         };
         const messageHandler = (request: Request, msgType: string, requestId: number, channelId: number) => {
             this._cancel_wait_for_open_secure_channel_request_timeout();
-            this.messageBuilder.removeListener("error", errorHandler);
+            this.messageBuilder!.removeListener("error", errorHandler);
             this._on_initial_open_secure_channel_request(callback, request, msgType, requestId, channelId);
         };
-        this.messageBuilder.once("error", errorHandler);
-        this.messageBuilder.once("message", messageHandler);
+        this.messageBuilder!.once("error", errorHandler);
+        this.messageBuilder!.once("message", messageHandler);
     }
 
     private _send_chunk(callback: ErrorCallback | undefined, messageChunk: Buffer | null) {
@@ -950,7 +1006,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
     private _get_security_options_for_OPN(): SecureMessageChunkManagerOptions | null {
         // install sign & sign-encrypt behavior
         if (this.securityMode === MessageSecurityMode.Sign || this.securityMode === MessageSecurityMode.SignAndEncrypt) {
-            const cryptoFactory = this.messageBuilder.cryptoFactory;
+            const cryptoFactory = this.messageBuilder!.cryptoFactory;
             /* istanbul ignore next */
             if (!cryptoFactory) {
                 throw new Error("Internal Error");
@@ -988,7 +1044,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         if (this.securityMode === MessageSecurityMode.None) {
             return null;
         }
-        const cryptoFactory = this.messageBuilder.cryptoFactory;
+        const cryptoFactory = this.messageBuilder!.cryptoFactory;
 
         /* istanbul ignore next */
         if (!cryptoFactory || !this.derivedKeys) {
@@ -1060,14 +1116,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         });
     }
 
-    /**
-     * @method _prepare_security_header
-     * @param request
-     * @param message
-     * @return {AsymmetricAlgorithmSecurityHeader}
-     * @private
-     */
-    private _prepare_security_header(request: OpenSecureChannelRequest, message: Message): AsymmetricAlgorithmSecurityHeader {
+    private _prepare_security_header(request: OpenSecureChannelRequest, message: Message): AsymmetricAlgorithmSecurityHeader | null {
         let securityHeader: AsymmetricAlgorithmSecurityHeader;
         // senderCertificate:
         //    The X509v3 certificate assigned to the sending application instance.
@@ -1091,6 +1140,10 @@ export class ServerSecureChannelLayer extends EventEmitter {
             case MessageSecurityMode.Sign:
             case MessageSecurityMode.SignAndEncrypt:
             default: {
+                if (!this.parent) {
+                    warningLog("Cannot find parent of SecureChannel !!!!!!!! ");
+                    return null;
+                }
                 const receiverCertificateThumbprint = getThumbprint(this.receiverCertificate);
 
                 const asymmClientSecurityHeader = this.clientSecurityHeader as AsymmetricAlgorithmSecurityHeader;
@@ -1154,7 +1207,10 @@ export class ServerSecureChannelLayer extends EventEmitter {
     private _handle_OpenSecureChannelRequest(serviceResult: StatusCode, message: Message, callback: ErrorCallback) {
         const request = message.request as OpenSecureChannelRequest;
         const requestId: number = message.requestId;
-        assert(requestId !== 0 && requestId > 0);
+        if (!(requestId !== 0 && requestId > 0)) {
+            warningLog("OpenSecureChannelRequest: requestId");
+            return this._sendFatalErrorAndAbort(StatusCodes2.BadTcpInternalError, "invalid request", message, callback);
+        }
 
         // let prepare self.securityHeader;
         this.securityHeader = this._prepare_security_header(request, message);
@@ -1162,11 +1218,9 @@ export class ServerSecureChannelLayer extends EventEmitter {
         /* istanbul ignore next */
         if (!this.securityHeader) {
             warningLog("Cannot find SecurityHeader !!!!!!!! ");
-            return this.send_fatal_error_and_abort(StatusCodes.BadInternalError, "invalid request", message, callback);
+            return this._sendFatalErrorAndAbort(StatusCodes2.BadSecurityChecksFailed, "invalid request", message, callback);
         }
-
-        assert(this.securityHeader);
-
+        
         this.clientNonce = request.clientNonce;
 
         if (nonceAlreadyBeenUsed(this.clientNonce)) {
@@ -1178,7 +1232,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         this._prepare_security_token(request);
 
-        const cryptoFactory = this.messageBuilder.cryptoFactory;
+        const cryptoFactory = this.messageBuilder!.cryptoFactory;
         if (cryptoFactory) {
             // serverNonce: A random number that shall not be used in any other request. A new
             //    serverNonce shall be generated for each time a SecureChannel is renewed.
@@ -1209,7 +1263,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         }
 
         const derivedClientKeys = this.derivedKeys ? this.derivedKeys.derivedClientKeys : null;
-        this.messageBuilder.pushNewToken(this.securityToken, derivedClientKeys);
+        this.messageBuilder!.pushNewToken(this.securityToken, derivedClientKeys);
 
         const derivedServerKeys = this.derivedKeys ? this.derivedKeys.derivedServerKeys : undefined;
 
@@ -1314,11 +1368,11 @@ export class ServerSecureChannelLayer extends EventEmitter {
         }
 
         /* istanbul ignore next */
-        if (this.messageBuilder.sequenceHeader === null) {
+        if (this.messageBuilder!.sequenceHeader === null) {
             throw new Error("Internal Error");
         }
 
-        requestId = this.messageBuilder.sequenceHeader.requestId;
+        requestId = this.messageBuilder!.sequenceHeader.requestId;
 
         const message: Message = {
             channel: this,
@@ -1346,7 +1400,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
                 if (this.securityToken && channelId !== this.securityToken.channelId) {
                     // response = new ServiceFault({responseHeader: {serviceResult: certificate_status}});
                     debugLog("Invalid channelId detected =", channelId, " <> ", this.securityToken.channelId);
-                    return this.send_fatal_error_and_abort(
+                    return this._sendFatalErrorAndAbort(
                         StatusCodes.BadCommunicationError,
                         "Invalid Channel Id specified " + this.securityToken.channelId,
                         message,
@@ -1432,7 +1486,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
         // turn of security mode as we haven't manage to set it to
         this.securityMode = MessageSecurityMode.None;
         // setTimeout(() => {
-        this.send_fatal_error_and_abort(serviceResult, description, message, callback);
+        this._sendFatalErrorAndAbort(serviceResult, description, message, callback);
         // }, ServerSecureChannelLayer.throttleTime); // Throttling keep connection on hold for a while.
     }
 }

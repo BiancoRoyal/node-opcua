@@ -24,7 +24,7 @@ const senderPrivateKey = readKeyPem(getFixture("certs/client_key_1024.pem"));
 const receiverCertificate =  readCertificate(getFixture("certs/server_cert_1024.pem"));
 const receiverCertificateThumbprint = makeSHA1Thumbprint(receiverCertificate);
 
-const receiverPublicKey = fs.readFileSync(getFixture("certs/server_public_key_1024.pub", "ascii")).toString();
+const receiverPublicKey = fs.readFileSync(getFixture("certs/server_public_key_1024.pub", "utf-8")).toString();
 
 const sequenceNumberGenerator = new SequenceNumberGenerator();
 
@@ -101,7 +101,7 @@ const globalOptions = {
 
 export const derivedKeys: DerivedKeys = computeDerivedKeys(secret, seed, globalOptions);
 
-export function iterateOnSymmetricEncryptedChunk(buffer: Buffer, callback: ChunkVisitorFunc) {
+export function iterateOnSymmetricEncryptedChunk(buffer: Buffer, onChunkFunc: ChunkVisitorFunc) {
 
     const options: SecureMessageChunkManagerOptions = {
         chunkSize: 1024,
@@ -120,7 +120,7 @@ export function iterateOnSymmetricEncryptedChunk(buffer: Buffer, callback: Chunk
     });
 
     const msgChunkManager = new SecureMessageChunkManager("MSG", options, securityHeader, sequenceNumberGenerator);
-    msgChunkManager.on("chunk", (chunk, final) => callback(null, chunk));
+    msgChunkManager.on("chunk", (chunk, final) => onChunkFunc(null, chunk));
     msgChunkManager.write(buffer, buffer.length);
     msgChunkManager.end();
 }

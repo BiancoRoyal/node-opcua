@@ -5,7 +5,7 @@ import { assert } from "node-opcua-assert";
 import { decodeByte, decodeExpandedNodeId, decodeNodeId, decodeUInt32 } from "node-opcua-basic-types";
 import { BinaryStream } from "node-opcua-binary-stream";
 import { hexDump } from "node-opcua-debug";
-import { BaseUAObject, constructObject } from "node-opcua-factory";
+import { BaseUAObject, getStandardDataTypeFactory } from "node-opcua-factory";
 import { buffer_ellipsis } from "node-opcua-utils";
 
 const spaces =
@@ -13,7 +13,7 @@ const spaces =
 
 function f(n: number, width: number): string {
     const s = n.toString();
-    return (s + "      ").substr(0, Math.max(s.length, width));
+    return (s + "      ").substring(0, Math.max(s.length, width));
 }
 
 function display_encoding_mask(padding: string, encodingMask: any, encodingInfo: any) {
@@ -57,14 +57,14 @@ function make_tracer(buffer: Buffer, padding: number, offset?: number): Tracer {
     padding = !padding ? 0 : padding;
     offset = offset || 0;
 
-    const pad = () => "                                                       ".substr(0, padding);
+    const pad = () => "                                                       ".substring(0, padding);
 
     function _display(str: string, hexInfo?: string) {
         hexInfo = hexInfo || "";
         // account for ESC codes for colors
         const nbColorAttributes = [...str.split("")].filter((c) => c === "\u001b").length;
         const extra = nbColorAttributes * 5;
-        console.log((pad() + str + spaces).substr(0, 132 + extra) + "|" + hexInfo);
+        console.log((pad() + str + spaces).substring(0, 132 + extra) + "|" + hexInfo);
     }
     function display(str: string, hexInfo?: string) {
         const lines = str.split("\n");
@@ -188,7 +188,7 @@ export function analyseExtensionObject(
     let objMessage;
     try {
         id = decodeExpandedNodeId(stream);
-        objMessage = constructObject(id);
+        objMessage = getStandardDataTypeFactory().constructObject(id);
     } catch (err) {
         console.log(id);
         console.log(err);

@@ -30,18 +30,11 @@ describe("testing extension object with client residing on a different process t
     };
     fs.existsSync(options.server_sourcefile).should.eql(true, "cannot find simple_server_with_custom_extension_objects script");
 
-    before(function (done) {
-        start_simple_server(options, function (err, data) {
-            if (!err) {
-                serverHandle = data;
-            }
-            done(err);
-        });
+    before(async () => {
+        serverHandle = await start_simple_server(options);
     });
-    after(function (done) {
-        stop_simple_server(serverHandle, function (err) {
-            done(err);
-        });
+    after(async () => {
+        await stop_simple_server(serverHandle);
     });
 
     it("should read the MyStructureDataType definition", function (done) {
@@ -70,7 +63,7 @@ describe("testing extension object with client residing on a different process t
 
                                     //xx console.log(" input,",nodesToRead[0].toString());
                                     //xx console.log(" result,",results[0].toString());
-                                    const xmlData = dataValues[0].value.value.toString("ascii");
+                                    const xmlData = dataValues[0].value.value.toString("utf-8");
                                     xmlData.should.match(
                                         /opc:StructuredType BaseType="ua:ExtensionObject" Name="MyStructureDataType"/
                                     );
@@ -89,7 +82,7 @@ describe("testing extension object with client residing on a different process t
                                 if (!err) {
                                     //xx console.log(" input,",nodesToRead[0].toString());
                                     //xx console.log(" result,",results[0].toString());
-                                    const xmlData = dataValue.value.value.toString("ascii");
+                                    const xmlData = dataValue.value.value.toString("utf-8");
                                     xmlData.should.match(
                                         /opc:StructuredType BaseType="ua:ExtensionObject" Name="MyStructureDataType"/
                                     );

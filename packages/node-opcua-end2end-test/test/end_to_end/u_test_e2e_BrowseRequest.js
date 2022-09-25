@@ -164,10 +164,10 @@ module.exports = function(test) {
                     const browseNextRequest = new BrowseNextRequest({
                         continuationPoints: null
                     });
-                    g_session.performMessageTransaction(browseNextRequest, function(err, response) {
+                    g_session.performMessageTransaction(browseNextRequest, function(err, _response) {
                         err.message.should.match(/BadNothingToDo/);
                         // console.log(response.toString());
-                        response.responseHeader.serviceResult.should.equal(StatusCodes.BadNothingToDo);
+                        err.response.responseHeader.serviceResult.should.equal(StatusCodes.BadNothingToDo);
                         callback();
                     });
                 }
@@ -314,7 +314,7 @@ module.exports = function(test) {
                 //  Given one node to browse
                 nodeId = resolveNodeId(nodeId);
                 //     And the node exists
-                const obj = server.engine.addressSpace.findNode(nodeId, BrowseDirection.Forward);
+                const obj = test.server.engine.addressSpace.findNode(nodeId, BrowseDirection.Forward);
                 should.exist(obj);
 
                 const browseDesc = new BrowseDescription({

@@ -1,7 +1,7 @@
 // tslint:disable: no-console
 import * as fs from "fs";
 import * as os from "os";
-import * as path from "path";
+import { promisify } from "util";
 import * as should from "should";
 import * as async from "async";
 
@@ -18,16 +18,14 @@ import {
     StatusCodes,
     RegisterServerMethod,
     makeApplicationUrn,
-    OPCUACertificateManager,
-    FindServerResults,
-    OPCUADiscoveryServer
+    OPCUADiscoveryServer,
+    ServiceFault
 } from "node-opcua";
 import { readCertificate, exploreCertificate } from "node-opcua-crypto";
 import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 
-import { createServerThatRegistersItselfToTheDiscoveryServer, ep, startDiscovery } from "./_helper";
-
-const configFolder = path.join(__dirname, "../../tmp");
+import { createServerCertificateManager } from "../../test_helpers/createServerCertificateManager";
+import { createServerThatRegistersItselfToTheDiscoveryServer, ep, pause, startDiscovery } from "./_helper";
 
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
@@ -38,7 +36,7 @@ const port2 = 2502;
 const port3 = 2503;
 const port4 = 2504;
 const port5 = 2505;
-const port_discovery = 1235;
+const port_discovery = 2516;
 // add the tcp/ip endpoint with no security
 
 process.on("uncaughtException", (err) => {
@@ -48,17 +46,21 @@ process.on("uncaughtException", (err) => {
 // tslint:disable-next-line: no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 export function t(test: any) {
-    describe("DS1 - DiscoveryServer1", function (this: any) {
+    describe("DISCO1 - DiscoveryServer1", function (this: any) {
         this.timeout(30 * 1000);
 
         let discovery_server: OPCUADiscoveryServer | undefined;
         let discoveryServerEndpointUrl: string;
         let server: OPCUAServer | undefined;
 
-        before(() => {
+        before(async () => {
             server = new OPCUAServer({
-                port: port0
+                port: port0,
+                serverCertificateManager: this.serverCertificateManager
             });
+
+            await server.initialize();
+            await server.initializeCM();
         });
 
         after(async () => {
@@ -67,14 +69,9 @@ export function t(test: any) {
         });
 
         beforeEach(async () => {
-            const serverCertificateManager = new OPCUACertificateManager({
-                rootFolder: path.join(configFolder, "PKI-Discovery")
-            });
-            await serverCertificateManager.initialize();
-
             discovery_server = new OPCUADiscoveryServer({
                 port: port_discovery,
-                serverCertificateManager
+                serverCertificateManager: this.discoveryServerCertificateManager
             });
             await discovery_server.start();
             discoveryServerEndpointUrl = discovery_server.getEndpointUrl();
@@ -116,7 +113,7 @@ export function t(test: any) {
             await client.disconnect();
         }
 
-        it("should fail to register server if discovery url is not specified (Bad_DiscoveryUrlMissing)", async () => {
+        it("DISCO1-1 should fail to register server if discovery url is not specified (Bad_DiscoveryUrlMissing)", async () => {
             const request = new RegisterServerRequest({
                 server: {
                     // The globally unique identifier for the Server instance. The serverUri matches
@@ -136,16 +133,18 @@ export function t(test: any) {
                 }
             });
 
-            function check_response(err: Error | null, response: any): void {
-                should.not.exist(err);
+            function check_error_response(err: Error | null, response: any): void {
+                should.exist(err);
+                should.not.exist(response);
+                (err as any).response.should.be.instanceOf(ServiceFault);
                 //xx console.log(response.toString());
-                response.responseHeader.serviceResult.should.eql(StatusCodes.BadDiscoveryUrlMissing);
+                (err as any).response.responseHeader.serviceResult.should.eql(StatusCodes.BadDiscoveryUrlMissing);
             }
 
-            await send_registered_server_request(discoveryServerEndpointUrl, request, check_response);
+            await send_registered_server_request(discoveryServerEndpointUrl, request, check_error_response);
         });
 
-        it("should fail to register server to the discover server if server type is Client (BadInvalidArgument)", async () => {
+        it("DISCO1-2 should fail to register server to the discover server if server type is Client (BadInvalidArgument)", async () => {
             const request = new RegisterServerRequest({
                 server: {
                     // The globally unique identifier for the Server instance. The serverUri matches
@@ -165,16 +164,18 @@ export function t(test: any) {
                 }
             });
 
-            function check_response(err: Error | null, response: any) {
-                should.not.exist(err);
+            function check_error_response(err: Error | null, response: any) {
+                should.exist(err);
+                should.not.exist(response);
                 //xx debugLog(response.toString());
-                response.responseHeader.serviceResult.should.eql(StatusCodes.BadInvalidArgument);
+                (err as any).response.should.be.instanceOf(ServiceFault);
+                (err as any).response.responseHeader.serviceResult.should.eql(StatusCodes.BadInvalidArgument);
             }
 
-            await send_registered_server_request(discoveryServerEndpointUrl, request, check_response);
+            await send_registered_server_request(discoveryServerEndpointUrl, request, check_error_response);
         });
 
-        it("should fail to register server to the discover server if server name array is empty (BadServerNameMissing)", async () => {
+        it("DISCO1-3 should fail to register server to the discover server if server name array is empty (BadServerNameMissing)", async () => {
             const request = new RegisterServerRequest({
                 server: {
                     // The globally unique identifier for the Server instance. The serverUri matches
@@ -194,17 +195,19 @@ export function t(test: any) {
                 }
             });
 
-            function check_response(err: Error | null, response: any) {
-                should.not.exist(err);
-                response.responseHeader.serviceResult.should.eql(StatusCodes.BadServerNameMissing);
+            function check_error_response(err: Error | null, response: any) {
+                should.exist(err);
+                should.not.exist(response);
+                (err as any).response.should.be.instanceOf(ServiceFault);
+                (err as any).response.responseHeader.serviceResult.should.eql(StatusCodes.BadServerNameMissing);
             }
 
-            await send_registered_server_request(discoveryServerEndpointUrl, request, check_response);
+            await send_registered_server_request(discoveryServerEndpointUrl, request, check_error_response);
         });
     });
 
-    describe("DS2 - DiscoveryServer2", function (this: any) {
-        this.timeout(20000);
+    describe("DISCO2 - DiscoveryServer2", function (this: any) {
+        this.timeout(Math.max(40 * 1000, this.timeout()));
 
         let discoveryServer: OPCUADiscoveryServer;
         let discoveryServerEndpointUrl: string;
@@ -212,19 +215,16 @@ export function t(test: any) {
 
         before(() => {
             OPCUAServer.registry.count().should.eql(0);
+            1162;
         });
 
         after(() => {
             OPCUAServer.registry.count().should.eql(0);
         });
         beforeEach(async () => {
-            const serverCertificateManager = new OPCUACertificateManager({
-                rootFolder: path.join(configFolder, "PKI-Discovery")
-            });
-            await serverCertificateManager.initialize();
             discoveryServer = new OPCUADiscoveryServer({
                 port: port_discovery,
-                serverCertificateManager
+                serverCertificateManager: this.discoveryServerCertificateManager
             });
             await discoveryServer.start();
             discoveryServerEndpointUrl = discoveryServer.getEndpointUrl()!;
@@ -239,12 +239,12 @@ export function t(test: any) {
 
         async function addServerCertificateToTrustedCertificateInDiscoveryServer(server: OPCUAServer) {
             const filename = server.certificateFile;
-            fs.existsSync(filename).should.eql(true);
+            fs.existsSync(filename).should.eql(true, " the server certficate file " + filename + " should exist");
             const certificate = readCertificate(filename);
             await discoveryServer.serverCertificateManager.trustCertificate(certificate);
         }
 
-        it("DS2-A should register server to the discover server 2", async () => {
+        it("DISCO2-1 should register server to the discover server 2", async () => {
             const applicationUri = makeApplicationUrn(os.hostname(), "NodeOPCUA-Server");
 
             // there should be no endpoint exposed by an blank discovery server
@@ -261,11 +261,13 @@ export function t(test: any) {
             debugLog(" initialServerCount = ", initialServerCount);
             debugLog("servers[0].discoveryUrls", servers[0].discoveryUrls!.join("\n"));
 
+            const serverCertificateManager = await createServerCertificateManager(port1);
             // ----------------------------------------------------------------------------
             server = new OPCUAServer({
                 port: port1,
                 registerServerMethod: RegisterServerMethod.LDS,
                 discoveryServerEndpointUrl,
+                serverCertificateManager,
                 serverInfo: {
                     applicationName: { text: "NodeOPCUA", locale: "en" },
                     applicationUri,
@@ -275,6 +277,9 @@ export function t(test: any) {
                     gatewayServerUri: null
                 }
             });
+
+            await server.initialize();
+            await server.initializeCM();
 
             await addServerCertificateToTrustedCertificateInDiscoveryServer(server);
 
@@ -309,7 +314,7 @@ export function t(test: any) {
         });
     });
 
-    describe("DS3 - DiscoveryServer3 - many server", function (this: any) {
+    describe("DISCO3 - DiscoveryServer3 - many server", function (this: any) {
         this.timeout(200000);
 
         let discoveryServer: OPCUADiscoveryServer;
@@ -336,12 +341,12 @@ export function t(test: any) {
             OPCUAServer.registry.count().should.eql(0);
         });
 
-        beforeEach(async () => {
+        before(async () => {
             discoveryServer = await startDiscovery(port_discovery);
             discoveryServerEndpointUrl = ep(discoveryServer);
         });
 
-        afterEach(async () => {
+        after(async () => {
             await discoveryServer.shutdown();
         });
 
@@ -349,14 +354,22 @@ export function t(test: any) {
 
         async function checkServerCertificateAgainsLDS(server: OPCUAServer) {
             const certificate = await server.getCertificate();
-            const certIngo = await exploreCertificate(certificate);
+            const certificateInfo = await exploreCertificate(certificate);
             if (doDebug) {
-                console.log(certIngo);
+                console.log(certificateInfo);
             }
-            const status = await discoveryServer.serverCertificateManager.verifyCertificate(certificate);
+            const statusBefore = await discoveryServer.serverCertificateManager.verifyCertificate(certificate);
             if (doDebug) {
-                console.log(status);
+                console.log("statusBefore = ", statusBefore);
             }
+
+            await discoveryServer.serverCertificateManager.trustCertificate(certificate);
+
+            const statusAfter = await discoveryServer.serverCertificateManager.verifyCertificate(certificate);
+            if (doDebug) {
+                console.log("statusAfter = ", statusAfter);
+            }
+            statusAfter.should.eql("Good");
         }
 
         function start_all_servers(done: () => void) {
@@ -431,81 +444,67 @@ export function t(test: any) {
                 done
             );
         }
+        const start_all_serversAsync = promisify(start_all_servers);
+        const stop_all_serversAsync = promisify(stop_all_servers);
 
-        it("DS3-0 checking certificates", async () => {
+        it("DISCO3-1 checking certificates", async () => {
             await checkServerCertificateAgainsLDS(server1);
             await checkServerCertificateAgainsLDS(server2);
             await checkServerCertificateAgainsLDS(server3);
             await checkServerCertificateAgainsLDS(server4);
+            console.log("done");
         });
 
-        it("DS3-1 a discovery server shall be able to expose many registered servers", function (done) {
-            async.series(
-                [
-                    function (callback: () => void) {
-                        start_all_servers(callback);
-                    },
-                    function (callback: () => void) {
-                        function wait_until_all_servers_registered() {
-                            if (registeredServerCount === 5) {
-                                return callback();
-                            }
-                            setTimeout(wait_until_all_servers_registered, 500);
-                        }
+        function wait_until_all_servers_registered_iter(expectedCount: number, resolve: () => void) {
+            console.log("waiting for all servers to be registered ", registeredServerCount, "expected", expectedCount);
+            if (registeredServerCount === expectedCount) {
+                return resolve();
+            }
+            setTimeout(wait_until_all_servers_registered_iter, 500, expectedCount, resolve);
+        }
 
-                        wait_until_all_servers_registered();
-                    },
-                    function (callback: () => void) {
-                        discoveryServer.registeredServerCount.should.equal(5);
-                        callback();
-                    },
+        async function wait_until_all_servers_registered(expectedCount: number): Promise<void> {
+            return new Promise<void>((resolve) => {
+                wait_until_all_servers_registered_iter(expectedCount, resolve);
+            });
+        }
 
-                    function wait_a_little_bit_to_let_bonjour_propagate_data(callback: () => void) {
-                        setTimeout(callback, 2000);
-                    },
+        it("DISCO3-2 a discovery server shall be able to expose many registered servers", async () => {
+            await start_all_serversAsync();
 
-                    function query_discovery_server_for_available_servers(callback: (err: Error | null) => void) {
-                        findServers(discoveryServerEndpointUrl, (err: Error | null, data?: FindServerResults) => {
-                            const { servers, endpoints } = data!;
+            await wait_until_all_servers_registered(5);
 
-                            if (doDebug) {
-                                for (const s of servers) {
-                                    debugLog(
-                                        s.applicationUri,
-                                        s.productUri,
-                                        ApplicationType[s.applicationType],
-                                        s.discoveryUrls![0]
-                                    );
-                                }
-                            }
-                            servers.length.should.eql(6); // 5 server + 1 discovery server
+            discoveryServer.registeredServerCount.should.equal(5);
 
-                            // servers[1].applicationUri.should.eql("urn:NodeOPCUA-Server");
-                            callback(err);
-                        });
-                    },
+            await pause(1000);
 
-                    function query_discovery_server_for_available_servers_on_network(callback: (err: Error | null) => void) {
-                        findServersOnNetwork(discoveryServerEndpointUrl, (err, servers) => {
-                            if (doDebug || servers!.length !== 6) {
-                                for (const s of servers!) {
-                                    console.log(s.toString());
-                                }
-                            }
-                            servers!.length.should.eql(
-                                6,
-                                "may be you have a LDS running on your system. please make sure to shut it down before running the tests"
-                            ); // 5 server + 1 discovery server
-                            // servers[1].applicationUri.should.eql("urn:NodeOPCUA-Server");
-                            callback(err);
-                        });
-                    },
-                    function (callback: () => void) {
-                        stop_all_servers(callback);
+            const { servers, endpoints } = await findServers(discoveryServerEndpointUrl);
+            if (doDebug) {
+                for (const s of servers) {
+                    debugLog(s.applicationUri, s.productUri, ApplicationType[s.applicationType], s.discoveryUrls![0]);
+                }
+            }
+            servers.length.should.eql(6); // 5 server + 1 discovery server
+
+            // servers[1].applicationUri.should.eql("urn:NodeOPCUA-Server");
+            await pause(1000);
+            {
+                const servers = await findServersOnNetwork(discoveryServerEndpointUrl);
+                if (servers!.length !== 6) {
+                    for (const s of servers!) {
+                        console.log(s.toString());
                     }
-                ],
-                done
-            );
+                }
+                servers!.length.should.eql(
+                    6,
+                    "found " +
+                        servers!.length +
+                        " server running instead of 6: may be you have a LDS running on your system. please make sure to shut it down before running the tests"
+                ); // 5 server + 1 discovery server
+                // servers[1].applicationUri.should.eql("urn:NodeOPCUA-Server");
+            }
+
+            await stop_all_serversAsync();
         });
     });
 }

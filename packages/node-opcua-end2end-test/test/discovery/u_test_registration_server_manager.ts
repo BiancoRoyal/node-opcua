@@ -1,10 +1,10 @@
+import * as os from "os";
 import "should";
 import * as async from "async";
-import * as os from "os";
-
-import { OPCUAServer, OPCUADiscoveryServer, RegisterServerMethod, makeApplicationUrn } from "node-opcua";
-import { createDiscovery, createServerThatRegistersItselfToTheDiscoveryServer, f, fa, pause } from "./_helper";
 import { make_debugLog } from "node-opcua-debug";
+import { OPCUAServer, OPCUADiscoveryServer, RegisterServerMethod, makeApplicationUrn } from "node-opcua";
+
+import { createDiscovery, createServerThatRegistersItselfToTheDiscoveryServer, f, fa, pause } from "./_helper";
 const debugLog = make_debugLog("TEST");
 
 const port = 1435;
@@ -12,10 +12,10 @@ const port_discovery = 1436;
 
 export function t() {
     const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
-    describe("DS6- Discovery server", function (this: any) {
-        this.timeout(50000);
+    describe("DISCO7 - Discovery server", function (this: any) {
+        this.timeout(Math.max(50000,this.timeout()));
 
-        let discoveryServerEndpointUrl: string = `opc.tcp://localhost:${port_discovery}`;
+        let discoveryServerEndpointUrl = `opc.tcp://localhost:${port_discovery}`;
 
         let discoveryServer: OPCUADiscoveryServer | undefined;
 
@@ -50,11 +50,11 @@ export function t() {
             OPCUAServer.registry.count().should.eql(0);
         });
 
-        it("DS6-1 a server shall register itself to the LDS when the LDS comes online", async () => {
+        it("DISCO7-A -  a server shall register itself to the LDS when the LDS comes online", async () => {
             let server: OPCUAServer;
 
             await fa("given a server that has started before the discovery server is online", async () => {
-                server = await createServerThatRegistersItselfToTheDiscoveryServer(discoveryServerEndpointUrl, port, "AA");
+                server = await createServerThatRegistersItselfToTheDiscoveryServer(discoveryServerEndpointUrl, port, "FF");
 
                 await server.start();
                 (server.registerServerManager as any).timeout = 100;
@@ -70,7 +70,7 @@ export function t() {
                     // waiting for server to be registered
                     debugLog("Waiting for server to be registered");
                     server.once("serverRegistered", () => {
-                        debugLog("server serverRegistered");
+                        debugLog("on serverRegistered event received:  server has registered itself to the LDS");
                         resolve();
                     });
                 });
@@ -83,9 +83,8 @@ export function t() {
                     debugLog("server serverUnregistered");
                     serverUnregisteredCount += 1;
                 });
-
-                //
                 await server.shutdown();
+                debugLog("server has shut down");
             });
             await fa("then server must have unregistered itself from the LDS", async () => {
                 serverUnregisteredCount.should.eql(1);
@@ -94,14 +93,14 @@ export function t() {
             await fa("stopping discovery server", stop_discovery_server);
         });
 
-        it("DS6-2 a server shall register itself on a regular basic to the LDS", async () => {
+        it("DISCO7-B a server shall register itself on a regular basic to the LDS", async () => {
             await fa("given a running local discovery server", async () => {
                 await start_discovery_server();
             });
 
             let server: OPCUAServer;
             await fa("given a server that registers itself to the local discovery server", async () => {
-                server = await createServerThatRegistersItselfToTheDiscoveryServer(discoveryServerEndpointUrl, port, "B");
+                server = await createServerThatRegistersItselfToTheDiscoveryServer(discoveryServerEndpointUrl, port, "GG");
                 (server.registerServerManager as any).timeout = 100;
             });
 
@@ -154,7 +153,7 @@ export function t() {
             await stop_discovery_server();
         });
 
-        it("DS6-3 a server shall try to register itself even if discovery server is not available", function (done) {
+        it("DISCO7-C a server shall try to register itself even if discovery server is not available", function (done) {
             let server: OPCUAServer;
 
             async.series(
@@ -230,7 +229,7 @@ export function t() {
             );
         });
 
-        it("DS6-4 a server shall be able not to register itself to the LDS if needed to be hidden", function (done) {
+        it("DISCO7-D a server shall be able not to register itself to the LDS if needed to be hidden", function (done) {
             let server: OPCUAServer;
             async.series(
                 [
@@ -257,7 +256,7 @@ export function t() {
             );
         });
 
-        it("DS6-5 a server (that want to register itself to the LDS) shall be able to start promptly even if the LDS is no available", function (done) {
+        it("DISCO7-E a server (that want to register itself to the LDS) shall be able to start promptly even if the LDS is no available", function (done) {
             let server: OPCUAServer;
 
             async.series(
@@ -286,10 +285,10 @@ export function t() {
         });
     });
 
-    describe("DS7- Discovery Server 2", function (this: any) {
-        this.timeout(50000);
+    describe("DISCO8 - Discovery Server 2", function (this: any) {
+        this.timeout(Math.max(50000,this.timeout()));
 
-        it("DS7-1 server shall not struggle to start if discovery server is not available", function (done) {
+        it("DISCO8-A server shall not struggle to start if discovery server is not available", function (done) {
             const discoveryServerEndpointUrl = `opc.tcp://localhost:${port_discovery}`;
             let server: OPCUAServer;
             async.series(

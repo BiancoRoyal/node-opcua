@@ -20,7 +20,7 @@ import {
     verifyChunkSignatureWithDerivedKeys
 } from "node-opcua-crypto";
 import { checkDebugFlag, hexDump, make_debugLog, make_warningLog } from "node-opcua-debug";
-import { BaseUAObject, constructObject, hasConstructor } from "node-opcua-factory";
+import { BaseUAObject, getStandardDataTypeFactory } from "node-opcua-factory";
 import { ExpandedNodeId, NodeId } from "node-opcua-nodeid";
 import { analyseExtensionObject } from "node-opcua-packet-analyzer";
 import {
@@ -29,12 +29,13 @@ import {
     MessageSecurityMode,
     CloseSecureChannelRequest
 } from "node-opcua-service-secure-channel";
-import { decodeStatusCode } from "node-opcua-status-code";
-import { MessageBuilderBase } from "node-opcua-transport";
+import { decodeStatusCode, coerceStatusCode, StatusCodes, StatusCode } from "node-opcua-status-code";
+import { MessageBuilderBase, MessageBuilderBaseOptions, StatusCodes2 } from "node-opcua-transport";
 import { timestamp } from "node-opcua-utils";
 import { SequenceHeader } from "node-opcua-chunkmanager";
+import { doTraceChunk } from "node-opcua-transport";
 
-import { chooseSecurityHeader, SymmetricAlgorithmSecurityHeader } from "./secure_channel_service";
+import { chooseSecurityHeader, MessageChunker, SymmetricAlgorithmSecurityHeader } from "./secure_channel_service";
 
 import { SecurityHeader } from "./secure_message_chunk_manager";
 import {
@@ -51,8 +52,6 @@ const debugLog = make_debugLog(__filename);
 const doDebug = checkDebugFlag(__filename);
 const warningLog = make_warningLog(__filename);
 
-const doTraceChunk = process.env.NODEOPCUADEBUG && process.env.NODEOPCUADEBUG.indexOf("CHUNK") >= 0;
-
 export interface SecurityToken {
     tokenId: number;
     expired?: boolean;
@@ -60,16 +59,20 @@ export interface SecurityToken {
 }
 
 const defaultObjectFactory = {
-    constructObject,
-    hasConstructor
+    constructObject(binaryEncodingNodeId: NodeId): BaseUAObject {
+        return getStandardDataTypeFactory().constructObject(binaryEncodingNodeId);
+    },
+    hasConstructor(binaryEncodingNodeId: ExpandedNodeId): boolean {
+        return getStandardDataTypeFactory().hasConstructor(binaryEncodingNodeId);
+    }
 };
 
 export interface ObjectFactory {
-    constructObject: (expandedNodeId: ExpandedNodeId) => BaseUAObject;
-    hasConstructor: (expandedNodeId: ExpandedNodeId) => boolean;
+    constructObject: (binaryEncodingNodeId: ExpandedNodeId) => BaseUAObject;
+    hasConstructor: (binaryEncodingNodeId: ExpandedNodeId) => boolean;
 }
 
-export interface MessageBuilderOptions {
+export interface MessageBuilderOptions extends MessageBuilderBaseOptions {
     securityMode?: MessageSecurityMode;
     privateKey?: PrivateKeyPEM;
     objectFactory?: ObjectFactory;
@@ -85,6 +88,33 @@ export interface SecurityTokenAndDerivedKeys {
 const invalidPrivateKey = "<invalid>";
 let counter = 0;
 
+type PacketInfo = any;
+
+export interface MessageBuilder extends MessageBuilderBase {
+    on(eventName: "startChunk", eventHandler: (info: PacketInfo, data: Buffer) => void): this;
+    on(eventName: "chunk", eventHandler: (chunk: Buffer) => void): this;
+    on(eventName: "error", eventHandler: (err: Error, statusCode: StatusCode, requestId: number | null) => void): this;
+    on(eventName: "full_message_body", eventHandler: (fullMessageBody: Buffer) => void): this;
+    on(
+        eventName: "message",
+        eventHandler: (obj: BaseUAObject, msgType: string, requestId: number, channelId: number) => void
+    ): this;
+    on(eventName: "abandon", eventHandler: (requestId: number) => void): this;
+
+    on(eventName: "invalid_message", eventHandler: (obj: BaseUAObject) => void): this;
+    on(eventName: "invalid_sequence_number", eventHandler: (expectedSequenceNumber: number, sequenceNumber: number) => void): this;
+    on(eventName: "new_token", eventHandler: (tokenId: number) => void): this;
+
+    emit(eventName: "startChunk", info: PacketInfo, data: Buffer): boolean;
+    emit(eventName: "chunk", chunk: Buffer): boolean;
+    emit(eventName: "error", err: Error, statusCode: StatusCode, requestId: number | null): boolean;
+    emit(eventName: "full_message_body", fullMessageBody: Buffer): boolean;
+    emit(eventName: "message", obj: BaseUAObject, msgType: string, requestId: number, channelId: number): boolean;
+    emit(eventName: "invalid_message", evobj: BaseUAObject): boolean;
+    emit(eventName: "invalid_sequence_number", expectedSequenceNumber: number, sequenceNumber: number): boolean;
+    emit(eventName: "new_token", tokenId: number): boolean;
+    emit(eventName: "abandon"): boolean;
+}
 /**
  * @class MessageBuilder
  * @extends MessageBuilderBase
@@ -227,8 +257,8 @@ export class MessageBuilder extends MessageBuilderBase {
                     debugLog(" Sequence Header", this.sequenceHeader);
                 }
                 if (doTraceChunk) {
-                    warningLog(
-                        timestamp(),
+                    console.log(
+                        chalk.cyan(timestamp()),
                         chalk.green("   >$$ "),
                         chalk.green(this.messageHeader.msgType),
                         chalk.green("nbChunk = " + this.messageChunks.length.toString().padStart(3)),
@@ -245,6 +275,7 @@ export class MessageBuilder extends MessageBuilderBase {
             }
             return true;
         } catch (err) {
+            warningLog(chalk.red("Error"), (err as Error).message);
             return false;
         }
     }
@@ -252,18 +283,14 @@ export class MessageBuilder extends MessageBuilderBase {
     protected _decodeMessageBody(fullMessageBody: Buffer): boolean {
         // istanbul ignore next
         if (!this.messageHeader || !this.securityHeader) {
-            return this._report_error("internal error");
+            return this._report_error(StatusCodes2.BadTcpInternalError, "internal error");
         }
 
         const msgType = this.messageHeader.msgType;
 
-        if (msgType === "ERR") {
+        if (msgType === "HEL" || msgType === "ACK" || msgType === "ERR") {
             // invalid message type
-            return this._report_error("ERROR RECEIVED");
-        }
-        if (msgType === "HEL" || msgType === "ACK") {
-            // invalid message type
-            return this._report_error("Invalid message type ( HEL/ACK )");
+            return this._report_error(StatusCodes2.BadTcpMessageTypeInvalid, "Invalid message type ( HEL/ACK/ERR )");
         }
 
         if (msgType === "CLO" && fullMessageBody.length === 0 && this.sequenceHeader) {
@@ -285,20 +312,20 @@ export class MessageBuilder extends MessageBuilderBase {
         } catch (err) {
             // this may happen if the message is not well formed or has been altered
             // we better off reporting an error and abort the communication
-            return this._report_error(err instanceof Error ? err.message : " err");
+            return this._report_error(StatusCodes2.BadTcpInternalError, err instanceof Error ? err.message : " err");
         }
 
         if (!this.objectFactory.hasConstructor(id)) {
             // the datatype NodeId is not supported by the server and unknown in the factory
             // we better off reporting an error and abort the communication
-            return this._report_error("cannot construct object with nodeID " + id.toString());
+            return this._report_error(StatusCodes.BadNotSupported, "cannot construct object with nodeID " + id.toString());
         }
 
         // construct the object
         const objMessage = this.objectFactory.constructObject(id);
 
         if (!objMessage) {
-            return this._report_error("cannot construct object with nodeID " + id);
+            return this._report_error(StatusCodes.BadNotSupported, "cannot construct object with nodeID " + id);
         } else {
             if (this._safe_decode_message_body(fullMessageBody, objMessage, binaryStream)) {
                 /* istanbul ignore next */
@@ -341,7 +368,8 @@ export class MessageBuilder extends MessageBuilderBase {
                     }
                     warningLog(chalk.red("MessageBuilder : ERROR DETECTED IN 'message' event handler"));
                     if (err instanceof Error) {
-                        debugLog(err.stack);
+                        warningLog(err.message);
+                        warningLog(err.stack);
                     }
                 }
             } else {

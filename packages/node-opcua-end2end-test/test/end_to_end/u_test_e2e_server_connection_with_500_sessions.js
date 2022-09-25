@@ -1,6 +1,5 @@
-/*global describe, it, require*/
+"use strict";
 
-const { assert } = require("node-opcua-assert");
 const async = require("async");
 const should = require("should");
 
@@ -9,13 +8,8 @@ const chalk = require("chalk");
 
 const doDebug = false;
 
-const { perform_operation_on_client_session } = require("../../test_helpers/perform_operation_on_client_session");
-
-
-module.exports = function(test) {
-
-
-    const MAXSESSIONS = 50;
+module.exports = function (test) {
+    const maxSessionsForTest = 50;
 
     function getTick() {
         return Date.now() / 1000.0;
@@ -31,19 +25,19 @@ module.exports = function(test) {
     let client = null;
 
     function client_session(data, done) {
-
         should.exist(client);
-
 
         function r(t) {
             return Math.ceil(t * 100) / 100;
         }
 
         function perform(msg, func, callback) {
-            setTimeout(function() {
-                if (doDebug) { console.log(msg); }
+            setTimeout(function () {
+                if (doDebug) {
+                    console.log(msg);
+                }
                 const t = getTick();
-                func(function(err) {
+                func(function (err) {
                     if (doDebug) {
                         if (err) {
                             console.log("   ", chalk.red(msg), err.message, r(getTick() - t));
@@ -53,7 +47,6 @@ module.exports = function(test) {
                     }
                     return callback(err);
                 });
-
             }, 10);
         }
         function wait(callback) {
@@ -62,92 +55,89 @@ module.exports = function(test) {
 
         let the_session;
 
+        async.series(
+            [
+                //Xx wait,
+                // create a session using client1
+                perform.bind(null, "create session " + data.index, function (callback) {
+                    client.createSession(function (err, session) {
+                        the_session = session;
+                        if (doDebug) {
+                            console.log("session.authenticationToken = ", session.authenticationToken.toString("hex"));
+                        }
+                        callback(err);
+                    });
+                }),
 
-        async.series([
+                wait,
 
-            //Xx wait,
-            // create a session using client1
-            perform.bind(null, "create session " + data.index, function(callback) {
-
-                client.createSession(function(err, session) {
-                    the_session = session;
-                    if (doDebug) {
-                        console.log("session.authenticationToken = ", session.authenticationToken.toString("hex"));
-                    }
-                    callback(err);
-                });
-            }),
-
-            wait,
-
-            perform.bind(null, "closing session " + data.index, function(callback) {
-                the_session.close(function(err) {
-                    callback(err);
-                });
-            }),
-        ], done);
-
+                perform.bind(null, "closing session " + data.index, function (callback) {
+                    the_session.close(function (err) {
+                        callback(err);
+                    });
+                })
+            ],
+            done
+        );
     }
 
-
-
-    describe("AAAY Testing " + MAXSESSIONS + " sessions on the same  connection ", function() {
-
-        before(function(done) {
+    describe("AAAY Testing " + maxSessionsForTest + " sessions on the same  connection ", function () {
+        before(function (done) {
             const options = {
                 connectionStrategy: connectivity_strategy,
                 requestedSessionTimeout: 100000
             };
             client = opcua.OPCUAClient.create(options);
             const endpointUrl = test.endpointUrl;
-            client.on("send_request", function(req) {
-                if (doDebug) { console.log(req.constructor.name); }
+            client.on("send_request", function (req) {
+                if (doDebug) {
+                    console.log(req.constructor.name);
+                }
             });
-            client.on("receive_response", function(res) {
-                if (doDebug) { console.log(res.constructor.name, res.responseHeader.serviceResult.toString()); }
+            client.on("receive_response", function (res) {
+                if (doDebug) {
+                    console.log(res.constructor.name, res.responseHeader.serviceResult.toString());
+                }
             });
 
-            client.on("start_reconnection", function(err) {
-                if (doDebug) { console.log(chalk.bgWhite.yellow("start_reconnection"), data.index); }
+            client.on("start_reconnection", function (err) {
+                if (doDebug) {
+                    console.log(chalk.bgWhite.yellow("start_reconnection"));
+                }
             });
-            client.on("backoff", function(number, delay) {
-                if (doDebug) { console.log(chalk.bgWhite.yellow("backoff"), number, delay); }
+            client.on("backoff", function (number, delay) {
+                if (doDebug) {
+                    console.log(chalk.bgWhite.yellow("backoff"), number, delay);
+                }
             });
 
             //xx client.knowsServerEndpoint.should.eql(true);
 
-            client.connect(endpointUrl, function() {
+            client.connect(endpointUrl, function () {
                 //xx console.log("AAAA!!!!");
                 done();
             });
-
         });
-        after(function(done) {
-
-            client.disconnect(function(err) {
+        after(function (done) {
+            client.disconnect(function (err) {
                 done(err);
             });
-
         });
-        it("QZQ should be possible to open  many sessions on a single connection", function(done) {
+        it("QZQ should be possible to open  many sessions on a single connection", function (done) {
+            let maxSessionsBackup = test.server.engine.serverCapabilities.maxSessions;
+            test.server.engine.serverCapabilities.maxSessions = maxSessionsForTest;
 
-            if (test.server) {
-                test.server.maxAllowedSessionNumber = MAXSESSIONS;
-            }
-
-            const nb = MAXSESSIONS + 10;
+            const nb = maxSessionsForTest + 10;
             const q = async.queue(client_session, nb);
 
             for (let i = 0; i < nb; i++) {
                 q.push({ index: i });
             }
             q.drain(() => {
+                test.server.engine.serverCapabilities.maxSessions = maxSessionsBackup;
                 //xx console.log("done");
                 done();
             });
         });
-
     });
-
-
 };

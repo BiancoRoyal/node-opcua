@@ -4,16 +4,9 @@
 import { EventEmitter } from "events";
 import * as chalk from "chalk";
 import { assert } from "node-opcua-assert";
-import {
-    BaseNode,
-    IEventData,
-    extractEventFields,
-    makeAttributeEventName,
-    SessionContext,
-    UAVariable,
-    checkWhereClause,
-    AddressSpace
-} from "node-opcua-address-space";
+import { BaseNode, IEventData, makeAttributeEventName, SessionContext, UAVariable, AddressSpace } from "node-opcua-address-space";
+
+import { extractEventFields } from "node-opcua-service-filter";
 import { DateTime, UInt32 } from "node-opcua-basic-types";
 import { NodeClass, QualifiedNameOptions } from "node-opcua-data-model";
 import { AttributeIds } from "node-opcua-data-model";
@@ -25,7 +18,7 @@ import {
     coerceTimestampsToReturn,
     sameStatusCode
 } from "node-opcua-data-value";
-import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
+import { checkDebugFlag, make_debugLog, make_warningLog } from "node-opcua-debug";
 import { ExtensionObject } from "node-opcua-extension-object";
 import { NodeId } from "node-opcua-nodeid";
 import { NumericalRange0, NumericRange } from "node-opcua-numeric-range";
@@ -61,6 +54,7 @@ import { sameVariant, Variant } from "node-opcua-variant";
 
 import { appendToTimer, removeFromTimer } from "./node_sampler";
 import { validateFilter } from "./validate_filter";
+import { checkWhereClauseOnAdressSpace } from "./filter/check_where_clause_on_address_space";
 
 export type QueueItem = MonitoredItemNotification | EventFieldList;
 
@@ -71,6 +65,7 @@ const defaultItemToMonitor: ReadValueIdOptions = new ReadValueId({
 
 const debugLog = make_debugLog(__filename);
 const doDebug = checkDebugFlag(__filename);
+const warningLog = make_warningLog(__filename);
 
 function _adjust_sampling_interval(samplingInterval: number, node_minimumSamplingInterval: number): number {
     assert(typeof node_minimumSamplingInterval === "number", "expecting a number");
@@ -216,7 +211,7 @@ function apply_dataChange_filter(this: MonitoredItem, newDataValue: DataValue, o
                 debugLog("timestampHasChanged ", timestampHasChanged(newDataValue.sourceTimestamp, oldDataValue.sourceTimestamp));
             }
         } catch (err) {
-            console.log(err);
+            warningLog(err);
         }
     }
     switch (trigger) {
@@ -924,7 +919,7 @@ export class MonitoredItem extends EventEmitter {
 
         const addressSpace: AddressSpace = eventData.$eventDataSource?.addressSpace as AddressSpace;
 
-        if (!checkWhereClause(addressSpace, SessionContext.defaultContext, this.filter.whereClause, eventData)) {
+        if (!checkWhereClauseOnAdressSpace(addressSpace, SessionContext.defaultContext, this.filter.whereClause, eventData)) {
             return;
         }
 

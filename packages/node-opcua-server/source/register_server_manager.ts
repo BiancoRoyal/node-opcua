@@ -321,6 +321,12 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
         this.server = null;
         debugLog("RegisterServerManager#dispose", this.state.toString());
         assert(this.state === RegisterServerManagerStatus.INACTIVE);
+
+        if (this._registrationTimerId) {
+            clearTimeout(this._registrationTimerId);
+            this._registrationTimerId = null;
+        }
+        
         assert(this._registrationTimerId === null, "stop has not been called");
         this.removeAllListeners();
     }
@@ -631,7 +637,10 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
             warningLog(`Warning the server is already in the ${RegisterServerManagerStatus[theStatus]} state`);
             return outer_callback();
         }
-        assert(this.state === RegisterServerManagerStatus.INITIALIZING || this.state === RegisterServerManagerStatus.WAITING);
+        if (!(this.state === RegisterServerManagerStatus.INITIALIZING || this.state === RegisterServerManagerStatus.WAITING)) {
+            warningLog("Warning : cannot register server - wrong state " , RegisterServerManagerStatus[this.state]);
+            return outer_callback();
+        };
 
         this._setState(theStatus);
 

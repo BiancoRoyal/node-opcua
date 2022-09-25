@@ -1,29 +1,22 @@
 {
     "name": "node-opcua-service-discovery",
-    "version": "2.62.4",
+    "version": "2.77.0",
     "description": "pure nodejs OPCUA SDK - module -service-discovery",
     "scripts": {
         "build": "tsc -b",
         "test": "mocha",
-        "clean": "node -e \"require('rimraf').sync('dist');\"",
+        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
         "-generate": "node ./generate"
     },
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "dependencies": {
-        "@types/bonjour": "^3.5.9",
-        "bonjour": "^3.5.0",
-        "node-opcua-assert": "2.55.0",
-        "node-opcua-basic-types": "2.62.4",
-        "node-opcua-binary-stream": "2.55.0",
-        "node-opcua-data-model": "2.62.4",
-        "node-opcua-debug": "2.62.4",
-        "node-opcua-factory": "2.62.4",
-        "node-opcua-nodeid": "2.62.4",
-        "node-opcua-object-registry": "2.62.4",
-        "node-opcua-service-endpoints": "2.62.4",
-        "node-opcua-service-secure-channel": "2.62.4",
-        "node-opcua-types": "2.62.4"
+        "chalk": "4.1.2",
+        "node-opcua-assert": "2.77.0",
+        "node-opcua-debug": "2.77.0",
+        "node-opcua-object-registry": "2.77.0",
+        "node-opcua-types": "2.77.0",
+        "sterfive-bonjour-service": "1.1.4"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",

@@ -471,10 +471,10 @@ export function t(test: any) {
             notifiedValues1[3].value = values[4];
 
             // 4 in the queue => Oldest has been discarded !
-            notifiedValues1[0].statusCode.toString().should.eql("Good#InfoTypeDataValue|Overflow (0x0000480)");
-            notifiedValues1[1].statusCode.toString().should.eql("Good (0x00000)");
-            notifiedValues1[2].statusCode.toString().should.eql("Good (0x00000)");
-            notifiedValues1[3].statusCode.toString().should.eql("Good (0x00000)");
+            notifiedValues1[0].statusCode.toString().should.eql("Good#InfoTypeDataValue|Overflow (0x00000480)");
+            notifiedValues1[1].statusCode.toString().should.eql("Good (0x00000000)");
+            notifiedValues1[2].statusCode.toString().should.eql("Good (0x00000000)");
+            notifiedValues1[3].statusCode.toString().should.eql("Good (0x00000000)");
 
             // now send value that are within dead band
             const currentValue1 = await readCurrentValue(session, nodeId);

@@ -10,7 +10,9 @@ export function constructNodesetFilename(filename: string) {
     let file = path.join(dirname, "../nodesets", filename);
     if (!fs.existsSync(file)) {
         if (!process.argv[1]) {
-            throw new Error("Please make sure that nodeset can be found in " + path.join(dirname, "../nodesets"));
+            throw new Error(
+                `cannot find file ${file}\nPlease make sure that nodeset can be found in ${path.join(dirname, "../nodesets")}`
+            );
         }
         // let's find alternate places where to find the nodeset folder
         let appFolder = path.dirname(process.argv[1]);
@@ -31,7 +33,7 @@ path.join(__dirname, "nodesets/Opc.Ua.Adi.NodeSet2.xml");
 path.join(__dirname, "nodesets/Opc.Ua.AutoID.NodeSet2.xml");
 path.join(__dirname, "nodesets/Opc.Ua.MachineVision.NodeSet2.xml");
 path.join(__dirname, "nodesets/Opc.Ua.Robotics.NodeSet2.xml");
-
+path.join(__dirname, "nodeset/Opc.Ua.Ijt.Tightening.NodeSet2.xml");
 // ------------------------------------------------------------- }}
 
 const standardNodeSetFilename = constructNodesetFilename("Opc.Ua.NodeSet2.xml");
@@ -47,6 +49,11 @@ const cncNodeSetFilename = constructNodesetFilename("Opc.Ua.CNC.NodeSet.xml");
 const commercialKitchenEquipmentNodeSetFilename = constructNodesetFilename("Opc.Ua.CommercialKitchenEquipment.NodeSet2.xml");
 const machineToolNodeSetFilename = constructNodesetFilename("Opc.Ua.MachineTool.NodeSet2.xml");
 const iaNodeSetFilename = constructNodesetFilename("Opc.Ua.IA.NodeSet2.xml");
+const woodWorkingNodeSetFilename = constructNodesetFilename("Opc.Ua.Woodworking.NodeSet2.xml");
+const eumaboisNodeSetFilename = constructNodesetFilename("Opc.Ua.Eumabois.NodeSet2.xml");
+const glassNodeSetFilename = constructNodesetFilename("Opc.Ua.Glass.NodeSet2.xml");
+const tighteningNodeSetFilename = constructNodesetFilename("Opc.Ua.Ijt.Tightening.NodeSet2.xml")
+
 export const nodesets = {
     adi: adiNodeSetFilename,
 
@@ -74,6 +81,13 @@ export const nodesets = {
 
     machineTool: machineToolNodeSetFilename,
 
+    woodWorking: woodWorkingNodeSetFilename,
+
+    eumabois: eumaboisNodeSetFilename,
+
+    glass: glassNodeSetFilename,
+
+    tightening: tighteningNodeSetFilename
 };
 
 function makeDeprecated(id: string, newName: keyof typeof nodesets) {

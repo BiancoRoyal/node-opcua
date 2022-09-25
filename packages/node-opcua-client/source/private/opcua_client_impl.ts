@@ -278,7 +278,7 @@ function createUserNameIdentityToken(
 
     // istanbul ignore next
     if (!cryptoFactory) {
-        throw new Error(" Unsupported security Policy "+  securityPolicy.toString());
+        throw new Error(" Unsupported security Policy " + securityPolicy.toString());
     }
 
     identityToken = new UserNameIdentityToken({
@@ -861,13 +861,17 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         this.performMessageTransaction(request, (err: Error | null, response?: Response) => {
             /* istanbul ignore next */
             if (err) {
-                // we could have an invalid state here or a connection error
-                errorLog("error: ", err.message, " retrying in ... 5 secondes");
-                setTimeout(() => {
-                    errorLog(" .... now retrying");
-                    this.__createSession_step3(session, callback);
-                }, 5 * 1000);
-                return;
+                console.log("__createSession_step3 has failed", err.message);
+                return callback(err);
+
+                //  //xxxxxx               qdqsdqsdqsdqsd
+                //                 // we could have an invalid state here or a connection error
+                //                 errorLog("error: ", err.message, " retrying in ... 5 secondes");
+                //                 setTimeout(() => {
+                //                     errorLog(" .... now retrying");
+                //                     this.__createSession_step3(session, callback);
+                //                 }, 5 * 1000);
+                //                 return;
             }
 
             /* istanbul ignore next */
@@ -1037,6 +1041,9 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
                     session._client = this;
                     session.serverNonce = response.serverNonce;
                     session.lastResponseReceivedTime = new Date();
+                    if (this.keepSessionAlive) {
+                        session.startKeepAliveManager();
+                    }
                     return callback(null, session);
                 } else {
                     // restore client

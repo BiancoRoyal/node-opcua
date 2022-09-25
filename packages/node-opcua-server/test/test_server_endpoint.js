@@ -2,17 +2,17 @@
 
 const should = require("should");
 
-const MessageSecurityMode = require("node-opcua-service-secure-channel").MessageSecurityMode;
-const SecurityPolicy = require("node-opcua-secure-channel").SecurityPolicy;
-const EndpointDescription = require("node-opcua-service-endpoints").EndpointDescription;
-const extractFullyQualifiedDomainName = require("node-opcua-hostname").extractFullyQualifiedDomainName;
+const { SecurityPolicy } = require("node-opcua-secure-channel");
+const { MessageSecurityMode } = require("node-opcua-secure-channel");
+const { EndpointDescription } = require("node-opcua-service-endpoints");
+const { extractFullyQualifiedDomainName } = require("node-opcua-hostname");
+const { OPCUAServerEndPoint } = require("..");
 
-const crypto_utils = require("node-opcua-crypto");
 const it_with_crypto = it;
 
-const default_port = 1234;
+const port = 2042;
 
-const OPCUAServerEndPoint = require("..").OPCUAServerEndPoint;
+
 
 // eslint-disable-next-line import/order
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
@@ -24,7 +24,7 @@ describe("OPCUAServerEndpoint#addEndpointDescription", function () {
 
     beforeEach(function () {
         server_endpoint = new OPCUAServerEndPoint({
-            port: default_port,
+            port: port,
             serverInfo: {},
             certificateChain: null,
             privateKey: ""
@@ -68,7 +68,7 @@ describe("OPCUAServerEndpoint#addStandardEndpointDescriptions", function () {
     });
     beforeEach(function () {
         server_endpoint = new OPCUAServerEndPoint({
-            port: default_port,
+            port: port,
             serverInfo: {},
             certificateChain: null,
             privateKey: ""
@@ -98,7 +98,7 @@ describe("OPCUAServerEndpoint#addStandardEndpointDescriptions extra secure", fun
     let server_endpoint;
     beforeEach(function () {
         server_endpoint = new OPCUAServerEndPoint({
-            port: default_port,
+            port: port,
             serverInfo: {},
             certificateChain: null,
             privateKey: ""
@@ -132,7 +132,7 @@ describe("OPCUAServerEndpoint#getEndpointDescription", function () {
     let server_endpoint;
     beforeEach(function () {
         server_endpoint = new OPCUAServerEndPoint({
-            port: default_port,
+            port: port,
             serverInfo: {},
             certificateChain: null,
             privateKey: ""

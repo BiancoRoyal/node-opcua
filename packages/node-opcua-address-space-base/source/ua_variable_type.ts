@@ -16,7 +16,7 @@ import { UAMethod } from "./ua_method";
 export interface InstantiateVariableOptions extends InstantiateOptions {
     arrayDimensions?: number[] | null;
     dataType?: string | NodeIdLike;
-    extensionObject?: ExtensionObject;
+    extensionObject?: ExtensionObject | ExtensionObject[];
     nodeId?: NodeIdLike;
     minimumSamplingInterval?: number;
     propertyOf?: NodeIdLike | UAObject | UAObjectType | UAVariable | UAVariableType | UAMethod;
@@ -36,7 +36,7 @@ export declare class UAVariableType extends BaseNode implements VariableAttribut
 
     public isAbstract: boolean;
 
-    public isSupertypeOf(type: UAVariableType): boolean;
+    public isSupertypeOf(type:  UAVariableType | NodeIdLike): boolean;
 
     public instantiate(options: InstantiateVariableOptions): UAVariable;
 }

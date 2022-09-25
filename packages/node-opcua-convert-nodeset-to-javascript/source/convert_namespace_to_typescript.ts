@@ -8,11 +8,24 @@ import { convertTypeToTypescript } from "./convert_to_typescript";
 import { constructCache } from "./private/cache";
 import { Options } from "./options";
 
-function getPackageInfo(dependency: string) {
-    const d = path.join(__dirname, "../../" + dependency + "/package.json");
+function getPackageFolder(dependency: string, options: Options) {
+    const l = [...(options.lookupFolders || [])];
+    l.push(path.join(__dirname, "../../"));
+    for (const folder of l) {
+        const d = path.join(folder, dependency + "/package.json");
+        if (!fs.existsSync(d)) {
+            continue;
+        }
+        return d;
+    }
+    throw new Error("cannot find package.json for " + dependency);
+}
+function getPackageInfo(dependency: string, options: Options) {
+    const d = getPackageFolder(dependency, options);
     const p = JSON.parse(fs.readFileSync(d, "utf8"));
     return p;
 }
+
 interface Info {
     files: string[];
     folder: string;
@@ -79,7 +92,7 @@ export async function convertNamespaceTypeToTypescript(
     await walkThroughVariableTypes(session, nodeVisitor);
     await walkThroughDataTypes(session, nodeVisitor);
 
-    await outputFiles(infos);
+    await outputFiles(infos, options);
 }
 
 async function _output_index_ts_file(info: Info): Promise<void> {
@@ -97,9 +110,9 @@ async function _output_index_ts_file(info: Info): Promise<void> {
     fs.writeFileSync(index, content.join("\n"));
     // create package.json
 }
-async function _output_package_json(info: Info): Promise<void> {
+async function _output_package_json(info: Info, options: Options): Promise<void> {
     const packagejson = path.join(info.folder, "package.json");
-    const version = getPackageInfo("node-opcua-address-space-base").version;
+    const version = getPackageInfo("node-opcua-address-space-base", options).version;
 
     const content2: string[] = [];
     content2.push(`{`);
@@ -113,13 +126,12 @@ async function _output_package_json(info: Info): Promise<void> {
     content2.push(`    },`);
     content2.push(`    "author": "etienne.rossignon@sterfive.com",`);
     content2.push(`    "license": "MIT",`);
+
     content2.push(`    "dependencies": {`);
-
     // find versions
-
     const versions: { [key: string]: string } = {};
     for (const dependency of info.dependencies) {
-        const p = await getPackageInfo(dependency);
+        const p = await getPackageInfo(dependency, options);
         versions[dependency] = p.version;
     }
     content2.push(
@@ -129,14 +141,14 @@ async function _output_package_json(info: Info): Promise<void> {
             .join(",\n")
     );
 
-    content2.push(`    },`);
-    content2.push(`    "devDependencies": {}`);
+    content2.push(`    }`);
+
     content2.push(`}`);
     content2.push(``);
 
     fs.writeFileSync(packagejson, content2.join("\n"));
 }
-async function _output_tsconfig_json(info: Info): Promise<void> {
+async function _output_tsconfig_json(info: Info, options: Options): Promise<void> {
     const tsconfig = path.join(info.folder, "tsconfig.json");
     const content3: string[] = [];
     content3.push(`{`);
@@ -154,7 +166,10 @@ async function _output_tsconfig_json(info: Info): Promise<void> {
     // content3.push(`      { "path": "../node-opcua-address-space-base" }`);
     const l = [] as string[];
     for (const dep of info.dependencies) {
-        l.push(`     { "path": "../${dep}" }`);
+        // only add in dep if not found in node_module
+        if (!isIn_node_modules_Folder(dep)) {
+            l.push(`     { "path": "../${dep}" }`);
+        }
     }
     content3.push(l.join(",\n"));
     content3.push(`   ],`);
@@ -165,14 +180,19 @@ async function _output_tsconfig_json(info: Info): Promise<void> {
     content3.push(`}`);
 
     fs.writeFileSync(tsconfig, content3.join("\n"));
+
+    function isIn_node_modules_Folder(dep: string) {
+        const c = getPackageFolder(dep, options);
+        return !!c.match(/node_modules/);
+    }
 }
-async function outputFiles(infos: { [key: string]: Info }) {
+async function outputFiles(infos: { [key: string]: Info }, options: Options) {
     for (const info of Object.values(infos) as Info[]) {
         // create indexes
         await _output_index_ts_file(info);
 
-        await _output_package_json(info);
+        await _output_package_json(info, options);
 
-        await _output_tsconfig_json(info);
+        await _output_tsconfig_json(info, options);
     }
 }
