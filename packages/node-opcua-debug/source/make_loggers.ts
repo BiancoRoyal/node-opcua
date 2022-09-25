@@ -8,14 +8,15 @@ import * as chalk from "chalk";
 
 const debugFlags: { [id: string]: boolean } = {};
 
-const sTraceFlag = process.env && (process.env.DEBUG as string);
+const _process = (typeof process === "object") ? process : { env: {} as Record<string, string> };
+const sTraceFlag = _process.env && (_process.env.DEBUG as string);
 
 // istanbul ignore next
-if (process.env && false) {
+if (_process.env && false) {
     // this code can be activated to help detecting
     // when a external module overwrite one of the
     // environment variable that we may be using as well.
-    const old = { ...process.env };
+    const old = { ..._process.env };
     const handler = {
         get: function (obj: any, prop: string) {
             return old[prop];
@@ -26,20 +27,23 @@ if (process.env && false) {
             return true;
         }
     };
-    process.env = new Proxy(old, handler);
+    _process.env = new Proxy(old, handler);
 }
 const maxLines =
-    process.env && process.env.NODEOPCUA_DEBUG_MAXLINE_PER_MESSAGE
-        ? parseInt(process.env.NODEOPCUA_DEBUG_MAXLINE_PER_MESSAGE, 10)
+    _process.env && _process.env.NODEOPCUA_DEBUG_MAXLINE_PER_MESSAGE
+        ? parseInt(_process.env.NODEOPCUA_DEBUG_MAXLINE_PER_MESSAGE, 10)
         : 25;
 
 function extractBasename(name: string): string {
+    if (!name) {
+        return "";
+    }
     // return basename(name).replace(/\.(js|ts)$/, "");
     return name.replace(/(.*[\\|/])?/g, "").replace(/\.(js|ts)$/, "");
 }
 
 function w(str: string, l: number): string {
-    return (str + "                                                                ").substr(0, l);
+    return str.padEnd(l," ").substring(0, l);
 }
 
 export function setDebugFlag(scriptFullPath: string, flag: boolean): void {
@@ -67,7 +71,7 @@ export function checkDebugFlag(scriptFullPath: string): boolean {
  * @param callerLine
  */
 function file_line(mode: "E" | "D" | "W", filename: string, callerLine: number): string {
-    const d = new Date().toISOString().substr(11);
+    const d = new Date().toISOString().substring(11);
     if (mode === "W") {
         return chalk.bgCyan.white(w(d, 14) + ":" + w(filename, 30) + ":" + w(callerLine.toString(), 5));
     } else if (mode === "D") {

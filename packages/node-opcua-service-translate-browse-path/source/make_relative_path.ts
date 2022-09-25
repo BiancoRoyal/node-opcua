@@ -93,7 +93,7 @@ function makeQualifiedName(mm: RegExpMatchArray): QualifiedName {
     }
     const namespaceIndex = mm[11] ? parseInt(mm[11], 10) : 0;
     const name = unescape(mm[12]);
-    return new QualifiedName({namespaceIndex, name});
+    return new QualifiedName({ namespaceIndex, name });
 }
 
 /**
@@ -113,11 +113,11 @@ export function makeRelativePath(str: string, addressSpace?: any): RelativePath 
     let r: any = {
         elements: []
     };
-
+    const originalStr = str;
     while (str.length > 0) {
         const matches = str.match(regRelativePath);
         if (!matches) {
-            throw new Error("Malformed relative path  :'" + str + "'");
+            throw new Error("Malformed relative path  :'" + str + "'" + " in " + originalStr);
         }
         // console.log(mm);
 
@@ -162,7 +162,7 @@ export function makeRelativePath(str: string, addressSpace?: any): RelativePath 
 
         r.elements.push({ referenceTypeId, isInverse, includeSubtypes, targetName });
 
-        str = str.substr(matches[0].length);
+        str = str.substring(matches[0].length);
     }
     r = new RelativePath(r);
     return r;

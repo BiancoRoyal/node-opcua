@@ -121,7 +121,7 @@ function isNodeIdString(str: unknown): boolean {
     return str.substring(0, 2) === "i=" || str.substring(0, 3) === "ns=";
 }
 
-type ShutdownTask = (this: AddressSpace) => void;
+type ShutdownTask = ((this: AddressSpace) => void) | ((this: AddressSpace) => Promise<void>);
 
 /**
  * `AddressSpace` is a collection of UA nodes.
@@ -166,7 +166,8 @@ export class AddressSpace implements AddressSpacePrivate {
     constructor() {
         this._private_namespaceIndex = 1;
         this._namespaceArray = [];
-        this._constructNamespaceArray();
+        // special namespace 0 is reserved for the UA namespace
+        this.registerNamespace("http://opcfoundation.org/UA/");
         AddressSpace.registry.register(this);
     }
     /**
@@ -739,20 +740,25 @@ export class AddressSpace implements AddressSpacePrivate {
             throw new Error("BaseObjectType must be defined in the address space");
         }
 
-        const visitedProperties: { [key: string]: any } = {};
+        const hasProperty = (data: any, propertyName: string): boolean => Object.prototype.hasOwnProperty.call(data, propertyName);
 
-        function _process_var(self: BaseNode, prefix: string, node: BaseNode) {
-            const lowerName = prefix + lowerFirstLetter(node.browseName!.name!);
-            // istanbul ignore next
-            // xx if (doDebug) { debugLog("      " + lowerName.toString()); }
+        const visitedProperties: { [key: string]: number } = {};
+        const alreadyVisited=(key: string) => Object.prototype.hasOwnProperty.call(visitedProperties, key);
+        const markAsVisited=(key: string) => visitedProperties[key] = 1;
 
-            visitedProperties[lowerName] = node;
-            if (Object.prototype.hasOwnProperty.call(data, lowerName)) {
-                eventData.setValue(lowerName, node, data[lowerName] as VariantOptions);
-                // xx eventData[lowerName] = _coerceVariant(data[lowerName]);
+        function _process_var(self: BaseNode, prefixLower: string, prefixStandard: string, node: BaseNode) {
+            const lowerName = prefixLower + lowerFirstLetter(node.browseName!.name!);
+            const fullBrowsePath = prefixStandard + node.browseName.toString();
+            if(alreadyVisited(lowerName)) {
+                return;
+            } 
+            markAsVisited(lowerName);
+
+            if (hasProperty(data, lowerName)) {
+                eventData._createValue(fullBrowsePath, node, data[lowerName] as VariantOptions);
             } else {
                 // add a property , but with a null variant
-                eventData.setValue(lowerName, node, { dataType: DataType.Null });
+                eventData._createValue(fullBrowsePath, node, { dataType: DataType.Null });
 
                 if (doDebug) {
                     if (node.modellingRule === "Mandatory") {
@@ -778,13 +784,13 @@ export class AddressSpace implements AddressSpacePrivate {
         }
 
         // verify that all elements of data are valid
-        function verify_data_is_valid(data1: { [key: string]: any }) {
+        function verify_data_is_valid(data1: Record<string, unknown>) {
             Object.keys(data1).map((k: string) => {
                 if (k === "$eventDataSource") {
                     return;
                 }
                 /* istanbul ignore next */
-                if (!Object.prototype.hasOwnProperty.call(visitedProperties, k)) {
+                if (!alreadyVisited(k)) {
                     throw new Error(
                         " cannot find property '" +
                             k +
@@ -838,7 +844,7 @@ export class AddressSpace implements AddressSpacePrivate {
                     continue;
                 }
 
-                _process_var(self, "", node);
+                _process_var(self, "", "", node);
 
                 // also store value in index
                 // xx eventData.__nodes[node.nodeId.toString()] = eventData[lowerName];
@@ -846,10 +852,11 @@ export class AddressSpace implements AddressSpacePrivate {
                 const children2 = node.getAggregates();
                 if (children2.length > 0) {
                     const lowerName = lowerFirstLetter(node.browseName.name!);
+                    const standardName = node.browseName.toString();
                     //  console.log(" Children to visit = ",lowerName,
                     //  children.map(function(a){ return a.browseName.toString();}).join(" "));
                     for (const child2 of children2) {
-                        _process_var(self, lowerName + ".", child2);
+                        _process_var(self, lowerName + ".", standardName + ".", child2);
                     }
                 }
             }
@@ -1060,21 +1067,22 @@ export class AddressSpace implements AddressSpacePrivate {
      * register a function that will be called when the server will perform its shut down.
      * @method registerShutdownTask
      */
-    public registerShutdownTask(task: (this: AddressSpace) => void): void {
+    public registerShutdownTask(task: ShutdownTask): void {
         this._shutdownTask = this._shutdownTask || [];
         assert(typeof task === "function");
         this._shutdownTask.push(task);
     }
 
-    public shutdown(): void {
+    public async shutdown(): Promise<void> {
         if (!this._shutdownTask) {
             return;
         }
-        // perform registerShutdownTask
-        this._shutdownTask.forEach((task: any) => {
-            task.call(this);
-        });
+        const tasks = this._shutdownTask;
         this._shutdownTask = [];
+        // perform registerShutdownTask
+        for (const task of tasks) {
+            await task.call(this);
+        }
     }
 
     /**
@@ -1531,12 +1539,6 @@ export class AddressSpace implements AddressSpacePrivate {
             }
         }
         return nodeId;
-    }
-
-    private _constructNamespaceArray() {
-        if (this._namespaceArray.length === 0) {
-            this.registerNamespace("http://opcfoundation.org/UA/");
-        }
     }
 
     private _findReferenceType(refType: NodeId | string, namespaceIndex?: number): UAReferenceType | null {

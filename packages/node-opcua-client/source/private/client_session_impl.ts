@@ -10,8 +10,7 @@ import {
     ExtraDataTypeManager,
     getExtensionObjectConstructor,
     getExtraDataTypeManager,
-    promoteOpaqueStructure,
-    resolveDynamicExtensionObject
+    promoteOpaqueStructure
 } from "node-opcua-client-dynamic-extension-object";
 import { Certificate, Nonce } from "node-opcua-crypto";
 import { attributeNameById, BrowseDirection, LocalizedTextLike } from "node-opcua-data-model";
@@ -21,7 +20,7 @@ import { ExtensionObject } from "node-opcua-extension-object";
 import { coerceNodeId, NodeId, NodeIdLike, resolveNodeId } from "node-opcua-nodeid";
 import { getBuiltInDataType, getArgumentDefinitionHelper, IBasicSession } from "node-opcua-pseudo-session";
 import { AnyConstructorFunc } from "node-opcua-schemas";
-import { ClientSecureChannelLayer, requestHandleNotSetValue, SignatureData } from "node-opcua-secure-channel";
+import { requestHandleNotSetValue, SignatureData } from "node-opcua-secure-channel";
 import { BrowseDescription, BrowseRequest, BrowseResponse, BrowseResult } from "node-opcua-service-browse";
 import { CallMethodRequest, CallMethodResult, CallRequest, CallResponse } from "node-opcua-service-call";
 import { EndpointDescription } from "node-opcua-service-endpoints";
@@ -83,7 +82,13 @@ import {
 import { WriteRequest, WriteResponse, WriteValue } from "node-opcua-service-write";
 import { StatusCode, StatusCodes, Callback, CallbackT } from "node-opcua-status-code";
 import { ErrorCallback } from "node-opcua-status-code";
-import { BrowseNextRequest, BrowseNextResponse, HistoryReadValueIdOptions, WriteValueOptions } from "node-opcua-types";
+import {
+    BrowseNextRequest,
+    BrowseNextResponse,
+    HistoryReadValueIdOptions,
+    ServiceFault,
+    WriteValueOptions
+} from "node-opcua-types";
 import { buffer_ellipsis, getFunctionParameterNames, isNullOrUndefined, lowerFirstLetter } from "node-opcua-utils";
 import { DataType, Variant, VariantLike } from "node-opcua-variant";
 
@@ -115,7 +120,6 @@ import { repair_client_session } from "../reconnection";
 
 import { ClientSidePublishEngine } from "./client_publish_engine";
 import { ClientSubscriptionImpl } from "./client_subscription_impl";
-import { OPCUAClientImpl } from "./opcua_client_impl";
 import { IClientBase } from "./i_private_client";
 
 export type ResponseCallback<T> = (err: Error | null, response?: T) => void;
@@ -238,7 +242,7 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
 
     public serverNonce?: Nonce;
     public serverSignature?: SignatureData; // todo : remove ?
-    public serverEndpoints: any[] = [];
+    public serverEndpoints: EndpointDescription[] = [];
     public _client: IClientBase | null;
     public _closed: boolean;
 
@@ -1542,6 +1546,7 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
             if (err && err.message.match(/BadSessionIdInvalid/) && request.constructor.name !== "ActivateSessionRequest") {
                 debugLog("Transaction on Invalid Session ", request.constructor.name);
                 request.requestHeader.requestHandle = requestHandleNotSetValue;
+                warningLog("client is now attempting to recreate a session");
                 this.recreate_session_and_reperform_transaction(request, callback);
                 return;
             }
@@ -1597,6 +1602,7 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
                 }
                 return callback(err);
             }
+
             /* istanbul ignore next */
             if (!response) {
                 return callback(new Error("internal Error"));
@@ -1911,7 +1917,10 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
     }
 
     public startKeepAliveManager(): void {
-        assert(!this._keepAliveManager, "keepAliveManger already started");
+        if (this._keepAliveManager) {
+            //  "keepAliveManger already started"
+            return;
+        }
         this._keepAliveManager = new ClientSessionKeepAliveManager(this);
 
         this._keepAliveManager.on("failure", () => {

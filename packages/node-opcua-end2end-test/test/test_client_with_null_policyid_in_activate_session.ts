@@ -8,6 +8,7 @@ import {
     AnonymousIdentityToken
 } from "node-opcua";
 import * as should from "should";
+import { createServerCertificateManager } from "../test_helpers/createServerCertificateManager";
 
 const port = 2235;
 
@@ -16,8 +17,10 @@ const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("Testing client that have policyId = null in Activate Session for anonymous connection", () => {
     let server: OPCUAServer;
     before(async () => {
+        const serverCertificateManager = await createServerCertificateManager(port);
         server = new OPCUAServer({
             port,
+            serverCertificateManager,
             securityPolicies: [SecurityPolicy.None],
             securityModes: [MessageSecurityMode.None]
         });
@@ -48,7 +51,7 @@ describe("Testing client that have policyId = null in Activate Session for anony
         const endpoint = server.getEndpointUrl();
         await client.connect(endpoint);
 
-        let err = undefined;
+        let err: Error | undefined = undefined;
         try {
             const session = await client.createSession();
             await session.close();

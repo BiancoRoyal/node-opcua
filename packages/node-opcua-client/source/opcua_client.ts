@@ -107,11 +107,9 @@ export interface OPCUAClientOptions extends OPCUAClientBaseOptions {
 
 export interface OPCUAClient extends OPCUAClientBase {
     connect(endpointUrl: string): Promise<void>;
-
     connect(endpointUrl: string, callback: ErrorCallback): void;
 
     disconnect(): Promise<void>;
-
     disconnect(callback: ErrorCallback): void;
 
     getEndpoints(options?: GetEndpointsOptions): Promise<EndpointDescription[]>;
@@ -149,6 +147,9 @@ export interface OPCUAClient extends OPCUAClientBase {
     reactivateSession(session: ClientSession): Promise<void>;
 
     reactivateSession(session: ClientSession, callback: (err?: Error) => void): void;
+
+    // @private
+    createDefaultCertificate(): Promise<void>;
 }
 
 export interface EndpointWithUserIdentity {

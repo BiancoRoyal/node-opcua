@@ -1,3 +1,4 @@
+import { once } from "events";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
@@ -15,7 +16,7 @@ import {
     RegisterServerMethod
 } from "node-opcua";
 import { make_debugLog, checkDebugFlag } from "node-opcua-debug";
-import { once } from "events";
+import { createServerCertificateManager } from "../../test_helpers/createServerCertificateManager";
 
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
@@ -44,17 +45,12 @@ export async function createServerThatRegistersItselfToTheDiscoveryServer(
     port: number,
     name: string
 ): Promise<OPCUAServer> {
-    const pkiFolder = path.join(configFolder, "pki" + name);
-    const serverCertificateManager = new OPCUACertificateManager({
-        // keySize: 4096,
-        automaticallyAcceptUnknownCertificate: true,
-        name: "pki" + name,
-        rootFolder: pkiFolder
-    });
-    await serverCertificateManager.initialize();
+
+    const serverCertificateManager = await createServerCertificateManager(port);
+
     const certificateFile = path.join(serverCertificateManager.rootDir, "certificate_server" + name + ".pem");
 
-    assert(!name.match(/urn\:/));
+    assert(!name.match(/urn:/));
     const applicationName = name;
     const applicationUri = makeApplicationUrn(os.hostname(), name);
 
@@ -88,16 +84,16 @@ export async function createServerThatRegistersItselfToTheDiscoveryServer(
     server.discoveryServerEndpointUrl.should.eql(discoveryServerEndpointUrl);
 
     server.on("serverRegistrationPending", () => {
-        debugLog("server serverRegistrationPending");
+        debugLog("on serverRegistrationPending event received on server " + server.getEndpointUrl());
     });
     server.on("serverRegistered", () => {
-        debugLog("server serverRegistered");
+        debugLog("on serverRegistered event received on server " + server.getEndpointUrl());
     });
     server.on("serverRegistrationRenewed", () => {
-        debugLog("server serverRegistrationRenewed");
+        debugLog("on serverRegistrationRenewed event received on server " + server.getEndpointUrl());
     });
     server.on("serverUnregistered", () => {
-        debugLog("server serverUnregistered");
+        debugLog("on serverUnregistered event received on server " + server.getEndpointUrl());
     });
     return server;
 }
@@ -108,11 +104,8 @@ export function ep(server: OPCUABaseServer) {
 }
 
 export async function createDiscovery(port: number): Promise<OPCUADiscoveryServer> {
-    const serverCertificateManager = new OPCUACertificateManager({
-        automaticallyAcceptUnknownCertificate: true,
-        rootFolder: path.join(configFolder, "PKI-Discovery" + port)
-    });
-    await serverCertificateManager.initialize();
+
+    const serverCertificateManager = await createServerCertificateManager(port)
 
     const privateKeyFile = serverCertificateManager.privateKey;
     const certificateFile = path.join(serverCertificateManager.rootDir, "certificate_discovery_server.pem");

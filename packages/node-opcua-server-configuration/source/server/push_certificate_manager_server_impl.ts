@@ -6,11 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { promisify} from "util";
 import * as rimraf from "rimraf";
-
-
-// node 14 onward : import {  readFile, writeFile, readdir } from "fs/promises";
-const { readFile, writeFile, readdir } = fs.promises;
-
+import { SubjectOptions } from "node-opcua-pki";
 import { assert } from "node-opcua-assert";
 import { ByteString, StatusCodes } from "node-opcua-basic-types";
 import {
@@ -41,7 +37,10 @@ import {
     PushCertificateManager,
     UpdateCertificateResult
 } from "../push_certificate_manager";
-import { SubjectOptions } from "node-opcua-pki";
+
+// node 14 onward : import {  readFile, writeFile, readdir } from "fs/promises";
+const { readFile, writeFile, readdir } = fs.promises;
+
 
 const debugLog = make_debugLog("ServerConfiguration");
 const errorLog = make_errorLog("ServerConfiguration");
@@ -61,7 +60,7 @@ function certificateMatchesPrivateKeyPEM(certificate: CertificatePEM, privateKey
     const initialBuffer = Buffer.from("Lorem Ipsum");
     const encryptedBuffer = publicEncrypt_long(initialBuffer, certificate, 256, 11);
     const decryptedBuffer = privateDecrypt_long(encryptedBuffer, privateKey, 256);
-    return initialBuffer.toString("ascii") === decryptedBuffer.toString("ascii");
+    return initialBuffer.toString("utf-8") === decryptedBuffer.toString("utf-8");
 }
 
 export function certificateMatchesPrivateKey(certificate: Certificate, privateKey: PrivateKey): boolean {
@@ -284,7 +283,7 @@ export class PushCertificateManagerServerImpl extends EventEmitter implements Pu
                 await fs.promises.mkdir(location);
             }
 
-            let destCertificateManager = certificateManager;
+            const destCertificateManager = certificateManager;
             const keySize = (certificateManager as any).keySize; // because keySize is private !
             certificateManager = new CertificateManager({
                 keySize,

@@ -2,28 +2,26 @@
     "name": "node-opcua-nodeid",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
-    "version": "2.62.4",
+    "version": "2.77.0",
     "description": "pure nodejs OPCUA SDK - module -nodeid",
     "scripts": {
         "build": "tsc -b",
         "lint": "eslint source/**/*.ts",
-        "clean": "node -e \"require('rimraf').sync('dist');\"",
+        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
         "test": "mocha"
     },
     "dependencies": {
-        "@types/lodash": "4.14.177",
+        "@types/lodash": "4.14.184",
         "chalk": "4.1.2",
         "lodash": "4.17.21",
-        "node-opcua-assert": "2.55.0",
-        "node-opcua-constants": "2.52.0",
-        "node-opcua-enum": "2.55.0",
-        "node-opcua-guid": "2.55.0"
+        "node-opcua-assert": "2.77.0",
+        "node-opcua-constants": "2.77.0",
+        "node-opcua-guid": "2.77.0"
     },
     "devDependencies": {
-        "node-opcua-benchmarker": "2.55.0",
-        "node-opcua-debug": "2.62.4",
-        "should": "^13.2.3",
-        "source-map-support": "^0.5.21"
+        "node-opcua-benchmarker": "2.77.0",
+        "node-opcua-debug": "2.77.0",
+        "should": "^13.2.3"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",

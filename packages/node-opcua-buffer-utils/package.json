@@ -1,22 +1,19 @@
 {
     "name": "node-opcua-buffer-utils",
-    "version": "2.55.0",
+    "version": "2.77.0",
     "description": "pure nodejs OPCUA SDK - module -buffer-utils",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
         "build": "tsc -b",
         "test": "mocha",
-        "clean": "node -e \"require('rimraf').sync('dist');\"",
+        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
         "lint": "eslint source/**/*.ts"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",
-    "dependencies": {
-        "node-opcua-assert": "2.55.0"
-    },
     "devDependencies": {
-        "node-opcua-benchmarker": "2.55.0"
+        "node-opcua-benchmarker": "2.77.0"
     },
     "repository": {
         "type": "git",

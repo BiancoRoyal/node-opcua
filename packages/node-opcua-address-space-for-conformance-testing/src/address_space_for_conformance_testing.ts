@@ -71,7 +71,6 @@ function getRandomFuncForType(dataType: DataType): () => any {
 
 function _findDataType(dataTypeName: string): DataType {
     const builtInDataTypeName = findBuiltInType(dataTypeName);
-
     const dataType = (DataType as any)[builtInDataTypeName.name];
     // istanbul ignore next
     if (!dataType) {
@@ -275,7 +274,7 @@ function add_mass_variables_of_type(
         organizedBy: parent
     });
     for (let i = 0; i <= 99; i++) {
-        const extra_name = "_" + ("00" + i.toString()).substr(-2);
+        const extra_name = "_" + i.toString().padStart(2, "0");
         const local_defaultValue = typeof default_value === "function" ? default_value() : default_value;
         _add_variable(namespace, scalarMass_Type, dataTypeName, realType, local_defaultValue, -1, null, extra_name);
     }
@@ -1269,7 +1268,6 @@ function add_ObjectWithMethod(namespace: Namespace, parentFolder: UAObject) {
     assert(methodNoArgs.nodeId.toString().match(/s=MethodNoArgs/));
 
     methodNoArgs.bindMethod((inputArguments, context, callback) => {
-        // console.log(require("util").inspect(context).toString());
         const callMethodResult = {
             statusCode: StatusCodes.Good,
             outputArguments: []
@@ -1300,7 +1298,6 @@ function add_ObjectWithMethod(namespace: Namespace, parentFolder: UAObject) {
         ]
     });
     methodIO.bindMethod((inputArguments, context, callback) => {
-        // console.log(require("util").inspect(context).toString());
         const callMethodResult = {
             statusCode: StatusCodes.Good,
             outputArguments: [
@@ -1329,7 +1326,6 @@ function add_ObjectWithMethod(namespace: Namespace, parentFolder: UAObject) {
         // xx outputArguments: []
     });
     methodI.bindMethod((inputArguments, context, callback) => {
-        // console.log(require("util").inspect(context).toString());
         const callMethodResult = {
             statusCode: StatusCodes.Good,
             outputArguments: []
@@ -1353,7 +1349,6 @@ function add_ObjectWithMethod(namespace: Namespace, parentFolder: UAObject) {
         ]
     });
     methodO.bindMethod((inputArguments, context, callback) => {
-        // console.log(require("util").inspect(context).toString());
         const callMethodResult = {
             statusCode: StatusCodes.Good,
             outputArguments: [

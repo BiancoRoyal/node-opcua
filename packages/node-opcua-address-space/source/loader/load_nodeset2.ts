@@ -2,7 +2,9 @@
 /**
  * @module node-opcua-address-space
  */
+import { promisify } from "util";
 import * as chalk from "chalk";
+
 import * as ec from "node-opcua-basic-types";
 import {
     AddReferenceTypeOptions,
@@ -15,12 +17,12 @@ import {
     UAVariableType
 } from "node-opcua-address-space-base";
 import { assert, renderError } from "node-opcua-assert";
-import { Int64, isValidGuid, StatusCodes } from "node-opcua-basic-types";
-import { ExtraDataTypeManager, populateDataTypeManager } from "node-opcua-client-dynamic-extension-object";
+import { coerceInt64, coerceUInt64, Int64, isValidGuid, StatusCodes, UInt64 } from "node-opcua-basic-types";
 import { EUInformation } from "node-opcua-data-access";
 import {
     AccessLevelFlag,
     coerceLocalizedText,
+    LocalizedTextOptions,
     makeAccessLevelFlag,
     NodeClass,
     QualifiedName,
@@ -29,26 +31,16 @@ import {
 } from "node-opcua-data-model";
 import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
 import { ExtensionObject } from "node-opcua-extension-object";
-import { DataTypeFactory, findSimpleType, getStandardDataTypeFactory } from "node-opcua-factory";
-import { NodeId, resolveNodeId } from "node-opcua-nodeid";
+import { getBuiltInType } from "node-opcua-factory";
+import { NodeId, NodeIdLike, resolveNodeId } from "node-opcua-nodeid";
 import { Argument } from "node-opcua-service-call";
-import { CallbackT, ErrorCallback } from "node-opcua-status-code";
-import {
-    EnumDefinition,
-    EnumFieldOptions,
-    EnumValueType,
-    Range,
-    StructureDefinition,
-    StructureFieldOptions,
-    StructureType
-} from "node-opcua-types";
+import { ErrorCallback } from "node-opcua-status-code";
+import { EnumFieldOptions, EnumValueType, Range, StructureFieldOptions } from "node-opcua-types";
 import { DataType, Variant, VariantArrayType, VariantOptions } from "node-opcua-variant";
 import {
     _definitionParser,
-    Definition,
     FragmentClonerParser,
     InternalFragmentClonerReaderState,
-    makeExtensionObjectReader,
     ParserLike,
     ReaderState,
     ReaderStateParserLike,
@@ -56,109 +48,18 @@ import {
     XmlAttributes,
     SimpleCallback
 } from "node-opcua-xml2json";
+import * as semver from "semver";
 
 import { AddressSpacePrivate } from "../../src/address_space_private";
 import { NamespacePrivate } from "../../src/namespace_private";
-import { PseudoSession } from "../pseudo_session";
 import { promoteObjectsAndVariables } from "./namespace_post_step";
+import { ensureDatatypeExtracted } from "./ensure_datatype_extracted";
+import { decodeXmlExtensionObject } from "./decode_xml_extension_object";
+import { makeSemverCompatible } from "./make_semver_compatible";
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
 const errorLog = make_errorLog(__filename);
-
-export async function ensureDatatypeExtracted(addressSpace: IAddressSpace): Promise<ExtraDataTypeManager> {
-    const addressSpacePriv: any = addressSpace as AddressSpacePrivate;
-    if (!addressSpacePriv.$$extraDataTypeManager) {
-        const dataTypeManager = new ExtraDataTypeManager();
-
-        const namespaceArray = addressSpace.getNamespaceArray().map((n: INamespace) => n.namespaceUri);
-        debugLog("INamespace Array = ", namespaceArray.join("\n                   "));
-        dataTypeManager.setNamespaceArray(namespaceArray);
-        addressSpacePriv.$$extraDataTypeManager = dataTypeManager;
-
-        for (let namespaceIndex = 1; namespaceIndex < namespaceArray.length; namespaceIndex++) {
-            const dataTypeFactory1 = new DataTypeFactory([getStandardDataTypeFactory()]);
-            dataTypeManager.registerDataTypeFactory(namespaceIndex, dataTypeFactory1);
-        }
-        // inject simple types
-
-        // now extract structure and enumeration from old form if
-        const session = new PseudoSession(addressSpace);
-        await populateDataTypeManager(session, dataTypeManager, true);
-    }
-    return addressSpacePriv.$$extraDataTypeManager;
-}
-
-export function ensureDatatypeExtractedWithCallback(addressSpace: IAddressSpace, callback: CallbackT<ExtraDataTypeManager>): void {
-    ensureDatatypeExtracted(addressSpace)
-        .then((result: ExtraDataTypeManager) => callback(null, result))
-        .catch((err) => callback(err));
-}
-
-function findDataTypeNode(addressSpace: IAddressSpace, encodingNodeId: NodeId): UADataType {
-    const encodingNode = addressSpace.findNode(encodingNodeId)!;
-
-    // istanbul ignore next
-    if (!encodingNode) {
-        throw new Error("findDataTypeNode:  Cannot find " + encodingNodeId.toString());
-    }
-    // xx console.log("encodingNode", encodingNode.toString());
-
-    const refs = encodingNode.findReferences("HasEncoding", false);
-    const dataTypes = refs.map((ref) => addressSpace.findNode(ref.nodeId)).filter((obj: any) => obj !== null);
-
-    // istanbul ignore next
-    if (dataTypes.length !== 1) {
-        throw new Error("Internal Error");
-    }
-
-    const dataTypeNode = dataTypes[0] as UADataType;
-    // istanbul ignore next
-    if (dataTypeNode.nodeClass !== NodeClass.DataType) {
-        throw new Error("internal error: expecting a UADataType node here");
-    }
-    return dataTypeNode;
-}
-
-async function decodeXmlObject(
-    addressSpace2: IAddressSpace,
-    xmlEncodingNodeId: NodeId,
-    xmlBody: string
-): Promise<ExtensionObject | null> {
-    const dataTypeManager = await ensureDatatypeExtracted(addressSpace2);
-    const dataTypeNode = findDataTypeNode(addressSpace2, xmlEncodingNodeId);
-
-    const dataTypeFactory = dataTypeManager.getDataTypeFactory(xmlEncodingNodeId.namespace);
-
-    // istanbul ignore next
-    if (!dataTypeNode) {
-        debugLog(" cannot find ", xmlEncodingNodeId.toString());
-        return null;
-    }
-    const dataTypeName = dataTypeNode.browseName.name!;
-    const definitionMap = {
-        findDefinition(name: string): Definition {
-            debugLog(chalk.magentaBright("xxxxxxxxxxxxx !!!! "), name);
-            if (!name) {
-                return { name: "", fields: [] };
-            }
-            return dataTypeFactory.getStructuredTypeSchema(name) as any as Definition;
-        }
-    };
-    const reader = makeExtensionObjectReader(dataTypeName, definitionMap, {});
-    const parser2 = new Xml2Json(reader);
-    const pojo = await parser2.parseString(xmlBody);
-    // at this time the bsd file containing object definition
-    // must have been found and object can be constructed
-    const userDefinedExtensionObject = addressSpace2.constructExtensionObject(dataTypeNode, pojo);
-
-    // istanbul ignore next
-    if (doDebug) {
-        debugLog("userDefinedExtensionObject", userDefinedExtensionObject.toString());
-    }
-    //
-    return userDefinedExtensionObject;
-}
 
 function __make_back_references(namespace: INamespace) {
     const namespaceP = namespace as NamespacePrivate;
@@ -188,35 +89,29 @@ function convertAccessLevel(accessLevel?: string | null): AccessLevelFlag {
 
 type Task = (addressSpace: IAddressSpace) => Promise<void>;
 
-function makeDefaultVariant2(addressSpace: IAddressSpace, dataTypeNode: NodeId, valueRank: number): VariantOptions | undefined {
-    const variant: VariantOptions = { dataType: DataType.Null };
-    return variant;
-}
 function makeDefaultVariant(addressSpace: IAddressSpace, dataTypeNode: NodeId, valueRank: number): VariantOptions | undefined {
     let variant: VariantOptions = { dataType: DataType.Null };
 
     const nodeDataType = addressSpace.findNode(dataTypeNode) as UADataType;
     if (nodeDataType) {
-    
         const basicDataType = nodeDataType.basicDataType;
         if (basicDataType === DataType.Variant) {
             /// we don't now what is the variant
-            return undefined
+            return undefined;
         }
 
-        //  addressSpace.findCorrespondingBasicDataType(dataTypeNode);
         if (basicDataType === DataType.ExtensionObject) {
-            // console.log("xxxxxxxxxx ", dataTypeNode.toString(addressSpace as any));
             return { dataType: DataType.ExtensionObject, value: null };
         }
-        const dv = findSimpleType(DataType[basicDataType]).defaultValue;
-        if (dv === undefined || dv === null) {
-            // return
+        const builtInType = getBuiltInType(DataType[basicDataType]);
+        if (builtInType === undefined || builtInType === null) {
+            errorLog("Cannot find builtInType for ", basicDataType);
             return { dataType: DataType.Null };
         }
-        let arrayType: VariantArrayType;
+        const dv = builtInType.defaultValue;
         const value = typeof dv === "function" ? dv() : dv;
-        //  if (dataType === DataType.ByteString ) { value = Buffer.alloc(0) }
+ 
+        let arrayType: VariantArrayType;
         /*
          *  * n > 1                     : the Value is an array with the specified number of dimensions.
          *  * OneDimension (1):           The value is an array with one dimension.
@@ -242,19 +137,22 @@ function makeDefaultVariant(addressSpace: IAddressSpace, dataTypeNode: NodeId, v
                 variant = { dataType: basicDataType, value: [], arrayType, dimensions: [] };
                 break;
         }
-        // console.log(variant, DataType[dataType], valueRank);
     }
     return variant;
 }
+export interface NodeSet2ParserEngine {
+    addNodeSet: (xmlData: string, callback1: SimpleCallback) => void;
+    terminate: (callback: SimpleCallback) => void;
+}
 
-export function makeStuff(addressSpace: IAddressSpace): any {
+export function makeNodeSetParserEngine(addressSpace: IAddressSpace): NodeSet2ParserEngine {
     const addressSpace1 = addressSpace as AddressSpacePrivate;
     addressSpace1.suspendBackReference = true;
 
-    let postTasks: Task[] = [];
-    let postTaskInitializeVariable: Task[] = [];
-    let postTasks2: Task[] = [];
-    let postTasks3: Task[] = [];
+    const postTasks: Task[] = [];
+    const postTasks0_DecodePojoString: Task[] = [];
+    const postTasks1_InitializeVariable: Task[] = [];
+    const postTasks2_AssignedExtensionObjectToDataValue: Task[] = [];
 
     let alias_map: { [key: string]: NodeId } = {};
 
@@ -272,14 +170,15 @@ export function makeStuff(addressSpace: IAddressSpace): any {
     let namespace_uri_translation: { [key: number]: number } = {};
     let namespaceCounter = 0;
     let found_namespace_in_uri: { [key: string]: NamespacePrivate } = {};
+    let models: Model[] = [];
 
     function _reset_namespace_translation() {
         debugLog("_reset_namespace_translation");
         namespace_uri_translation = {};
         found_namespace_in_uri = {};
         namespaceCounter = 0;
-        _register_namespace_uri("http://opcfoundation.org/UA/");
         alias_map = {};
+        models = [];
     }
 
     function _translateNamespaceIndex(innerIndex: number) {
@@ -314,33 +213,100 @@ export function makeStuff(addressSpace: IAddressSpace): any {
         return namespace.internalCreateNode(params) as BaseNode;
     }
 
-    function _register_namespace_uri(namespaceUri: string): NamespacePrivate {
+    function _register_namespace_uri_in_translation_table(namespaceUri: string): NamespacePrivate {
         if (found_namespace_in_uri[namespaceUri]) {
             return found_namespace_in_uri[namespaceUri];
         }
-
-        const namespace = addressSpace1.registerNamespace(namespaceUri);
+        const namespace = addressSpace1.getNamespace(namespaceUri);
+        if (!namespace) {
+            throw new Error(
+                "cannot find namespace for " +
+                    namespaceUri +
+                    "\nplease make sure to initialize your address space with the corresponding nodeset files"
+            );
+        }
         found_namespace_in_uri[namespaceUri] = namespace;
 
         const index_in_xml = namespaceCounter;
         namespaceCounter++;
         namespace_uri_translation[index_in_xml] = namespace.index;
 
-        debugLog(
-            " _register_namespace_uri = ",
-            namespaceUri,
-            "index in Xml=",
-            index_in_xml,
-            " index in addressSpace",
-            namespace.index
-        );
+        doDebug &&
+            debugLog(
+                " _register_namespace_uri = ",
+                namespaceUri,
+                "index in Xml=",
+                index_in_xml,
+                " index in addressSpace",
+                namespace.index
+            );
         return namespace;
     }
 
-    function _register_namespace_uri_model(model: any) {
-        const namespace = _register_namespace_uri(model.modelUri);
+    function _add_namespace(model: Model) {
+        if (model.requiredModels.length > 0) {
+            // check that required models exist already in the address space
+            for (const requiredModel of model.requiredModels) {
+                const existingNamespace = addressSpace1.getNamespace(requiredModel.modelUri);
+                if (!existingNamespace) {
+                    errorLog(
+                        "Please ensure that the required namespace ",
+                        requiredModel.modelUri,
+                        "is loaded firs when loading ",
+                        model.modelUri
+                    );
+                    throw new Error("LoadNodeSet : Cannot find namespace for " + requiredModel.modelUri);
+                }
+                /**
+                 *  from https://reference.opcfoundation.org/Core/docs/Part6/F.2/
+                 *  The version of the model defined in the UANodeSet.
+                 *  This is a human readable string and not intended for programmatic comparisons.
+                 *
+                 */
+                const isLowerVersion = (existingVersion: string, requiredVersion: string): boolean => {
+                    const existingSemver = makeSemverCompatible(existingVersion);
+                    const requiredSemver = makeSemverCompatible(requiredVersion);
+                    return semver.lt(existingSemver, requiredSemver);
+                };
+                if (isLowerVersion(existingNamespace.version, requiredModel.version)) {
+                    errorLog(
+                        "Expecting ",
+                        requiredModel.modelUri,
+                        " with version to be at least",
+                        requiredModel.version,
+                        " but namespace version is ",
+                        existingNamespace.version
+                    );
+                }
+                if (existingNamespace.publicationDate.getTime() < requiredModel.publicationDate.getTime()) {
+                    errorLog(
+                        "Expecting ",
+                        requiredModel.modelUri,
+                        " with publicationDatea at least ",
+                        requiredModel.publicationDate.toUTCString(),
+                        " but namespace publicationDate is ",
+                        existingNamespace.publicationDate.toUTCString()
+                    );
+                }
+            }
+        }
+
+        let namespace: NamespacePrivate;
+        // Model must not be already registered
+        const existingNamespace = addressSpace1.getNamespace(model.modelUri);
+        if (existingNamespace) {
+            // special treatment for namespace 0
+            if (model.modelUri === "http://opcfoundation.org/UA/") {
+                namespace = existingNamespace;
+            } else {
+                throw new Error(" namespace already registered " + model.modelUri);
+            }
+        } else {
+            namespace = addressSpace1.registerNamespace(model.modelUri);
+        }
+
         namespace.version = model.version;
-        namespace.publicationDate = model.publicationDate;
+        namespace.publicationDate = model.publicationDate || namespace.publicationDate;
         return namespace;
     }
 
@@ -576,18 +542,17 @@ export function makeStuff(addressSpace: IAddressSpace): any {
                 return x;
             });
             this.obj.partialDefinition = definitionFields;
-         
-            const dataTypeNode = _internal_createNode(this.obj) as UADataType;
-            assert(addressSpace1.findNode(this.obj.nodeId));
-            const definitionName = dataTypeNode.browseName.name!;
 
+            let capturedDataTypeNode = _internal_createNode(this.obj) as UADataType;
             const processBasicDataType = async (addressSpace2: IAddressSpace) => {
-                const isStructure = dataTypeNode.isStructure();
-                const isEnumeration = dataTypeNode.isEnumeration();
-                if (!isEnumeration && !isStructure && dataTypeNode.nodeId.namespace !== 0) {
+                const definitionName = capturedDataTypeNode.browseName.name!;
+                const isStructure = capturedDataTypeNode.isStructure();
+                const isEnumeration = capturedDataTypeNode.isEnumeration();
+                if (!isEnumeration && !isStructure && capturedDataTypeNode.nodeId.namespace !== 0) {
                     // add a custom basic type that is not a structure nor a enumeration
-                    pendingSimpleTypeToRegister.push({ name: definitionName, dataTypeNodeId: dataTypeNode.nodeId });
+                    pendingSimpleTypeToRegister.push({ name: definitionName, dataTypeNodeId: capturedDataTypeNode.nodeId });
                 }
+                (capturedDataTypeNode as any) = undefined;
             };
             postTasks.push(processBasicDataType);
         },
@@ -836,7 +801,7 @@ export function makeStuff(addressSpace: IAddressSpace): any {
         TypeId: {
             parser: {
                 Identifier: {
-                    finish(this: any) {
+                    finish(this: ExtensionObjectTypeIdIdentifierParser) {
                         const typeDefinitionId = this.text.trim();
                         const self = this.parent.parent; // ExtensionObject
                         self.typeDefinitionId = resolveNodeId(typeDefinitionId);
@@ -854,7 +819,7 @@ export function makeStuff(addressSpace: IAddressSpace): any {
                 EnumValueType: enumValueType_parser.EnumValueType,
                 Range: Range_parser.Range
             },
-            startElement(this: any, elementName: string, attrs: any) {
+            startElement(this: ExtensionObjectBodyParser, elementName: string, attrs: any) {
                 const self = this.parent; // ExtensionObject
                 self.extensionObject = null;
                 self.extensionObjectPojo = null;
@@ -866,7 +831,7 @@ export function makeStuff(addressSpace: IAddressSpace): any {
                     this.engine!._promote(this._cloneFragment, this.engine!.currentLevel, elementName, attrs);
                 }
             },
-            finish(this: any) {
+            finish(this: ExtensionObjectBodyParser) {
                 const self = this.parent; // ExtensionObject
 
                 // typeDefinitionId is also the "Default XML" encoding nodeId !
@@ -901,28 +866,37 @@ export function makeStuff(addressSpace: IAddressSpace): any {
 
                         // the "Default Xml" encoding  nodeId
                         const xmlEncodingNodeId = _translateNodeId(self.typeDefinitionId.toString());
-                        const xmlBody = this.bodyXML;
+
+                        if (xmlEncodingNodeId.isEmpty()) {
+                            debugLog("xmlEncodingNodeId is empty for " + self.typeDefinitionId.toString());
+                            break;
+                        }
+                        let captureXmlBody = this.bodyXML;
+                        if (doDebug) {
+                            debugLog("xxxx ", chalk.yellow(captureXmlBody));
+                        }
                         // this is a user defined Extension Object
                         debugLog(
                             "load nodeset2: typeDefinitionId in ExtensionObject Default XML = " + xmlEncodingNodeId.toString()
                         );
-                        if (doDebug) {
-                            debugLog("xxxx ", chalk.yellow(xmlBody));
-                        }
-                        const postTaskData = self.postTaskData;
+
+                        let captured = self.postTaskData;
+                        self.extensionObjectPojo = null;
                         const task = async (addressSpace2: IAddressSpace) => {
-                            const extensionObject: ExtensionObject | null = await decodeXmlObject(
+                            const extensionObject: ExtensionObject | null = await decodeXmlExtensionObject(
                                 addressSpace2,
                                 xmlEncodingNodeId,
-                                xmlBody
+                                captureXmlBody
                             );
-                            if (postTaskData) {
-                                postTaskData.postponedExtensionObject = extensionObject;
+                            if (captured) {
+                                captured.postponedExtensionObject = extensionObject;
                             }
+                            (captureXmlBody as any) = undefined;
+                            (captured as any) = undefined;
                         };
-                        postTasks2.push(task);
-                        self.extensionObjectPojo = null;
+                        postTasks0_DecodePojoString.push(task);
                         assert(!self.extensionObject || self.extensionObject instanceof ExtensionObject);
+
                         break;
                     }
                 }
@@ -932,27 +906,28 @@ export function makeStuff(addressSpace: IAddressSpace): any {
 
     const extensionObject_parser = {
         ExtensionObject: {
-            init(this: any) {
-                this.typeDefinitionId = "";
+            init(this: ExtensionObjectParser) {
+                this.typeDefinitionId = NodeId.nullNodeId;
                 this.extensionObject = null;
                 this.extensionObjectPojo = null;
+                this.postTaskData = { postponedExtensionObject: null };
             },
             parser: _extensionObject_inner_parser,
-            finish(this: any) {
+            finish(this: ExtensionObjectParser) {
                 /* empty */
             }
         }
     };
 
-    function BasicType_parser(dataType: string, parseFunc: (this: any, text: string) => any): ParserLike {
+    function BasicType_parser<T>(dataType: string, parseFunc: (this: { value: T | undefined }, text: string) => any): ParserLike {
         const _parser: ParserLike = {};
 
         const r: ReaderStateParserLike = {
-            init(this: any, name: string, attrs: XmlAttributes) {
-                this.value = 0;
+            init(this: { value: T | undefined }, name: string, attrs: XmlAttributes) {
+                this.value = undefined;
             },
 
-            finish(this: any) {
+            finish(this: { value: T | undefined; text: string }) {
                 this.value = parseFunc.call(this, this.text);
             }
         };
@@ -960,22 +935,22 @@ export function makeStuff(addressSpace: IAddressSpace): any {
         return _parser;
     }
 
-    function ListOf(dataType: string, parseFunc: any) {
+    function ListOf<T>(dataType: string, parseFunc: any) {
         return {
-            init(this: any) {
+            init(this: ListOfTParser<T>) {
                 this.listData = [];
             },
 
-            parser: BasicType_parser(dataType, parseFunc),
+            parser: BasicType_parser<T>(dataType, parseFunc),
 
-            finish(this: any) {
+            finish(this: ListOfTParser<T>) {
                 this.parent.parent.obj.value = {
                     arrayType: VariantArrayType.Array,
                     dataType: (DataType as any)[dataType],
                     value: this.listData
                 };
             },
-            endElement(this: any, element: string) {
+            endElement(this: ListOfTParser<T>, element: string) {
                 this.listData.push(this.parser[dataType].value);
             }
         };
@@ -985,12 +960,68 @@ export function makeStuff(addressSpace: IAddressSpace): any {
         return {
             finish(this: any) {
                 this.parent.parent.obj.value = {
+                    arrayType: VariantArrayType.Scalar,
                     dataType: (DataType as any)[type],
                     value: p(this.text)
                 };
             }
         };
     }
+
+    interface PostExtensionObjectData {
+        postponedExtensionObject: ExtensionObject | null;
+        // variant: Variant;
+        // nodeId: NodeId;
+    }
+    interface ExtensionObjectParser {
+        parent: any;
+        typeDefinitionId: NodeId;
+        extensionObject: ExtensionObject | null;
+        extensionObjectPojo: any | null;
+        postTaskData?: PostExtensionObjectData;
+        parser: {
+            Body: ExtensionObjectBodyParser;
+        };
+    }
+
+    interface ExtensionObjectTypeIdParser {
+        parent: ExtensionObjectParser;
+    }
+    interface ExtensionObjectTypeIdIdentifierParser {
+        text: string;
+        parent: ExtensionObjectTypeIdParser;
+    }
+
+    interface ExtensionObjectBodyParser {
+        parent: ExtensionObjectParser;
+        _cloneFragment: InternalFragmentClonerReaderState;
+        bodyXML: string;
+        engine: any;
+        NodeSet2ParserEngine: any;
+        parser: any;
+    }
+
+    interface Parser {
+        parent: Parser | any;
+    }
+    interface ListOfTParser<T> extends Parser {
+        listData: T[];
+        parent: Parser;
+        parser: {
+            [key: string]: Parser | any;
+        };
+    }
+
+    interface ListOfExtensionObjectParser extends ListOfTParser<ExtensionObject> {
+        listExtensionObject: (ExtensionObject | null)[];
+        parser: {
+            ExtensionObject: ExtensionObjectParser;
+        };
+    }
+
+    const parseUInt64 = (str: string): UInt64 => coerceUInt64(str);
+    const parseInt64 = (str: string): Int64 => coerceInt64(str);
+
     const state_Variant = {
         init: () => {
             /* empty */
@@ -1074,6 +1105,9 @@ export function makeStuff(addressSpace: IAddressSpace): any {
             UInt32: parser2("UInt32", parseInt),
             UInt8: parser2("UInt8", parseInt),
 
+            UInt64: parser2("UInt64", parseUInt64),
+            Int64: parser2("Int64", parseInt64),
+
             ByteString: {
                 init(this: any) {
                     this.value = null;
@@ -1107,150 +1141,194 @@ export function makeStuff(addressSpace: IAddressSpace): any {
             },
 
             ListOfExtensionObject: {
-                init(this: any) {
-                    this.listData = [];
+                init(this: ListOfExtensionObjectParser) {
+                    this.listExtensionObject = [];
                 },
                 parser: extensionObject_parser,
-                finish(this: any) {
-                    this.parent.parent.obj.value = {
-                        arrayType: VariantArrayType.Array,
-                        dataType: DataType.ExtensionObject,
-                        value: this.listData
-                    };
+                finish(this: ListOfExtensionObjectParser) {
+                    installExtensionObjectListInitializationPostTask(this);
                 },
-                startElement(this: any, elementName: string) {
+                startElement(this: ListOfExtensionObjectParser, elementName: string) {
                     /* empty */
+                    const extensionObjectParser = this.parser.ExtensionObject;
+                    extensionObjectParser.postTaskData = { postponedExtensionObject: null };
                 },
-                endElement(this: any, elementName: string) {
-                    this.listData.push(this.parser.ExtensionObject.extensionObject);
+                endElement(this: ListOfExtensionObjectParser, elementName: string) {
+                    const extensionObjectParser = this.parser.ExtensionObject;
 
-                    if (this.parser.ExtensionObject.extensionObject) {
-                        // assert(element === "ExtensionObject");
+                    this.listExtensionObject.push(extensionObjectParser.extensionObject);
+                    if (this.parser.ExtensionObject.extensionObject === null) {
+                        // extension object creation will be postponed
+                        const index = this.listExtensionObject.length - 1;
+                        let capturedData = extensionObjectParser.postTaskData;
 
                         // istanbul ignore next
-                        if (!(this.parser.ExtensionObject.extensionObject instanceof ExtensionObject)) {
-                            throw new Error("expecting an extension object");
+                        if (!capturedData) {
+                            throw new Error("Internal Error : postponedExtensionObject not resolved");
                         }
+
+                        let listExtensionObject = this.listExtensionObject;
+                        const task = async (addressSpace2: IAddressSpace) => {
+                            // istanbul ignore next
+                            if (!capturedData!.postponedExtensionObject) {
+                                throw new Error("Internal Error : postponedExtensionObject not resolved");
+                            }
+                            listExtensionObject[index] = capturedData!.postponedExtensionObject!;
+                            capturedData = undefined;
+                            (listExtensionObject as any) = undefined;
+                        };
+                        postTasks2_AssignedExtensionObjectToDataValue.push(task);
                     }
                 }
             },
 
             ListOfLocalizedText: {
-                init(this: any) {
+                init(this: ListOfTParser<LocalizedTextOptions>) {
                     this.listData = [];
                 },
                 parser: localizedText_parser,
-                finish(this: any) {
+                finish(this: ListOfTParser<QualifiedNameOptions>) {
                     this.parent.parent.obj.value = {
                         arrayType: VariantArrayType.Array,
                         dataType: DataType.LocalizedText,
                         value: this.listData
                     };
                 },
-                endElement(this: any /*element*/) {
+                endElement(this: ListOfTParser<QualifiedNameOptions> /*element*/) {
                     this.listData.push(this.parser.LocalizedText.localizedText);
                 }
             },
             ListOfQualifiedName: {
-                init(this: any) {
+                init(this: ListOfTParser<QualifiedNameOptions>) {
                     this.listData = [];
                 },
                 parser: qualifiedName_parser,
-                finish(this: any) {
+                finish(this: ListOfTParser<QualifiedNameOptions>) {
                     this.parent.parent.obj.value = {
                         arrayType: VariantArrayType.Array,
                         dataType: DataType.QualifiedName,
                         value: this.listData
                     };
                 },
-                endElement(this: any /*element*/) {
+                endElement(this: ListOfTParser<QualifiedNameOptions> /*element*/) {
                     this.listData.push(this.parser.QualifiedName.qualifiedName);
                 }
             },
             ListOfNodeId: {
-                init(this: any) {
+                init(this: ListOfTParser<NodeIdLike>) {
                     this.listData = [];
                 },
                 parser: nodeId_parser,
-                finish(this: any) {
+                finish(this: ListOfTParser<NodeIdLike>) {
                     this.parent.parent.obj.value = {
                         arrayType: VariantArrayType.Array,
                         dataType: DataType.NodeId,
                         value: this.listData
                     };
                 },
-                endElement(this: any, elementName: string) {
+                endElement(this: ListOfTParser<NodeIdLike>, elementName: string) {
                     this.listData.push(this.parser.NodeId.nodeId);
                 }
             },
-            ListOfBoolean: ListOf("Boolean", ec.coerceBoolean),
-            ListOfByte: ListOf("Byte", parseInt),
 
-            ListOfDouble: ListOf("Double", parseFloat),
+            ListOfBoolean: ListOf<boolean>("Boolean", ec.coerceBoolean),
 
-            ListOfFloat: ListOf("Float", parseFloat),
+            ListOfByte: ListOf<number>("Byte", parseInt),
 
-            ListOfInt32: ListOf("Int32", parseInt),
+            ListOfDouble: ListOf<number>("Double", parseFloat),
 
-            ListOfInt16: ListOf("Int16", parseInt),
+            ListOfFloat: ListOf<number>("Float", parseFloat),
 
-            ListOfInt8: ListOf("Int8", parseInt),
+            ListOfInt32: ListOf<number>("Int32", parseInt),
 
-            ListOfUInt32: ListOf("UInt32", parseInt),
+            ListOfInt16: ListOf<number>("Int16", parseInt),
 
-            ListOfUInt16: ListOf("UInt16", parseInt),
+            ListOfInt8: ListOf<number>("Int8", parseInt),
 
-            ListOfUInt8: ListOf("UInt8", parseInt),
+            ListOfUInt32: ListOf<number>("UInt32", parseInt),
 
-            ListOfString: ListOf("String", (value: string) => value),
+            ListOfUInt16: ListOf<number>("UInt16", parseInt),
 
-            ListOfXmlElement: ListOf("XmlElement", (value: string) => value),
+            ListOfUInt8: ListOf<number>("UInt8", parseInt),
+
+            ListOfString: ListOf<string>("String", (value: string) => value),
+
+            ListOfXmlElement: ListOf<string>("XmlElement", (value: string) => value),
 
             ExtensionObject: {
-                init(this: any) {
-                    this.typeDefinitionId = {};
+                init(this: ExtensionObjectParser) {
+                    this.typeDefinitionId = NodeId.nullNodeId;
                     this.extensionObject = null;
-                    this.postTaskData = {};
+                    this.postTaskData = { postponedExtensionObject: null };
                 },
                 parser: _extensionObject_inner_parser,
-                finish(this: any) {
+                finish(this: ExtensionObjectParser) {
                     // istanbul ignore next
                     if (this.extensionObject && !(this.extensionObject instanceof ExtensionObject)) {
                         throw new Error("expecting an extension object");
                     }
-
                     this.parent.parent.obj.value = {
                         dataType: DataType.ExtensionObject,
                         value: this.extensionObject
                     };
-
-                    // let's create the mechanism that postpone the creation of the
-                    // extension object
-                    const data = this.postTaskData;
-                    data.variant = this.parent.parent.obj.value;
-                    if (!data.variant) {
-                        data.nodeId = this.parent.parent.obj.nodeId;
-                        this.postTaskData = null;
-                        const task = async (addressSpace2: IAddressSpace) => {
-                            data.variant.value = data.postponedExtensionObject;
-                            assert(data.nodeId, "expecting a nodeid");
-                            const node = addressSpace2.findNode(data.nodeId)!;
-                            if (node.nodeClass === NodeClass.Variable) {
-                                const v = node as UAVariable;
-                                v.setValueFromSource(data.variant);
-                            }
-                            if (node.nodeClass === NodeClass.VariableType) {
-                                const v = node as UAVariableType;
-                                (v as any) /*fix me*/.value.value = data.variant.value;
-                            }
-                        };
-                        postTasks3.push(task);
+                    if (!this.extensionObject) {
+                        installExtensionObjectInitializationPostTask(this);
                     }
                 }
             }
         }
     };
 
+    function installExtensionObjectListInitializationPostTask(element: ListOfExtensionObjectParser) {
+        let listExtensionObject = element.listExtensionObject;
+        let nodeId = element.parent.parent.obj.nodeId;
+        assert(nodeId, "expecting a nodeid");
+        const task = async (addressSpace2: IAddressSpace) => {
+            const node = addressSpace2.findNode(nodeId)!;
+            if (!node) {
+                debugLog("Cannot find node with nodeId " + nodeId + ". may be the node was marked as deprecated");
+            } else if (node.nodeClass === NodeClass.Variable) {
+                const v = node as UAVariable;
+                v.setValueFromSource({
+                    dataType: DataType.ExtensionObject,
+                    value: listExtensionObject
+                });
+            } else if (node.nodeClass === NodeClass.VariableType) {
+                const v = node as UAVariableType;
+                (v as any) /*fix me*/.value.value = listExtensionObject;
+            }
+            listExtensionObject.slice(0);
+            (listExtensionObject as any) = undefined;
+            (nodeId as any) = undefined;
+        };
+        postTasks2_AssignedExtensionObjectToDataValue.push(task);
+    }
+
+    function installExtensionObjectInitializationPostTask(element: ExtensionObjectParser) {
+        // let's create the mechanism that postpone the creation of the
+        // extension object
+        let data = element.postTaskData!;
+        let variant = element.parent.parent.obj.value;
+        let nodeId = element.parent.parent.obj.nodeId;
+        const task = async (addressSpace2: IAddressSpace) => {
+            variant.value = data.postponedExtensionObject;
+            assert(nodeId, "expecting a nodeid");
+            const node = addressSpace2.findNode(nodeId)!;
+            if (node.nodeClass === NodeClass.Variable) {
+                const v = node as UAVariable;
+                v.setValueFromSource(variant);
+            } else if (node.nodeClass === NodeClass.VariableType) {
+                const v = node as UAVariableType;
+                (v as any) /*fix me*/.value.value = variant.value;
+            }
+
+            data.postponedExtensionObject = null;
+            (data as any) = undefined;
+            (variant as any) = undefined;
+            (nodeId as any) = undefined;
+        };
+        postTasks2_AssignedExtensionObjectToDataValue.push(task);
+    }
     const state_UAVariable = {
         init(this: any, name: string, attrs: XmlAttributes) {
             this.obj = {};
@@ -1289,38 +1367,39 @@ export function makeStuff(addressSpace: IAddressSpace): any {
             }
             */
             // eslint-disable-next-line prefer-const
-            let variable: UAVariable;
+            let capturedVariable: UAVariable;
             if (this.obj.value) {
-                const capturedValue = this.obj.value;
+                let capturedValue = this.obj.value;
                 const task = async (addressSpace2: IAddressSpace) => {
                     if (false && doDebug) {
-                        debugLog("1 setting value to ", variable.nodeId.toString(), new Variant(capturedValue).toString());
+                        debugLog("1 setting value to ", capturedVariable.nodeId.toString(), new Variant(capturedValue).toString());
                     }
-                    variable.setValueFromSource(capturedValue);
+                    capturedVariable.setValueFromSource(capturedValue);
+                    capturedValue = undefined;
+                    (capturedVariable as any) = undefined;
                 };
-                postTaskInitializeVariable.push(task);
+                postTasks1_InitializeVariable.push(task);
             } else {
-                const captureName = this.obj.browseName.toString();
-                const captureNodeId = this.obj.nodeId;
                 const task = async (addressSpace2: IAddressSpace) => {
-                    const dataTypeNode = variable.dataType;
-                    const valueRank = variable.valueRank;
+                    const dataTypeNode = capturedVariable.dataType;
+                    const valueRank = capturedVariable.valueRank;
                     const value = makeDefaultVariant(addressSpace, dataTypeNode, valueRank);
                     if (value) {
                         if (false && doDebug) {
-                            debugLog("2 setting value to ", variable.nodeId.toString(), value);
+                            debugLog("2 setting value to ", capturedVariable.nodeId.toString(), value);
                         }
                         if (value.dataType === DataType.Null) {
-                            variable.setValueFromSource(value, StatusCodes.BadWaitingForInitialData);
+                            capturedVariable.setValueFromSource(value, StatusCodes.BadWaitingForInitialData);
                         } else {
-                            variable.setValueFromSource(value, StatusCodes.Good);
+                            capturedVariable.setValueFromSource(value, StatusCodes.Good);
                         }
                     }
+                    (capturedVariable as any) = undefined;
                 };
-                postTaskInitializeVariable.push(task);
+                postTasks1_InitializeVariable.push(task);
             }
             this.obj.value = undefined;
-            variable = _internal_createNode(this.obj) as UAVariable;
+            capturedVariable = _internal_createNode(this.obj) as UAVariable;
         },
         parser: {
             DisplayName: {
@@ -1423,64 +1502,124 @@ export function makeStuff(addressSpace: IAddressSpace): any {
         }
     };
 
+    interface RequiredModel {
+        modelUri: string;
+        version: string;
+        publicationDate: Date;
+    }
+    interface Model {
+        modelUri: string;
+        version: string;
+        publicationDate?: Date;
+        requiredModels: RequiredModel[];
+        accessRestrictions?: string;
+        symbolicName?: string;
+    }
+
     const state_ModelTableEntry = new ReaderState({
         // ModelTableEntry
 
         init(this: any) {
-            this._requiredModels = [];
+            this._requiredModels = [] as RequiredModel[];
         },
         parser: {
-            // xx  "RequiredModel":  null
+            RequiredModel: {
+                init(this: any, name: string, attrs: XmlAttributes) {
+                    const modelUri = attrs.ModelUri;
+                    const version = attrs.Version;
+                    const publicationDate = new Date(Date.parse(attrs.PublicationDate));
+
+                    this.parent._requiredModels.push({ modelUri, version, publicationDate });
+                },
+                finish(this: any) {
+                    /** */
+                }
+            }
         },
         finish(this: any) {
             const modelUri = this.attrs.ModelUri; // //"http://opcfoundation.org/UA/"
             const version = this.attrs.Version; // 1.04
-            const publicationDate = this.attrs.PublicationDate; // "2018-05-15T00:00:00Z" "
+            const publicationDate = this.attrs.PublicationDate ? new Date(Date.parse(this.attrs.PublicationDate)) : undefined; // "2018-05-15T00:00:00Z" "
             // optional,
             const symbolicName = this.attrs.SymbolicName;
             const accessRestrictions = this.attrs.AccessRestrictions;
 
-            const namespace = _register_namespace_uri_model({
+            const model = {
                 accessRestrictions,
                 modelUri,
                 publicationDate,
                 requiredModels: this._requiredModels,
                 symbolicName,
                 version
-            });
-            this._requiredModels.push(namespace);
+            };
+            const namespace = _add_namespace(model);
+            models.push(model);
         }
     });
-    // state_ModelTableEntry.parser["RequiredModel"] = state_ModelTableEntry;
 
+    function _perform() {
+        /**special case for old nodeset file version 1.02 where no models exists */
+        if (models.length === 0) {
+            for (const namespaceuri of _namespaceUris) {
+                const existingNamespace = addressSpace1.getNamespace(namespaceuri);
+                if (existingNamespace) {
+                    continue;
+                }
+
+                _add_namespace({
+                    modelUri: namespaceuri,
+                    version: "1.0.0",
+                    requiredModels: []
+                });
+            }
+        }
+
+        doDebug && debugLog("xxx models =", JSON.stringify(models, null, " "));
+        doDebug && debugLog("xxx _namespaceUris =", _namespaceUris);
+        _register_namespace_uri_in_translation_table("http://opcfoundation.org/UA/");
+        for (const namespaceUri of _namespaceUris) {
+            _register_namespace_uri_in_translation_table(namespaceUri);
+        }
+    }
+    // state_ModelTableEntry.parser["RequiredModel"] = state_ModelTableEntry;
+    let _namespaceUris: string[] = [];
     const state_0: ReaderStateParserLike = {
         parser: {
-            Aliases: { parser: { Alias: state_Alias } },
+            Aliases: {
+                init(this: any) {
+                    _perform();
+                },
+                parser: { Alias: state_Alias }
+            },
 
             NamespaceUris: {
                 init(this: any) {
                     //
+                    _namespaceUris = [];
                 },
                 parser: {
                     Uri: {
                         finish(this: any) {
-                            _register_namespace_uri(this.text);
+                            _namespaceUris.push(this.text);
                         }
                     }
+                },
+                finish(this: any) {
+                    // verify that requested namespaces are already loaded or abort with a message
                 }
             },
 
             Models: {
                 // ModelTable
-                init(this: any) {
-                    //
+                init(this: any, name: string, attrs: XmlAttributes) {
+                    /* */
                 },
                 parser: {
                     Model: state_ModelTableEntry
                 },
 
                 finish(this: any) {
-                    //
+                    /** */
                 }
             },
 
@@ -1515,9 +1654,11 @@ export function makeStuff(addressSpace: IAddressSpace): any {
                 );
             }
         }
-        debugLog(
-            chalk.bgGreenBright("Performing post loading tasks -------------------------------------------") + chalk.green("DONE")
-        );
+        doDebug &&
+            debugLog(
+                chalk.bgGreenBright("Performing post loading tasks -------------------------------------------") +
+                    chalk.green("DONE")
+            );
 
         async function performPostLoadingTasks(tasks: Task[]): Promise<void> {
             for (const task of tasks) {
@@ -1532,46 +1673,40 @@ export function makeStuff(addressSpace: IAddressSpace): any {
                     await task(addressSpace1);
                 }
             }
+            tasks.splice(0);
         }
         async function finalSteps(): Promise<void> {
             /// ----------------------------------------------------------------------------------------
             // perform post task
-            debugLog(chalk.bgGreenBright("Performing post loading tasks -------------------------------------------"));
+            doDebug && debugLog(chalk.bgGreenBright("Performing post loading tasks -------------------------------------------"));
             await performPostLoadingTasks(postTasks);
-            postTasks = [];
 
-            debugLog(chalk.bgGreenBright("Performing DataType extraction -------------------------------------------"));
+            doDebug && debugLog(chalk.bgGreenBright("Performing DataType extraction -------------------------------------------"));
             assert(!addressSpace1.suspendBackReference);
             await ensureDatatypeExtracted(addressSpace);
+            const dataTypeManager = (addressSpace as AddressSpacePrivate).getDataTypeManager();
 
             /// ----------------------------------------------------------------------------------------
-            debugLog(chalk.bgGreenBright("DataType extraction done ") + chalk.green("DONE"));
+            doDebug && debugLog(chalk.bgGreenBright("DataType extraction done ") + chalk.green("DONE"));
 
             for (const { name, dataTypeNodeId } of pendingSimpleTypeToRegister) {
                 if (dataTypeNodeId.namespace === 0) {
                     continue;
                 }
-                const dataTypeManager = (addressSpace as AddressSpacePrivate).getDataTypeManager();
                 const dataTypeFactory = dataTypeManager.getDataTypeFactoryForNamespace(dataTypeNodeId.namespace);
             }
             pendingSimpleTypeToRegister.splice(0);
 
-            debugLog(chalk.bgGreenBright("Performing post loading tasks 2 (parsing XML objects) ---------------------"));
-            await performPostLoadingTasks(postTasks2);
-            postTasks2 = [];
+            doDebug && debugLog(chalk.bgGreenBright("Performing post loading task: Decoding Pojo String (parsing XML objects) -"));
+            await performPostLoadingTasks(postTasks0_DecodePojoString);
 
-            debugLog(chalk.bgGreenBright("Performing post variable initialization ---------------------"));
-            await performPostLoadingTasks(postTaskInitializeVariable);
-            postTaskInitializeVariable = [];
+            doDebug && debugLog(chalk.bgGreenBright("Performing post loading task: Initializing Variables ---------------------"));
+            await performPostLoadingTasks(postTasks1_InitializeVariable);
 
-            debugLog(
-                chalk.bgGreenBright(
-                    "Performing post loading tasks 3 (assigning Extension Object to Variables) ---------------------"
-                )
-            );
-            await performPostLoadingTasks(postTasks3);
-            postTasks3 = [];
+            doDebug && debugLog(chalk.bgGreenBright("Performing post loading tasks: (assigning Extension Object to Variables) -"));
+            await performPostLoadingTasks(postTasks2_AssignedExtensionObjectToDataValue);
 
+            doDebug && debugLog(chalk.bgGreenBright("Performing post variable initialization ---------------------"));
             promoteObjectsAndVariables(addressSpace);
         }
         finalSteps()
@@ -1594,8 +1729,9 @@ export function makeStuff(addressSpace: IAddressSpace): any {
 export class NodeSetLoader {
     _s: any;
     constructor(addressSpace: IAddressSpace) {
-        this._s = makeStuff(addressSpace);
+        this._s = makeNodeSetParserEngine(addressSpace);
     }
+
     addNodeSet(xmlData: string, callback: ErrorCallback): void {
         if (!callback) {
             throw new Error("Expecting callback function");
@@ -1604,14 +1740,14 @@ export class NodeSetLoader {
     }
 
     async addNodeSetAsync(xmlData: string): Promise<void> {
-        return await new Promise((resolve) => {
-            this.addNodeSet(xmlData, (err?: Error) => {
-                resolve();
-            });
-        });
+        return promisify(this.addNodeSet).call(this, xmlData);
     }
 
     terminate(callback: ErrorCallback): void {
         this._s.terminate(callback);
+    }
+
+    async terminateAsync(): Promise<void> {
+        return promisify(this.terminate).call(this);
     }
 }

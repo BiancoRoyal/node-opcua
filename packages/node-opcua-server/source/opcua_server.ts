@@ -1,3 +1,4 @@
+/* eslint-disable complexity */
 /**
  * @module node-opcua-server
  */
@@ -38,12 +39,19 @@ import {
     ISessionContext,
     UAView,
     EventTypeLike,
-    UAObjectType
+    UAObjectType,
+    PseudoVariantStringPredefined
 } from "node-opcua-address-space";
 import { getDefaultCertificateManager, OPCUACertificateManager } from "node-opcua-certificate-manager";
 import { ServerState } from "node-opcua-common";
-import { Certificate, exploreCertificate, makeSHA1Thumbprint, Nonce, toPem } from "node-opcua-crypto";
-import { AttributeIds, LocalizedText, NodeClass } from "node-opcua-data-model";
+import { Certificate, exploreCertificate, Nonce } from "node-opcua-crypto";
+import {
+    AttributeIds,
+    filterDiagnosticOperationLevel,
+    filterDiagnosticServiceLevel,
+    NodeClass,
+    RESPONSE_DIAGNOSTICS_MASK_ALL
+} from "node-opcua-data-model";
 import { DataValue } from "node-opcua-data-value";
 import { dump, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
 import { NodeId } from "node-opcua-nodeid";
@@ -139,13 +147,16 @@ import {
     BuildInfoOptions,
     MonitoredItemCreateResult,
     IssuedIdentityToken,
-    BrowseResultOptions
+    BrowseResultOptions,
+    ServiceFault,
+    ServerDiagnosticsSummaryDataType
 } from "node-opcua-types";
 import { DataType } from "node-opcua-variant";
 import { VariantArrayType } from "node-opcua-variant";
 import { matchUri } from "node-opcua-utils";
 
 import { UAString } from "node-opcua-basic-types";
+import { ObjectIds, ObjectTypeIds } from "node-opcua-constants";
 import { OPCUABaseServer, OPCUABaseServerOptions } from "./base_server";
 import { Factory } from "./factory";
 import { IRegisterServerManager } from "./i_register_server_manager";
@@ -160,24 +171,11 @@ import { ServerSession } from "./server_session";
 import { CreateMonitoredItemHook, DeleteMonitoredItemHook, Subscription } from "./server_subscription";
 import { ISocketData } from "./i_socket_data";
 import { IChannelData } from "./i_channel_data";
+import { UAUserManagerBase, makeUserManager, UserManagerOptions } from "./user_manager";
+import { bindRoleSet } from "./user_manager_ua";
 
 function isSubscriptionIdInvalid(subscriptionId: number): boolean {
     return subscriptionId < 0 || subscriptionId >= 0xffffffff;
-}
-
-export type ValidUserFunc = (this: ServerSession, username: string, password: string) => boolean;
-export type ValidUserAsyncFunc = (
-    this: ServerSession,
-    username: string,
-    password: string,
-    callback: (err: Error | null, isAuthorized?: boolean) => void
-) => void;
-
-export interface UserManagerOptions extends IUserManager {
-    /** synchronous function to check the credentials - can be overruled by isValidUserAsync */
-    isValidUser?: ValidUserFunc;
-    /** asynchronous function to check if the credentials - overrules isValidUser */
-    isValidUserAsync?: ValidUserAsyncFunc;
 }
 
 // tslint:disable-next-line:no-var-requires
@@ -188,11 +186,10 @@ const debugLog = make_debugLog(__filename);
 const errorLog = make_errorLog(__filename);
 const warningLog = make_warningLog(__filename);
 
-const default_maxAllowedSessionNumber = 10;
 const default_maxConnectionsPerEndpoint = 10;
 
 function g_sendError(channel: ServerSecureChannelLayer, message: Message, ResponseClass: any, statusCode: StatusCode): void {
-    const response = new ResponseClass({
+    const response = new ServiceFault({
         responseHeader: { serviceResult: statusCode }
     });
     return channel.send_response("MSG", response, message);
@@ -211,6 +208,7 @@ const default_build_info: BuildInfoOptions = {
 const minSessionTimeout = 100; // 100 milliseconds
 const defaultSessionTimeout = 1000 * 30; // 30 seconds
 const maxSessionTimeout = 1000 * 60 * 50; // 50 minutes
+let unnamed_session_count = 0;
 
 type ResponseClassType =
     | typeof BrowseResponse
@@ -260,7 +258,7 @@ function moveSessionToChannel(session: ServerSession, channel: ServerSecureChann
 }
 
 async function _attempt_to_close_some_old_unactivated_session(server: OPCUAServer) {
-    const session = server.engine!.getOldestUnactivatedSession();
+    const session = server.engine!.getOldestInactiveSession();
     if (session) {
         await server.engine!.closeSession(session.authenticationToken, false, "Forcing");
     }
@@ -268,11 +266,8 @@ async function _attempt_to_close_some_old_unactivated_session(server: OPCUAServe
 
 function getRequiredEndpointInfo(endpoint: EndpointDescription) {
     assert(endpoint instanceof EndpointDescription);
-    // It is recommended that Servers only include the server.applicationUri,  endpointUrl, securityMode,
-    // securityPolicyUri, userIdentityTokens, transportProfileUri and securityLevel with all
-    // other parameters set to null. Only the recommended parameters shall be verified by
-    // the client.
-
+    // https://reference.opcfoundation.org/v104/Core/docs/Part4/5.6.2/
+    // https://reference.opcfoundation.org/v105/Core/docs/Part4/5.6.2/
     const e = new EndpointDescription({
         endpointUrl: endpoint.endpointUrl,
         securityLevel: endpoint.securityLevel,
@@ -281,14 +276,13 @@ function getRequiredEndpointInfo(endpoint: EndpointDescription) {
         server: {
             applicationUri: endpoint.server.applicationUri,
             applicationType: endpoint.server.applicationType,
-            applicationName: endpoint.server.applicationName
-            // ... to be continued after verifying what fields are actually needed
+            applicationName: endpoint.server.applicationName,
+            productUri: endpoint.server.productUri
         },
         transportProfileUri: endpoint.transportProfileUri,
         userIdentityTokens: endpoint.userIdentityTokens
     });
     // reduce even further by explicitly setting unwanted members to null
-    e.server.productUri = null;
     e.server.applicationName = null as any;
     // xx e.server.applicationType = null as any;
     e.server.gatewayServerUri = null;
@@ -305,10 +299,8 @@ function getRequiredEndpointInfo(endpoint: EndpointDescription) {
 function _serverEndpointsForCreateSessionResponse(server: OPCUAServer, endpointUrl: string | null, serverUri: string | null) {
     serverUri = null; // unused then
 
-    // The Server shall return a set of EndpointDescriptions available for the serverUri specified in the request.
-    // It is recommended that Servers only include the endpointUrl, securityMode,
-    // securityPolicyUri, userIdentityTokens, transportProfileUri and securityLevel with all other parameters
-    // set to null. Only the recommended parameters shall be verified by the client.
+    // https://reference.opcfoundation.org/v104/Core/docs/Part4/5.6.2/
+    // https://reference.opcfoundation.org/v105/Core/docs/Part4/5.6.2/
     return server
         ._get_endpoints(endpointUrl)
         .filter((e) => !(e as any).restricted) // remove restricted endpoints
@@ -611,7 +603,9 @@ function validate_applicationUri(channel: ServerSecureChannelLayer, request: Cre
         return true; // can't check
     }
     const e = exploreCertificate(clientCertificate);
-    const applicationUriFromCert = e.tbsCertificate.extensions!.subjectAltName.uniformResourceIdentifier[0];
+    const uniformResourceIdentifier = e.tbsCertificate.extensions!.subjectAltName?.uniformResourceIdentifier ?? null;
+    const applicationUriFromCert =
+        uniformResourceIdentifier && uniformResourceIdentifier.length > 0 ? uniformResourceIdentifier[0] : null;
 
     /* istanbul ignore next */
     if (applicationUriFromCert !== applicationUri) {
@@ -675,6 +669,33 @@ function validate_security_endpoint(
         debugLog("endpoints_matching_security_policy= ", endpoints_matching_security_policy.length);
     }
     return { errCode: StatusCodes.Good, endpoint: endpoints_matching_security_policy[0] };
+}
+
+export function filterDiagnosticInfo(returnDiagnostics: number, response: CallResponse): void {
+    if (RESPONSE_DIAGNOSTICS_MASK_ALL & returnDiagnostics) {
+        response.responseHeader.serviceDiagnostics = filterDiagnosticServiceLevel(
+            returnDiagnostics,
+            response.responseHeader.serviceDiagnostics
+        );
+
+        if (response.diagnosticInfos && response.diagnosticInfos.length > 0) {
+            response.diagnosticInfos = response.diagnosticInfos.map((d) => filterDiagnosticOperationLevel(returnDiagnostics, d));
+        } else {
+            response.diagnosticInfos = [];
+        }
+
+        if (response.results) {
+            for (const entry of response.results) {
+                if (entry.inputArgumentDiagnosticInfos && entry.inputArgumentDiagnosticInfos.length > 0) {
+                    entry.inputArgumentDiagnosticInfos = entry.inputArgumentDiagnosticInfos.map((d) =>
+                        filterDiagnosticOperationLevel(returnDiagnostics, d)
+                    );
+                } else {
+                    entry.inputArgumentDiagnosticInfos = [];
+                }
+            }
+        }
+    }
 }
 
 export enum RegisterServerMethod {
@@ -755,6 +776,8 @@ export interface OPCUAServerOptions extends OPCUABaseServerOptions, OPCUAServerE
     /**
      * the maximum number of simultaneous sessions allowed.
      * @default 10
+     * @deprecated use serverCapabilities: { maxSessions: } instead
+    
      */
     maxAllowedSessionNumber?: number;
 
@@ -827,7 +850,7 @@ export interface OPCUAServerOptions extends OPCUABaseServerOptions, OPCUAServerE
      * - MDNS: the server publish itself to the mDNS Multicast network directly
      * - LDS: the server registers itself to the LDS or LDS-ME (Local Discovery Server)
      *
-     *  @default  RegisterServerMethod.HIDDEN - by default the server
+     *  @default    .HIDDEN - by default the server
      *            will not register itself to the local discovery server
      *
      */
@@ -1014,12 +1037,17 @@ export class OPCUAServer extends OPCUABaseServer {
     public static fallbackSessionName = "Client didn't provide a meaningful sessionName ...";
     /**
      * the maximum number of subscription that can be created per server
+     * @deprecated
      */
-    public static MAX_SUBSCRIPTION = 50;
+    public static deprectated_MAX_SUBSCRIPTION = 50;
+
     /**
      * the maximum number of concurrent sessions allowed on the server
      */
-    public maxAllowedSessionNumber: number;
+    public get maxAllowedSessionNumber(): number {
+        return this.engine.serverCapabilities.maxSessions;
+    }
+
     /**
      * the maximum number for concurrent connection per end point
      */
@@ -1033,7 +1061,8 @@ export class OPCUAServer extends OPCUABaseServer {
     /**
      * the user manager
      */
-    public userManager: UserManagerOptions;
+    public userManager: UAUserManagerBase;
+
     public readonly options: OPCUAServerOptions;
 
     private objectFactory?: Factory;
@@ -1048,10 +1077,14 @@ export class OPCUAServer extends OPCUABaseServer {
 
         this.options = options;
 
-        /**
-         * @property maxAllowedSessionNumber
-         */
-        this.maxAllowedSessionNumber = options.maxAllowedSessionNumber || default_maxAllowedSessionNumber;
+        if (options.maxAllowedSessionNumber !== undefined) {
+            warningLog(
+                "[NODE-OPCUA-W21] maxAllowedSessionNumber property is now deprecated , please use serverCapabilities.maxSessions instead"
+            );
+            options.serverCapabilities = options.serverCapabilities || {};
+            options.serverCapabilities.maxSessions = options.maxAllowedSessionNumber;
+        }
+
         /**
          * @property maxConnectionsPerEndpoint
          */
@@ -1067,12 +1100,7 @@ export class OPCUAServer extends OPCUABaseServer {
         buildInfo.productUri = buildInfo.productUri || this.serverInfo.productUri;
         this.serverInfo.productUri = this.serverInfo.productUri || buildInfo.productUri;
 
-        this.userManager = options.userManager || {};
-        if (typeof this.userManager.isValidUser !== "function") {
-            this.userManager.isValidUser = (/*userName,password*/) => {
-                return false;
-            };
-        }
+        this.userManager = makeUserManager(options.userManager);
 
         options.allowAnonymous = options.allowAnonymous === undefined ? true : !!options.allowAnonymous;
         /**
@@ -1186,6 +1214,7 @@ export class OPCUAServer extends OPCUABaseServer {
             .then(() => {
                 OPCUAServer.registry.register(this);
                 this.engine.initialize(this.options, () => {
+                    bindRoleSet(this.userManager, this.engine.addressSpace!);
                     setImmediate(() => {
                         this.emit("post_initialize");
                         done();
@@ -1291,8 +1320,8 @@ export class OPCUAServer extends OPCUABaseServer {
         debugLog("OPCUAServer is now unregistering itself from  the discovery server " + this.buildInfo);
         this.registerServerManager!.stop((err?: Error | null) => {
             debugLog("OPCUAServer unregistered from discovery server", err);
-            setTimeout(() => {
-                this.engine.shutdown();
+            setTimeout(async () => {
+                await this.engine.shutdown();
 
                 debugLog("OPCUAServer#shutdown: started");
                 OPCUABaseServer.prototype.shutdown.call(this, (err1?: Error) => {
@@ -1324,6 +1353,19 @@ export class OPCUAServer extends OPCUABaseServer {
             this.engine.dispose();
         }
     }
+
+    public raiseEvent(eventType: "AuditSessionEventType", options: RaiseEventAuditSessionEventData): void;
+    public raiseEvent(eventType: "AuditCreateSessionEventType", options: RaiseEventAuditCreateSessionEventData): void;
+    public raiseEvent(eventType: "AuditActivateSessionEventType", options: RaiseEventAuditActivateSessionEventData): void;
+    public raiseEvent(eventType: "AuditCreateSessionEventType", options: RaiseEventData): void;
+    public raiseEvent(eventType: "AuditConditionCommentEventType", options: RaiseEventAuditConditionCommentEventData): void;
+    public raiseEvent(eventType: "AuditUrlMismatchEventType", options: RaiseEventAuditUrlMismatchEventTypeData): void;
+    public raiseEvent(eventType: "TransitionEventType", options: RaiseEventTransitionEventData): void;
+    public raiseEvent(eventType: "AuditCertificateInvalidEventType", options: RaiseAuditCertificateInvalidEventData): void;
+    public raiseEvent(eventType: "AuditCertificateExpiredEventType", options: RaiseAuditCertificateExpiredEventData): void;
+    public raiseEvent(eventType: "AuditCertificateUntrustedEventType", options: RaiseAuditCertificateUntrustedEventData): void;
+    public raiseEvent(eventType: "AuditCertificateRevokedEventType", options: RaiseAuditCertificateRevokedEventData): void;
+    public raiseEvent(eventType: "AuditCertificateMismatchEventType", options: RaiseAuditCertificateMismatchEventData): void;
 
     public raiseEvent(eventType: EventTypeLike | UAObjectType, options: RaiseEventData): void {
         /* istanbul ignore next */
@@ -1385,7 +1427,7 @@ export class OPCUAServer extends OPCUABaseServer {
         clientCertificate: Certificate,
         clientNonce: Nonce
     ): SignatureData | undefined {
-        return computeSignature(clientCertificate, clientNonce, this.getPrivateKey(), channel.messageBuilder.securityPolicy);
+        return computeSignature(clientCertificate, clientNonce, this.getPrivateKey(), channel.messageBuilder!.securityPolicy);
     }
 
     /**
@@ -1401,7 +1443,7 @@ export class OPCUAServer extends OPCUABaseServer {
         clientSignature: SignatureData
     ): boolean {
         const clientCertificate = channel.receiverCertificate!;
-        const securityPolicy = channel.messageBuilder.securityPolicy;
+        const securityPolicy = channel.messageBuilder!.securityPolicy;
         const serverCertificate = this.getCertificate();
 
         const result = verifySignature(serverCertificate, session.nonce!, clientSignature, clientCertificate, securityPolicy);
@@ -1454,7 +1496,7 @@ export class OPCUAServer extends OPCUABaseServer {
         callback: (err: Error | null, statusCode?: StatusCode) => void
     ): void {
         assert(userIdentityToken instanceof X509IdentityToken);
-        assert(callback instanceof Function);
+        assert(typeof callback === "function");
 
         const securityPolicy = adjustSecurityPolicy(channel, userTokenPolicy.securityPolicyUri);
 
@@ -1465,6 +1507,8 @@ export class OPCUAServer extends OPCUABaseServer {
         }
 
         if (!userTokenSignature || !userTokenSignature.signature) {
+            this.raiseEvent("AuditCreateSessionEventType", {});
+
             return callback(null, StatusCodes.BadUserSignatureInvalid);
         }
 
@@ -1494,6 +1538,45 @@ export class OPCUAServer extends OPCUABaseServer {
             if (err) {
                 return callback(err);
             }
+            if (this.isAuditing) {
+                switch (certificateStatus) {
+                    case StatusCodes.Good:
+                        break;
+                    case StatusCodes.BadCertificateUntrusted:
+                        this.raiseEvent("AuditCertificateUntrustedEventType", {
+                            certificate: { dataType: DataType.ByteString, value: certificate },
+                            sourceName: { dataType: DataType.String, value: "Security/Certificate" }
+                        });
+                        break;
+                    case StatusCodes.BadCertificateTimeInvalid:
+                    case StatusCodes.BadCertificateIssuerTimeInvalid:
+                        this.raiseEvent("AuditCertificateExpiredEventType", {
+                            certificate: { dataType: DataType.ByteString, value: certificate },
+                            sourceName: { dataType: DataType.String, value: "Security/Certificate" },
+                            comment: { dataType: DataType.String, value: certificateStatus.toString() }
+                        });
+                        break;
+                    case StatusCodes.BadCertificateRevoked:
+                    case StatusCodes.BadCertificateRevocationUnknown:
+                    case StatusCodes.BadCertificateIssuerRevocationUnknown:
+                        this.raiseEvent("AuditCertificateRevokedEventType", {
+                            certificate: { dataType: DataType.ByteString, value: certificate },
+                            sourceName: { dataType: DataType.String, value: "Security/Certificate" },
+                            comment: { dataType: DataType.String, value: certificateStatus.toString() }
+                        });
+                        break;
+                    case StatusCodes.BadCertificateIssuerUseNotAllowed:
+                    case StatusCodes.BadCertificateUseNotAllowed:
+                    case StatusCodes.BadSecurityChecksFailed:
+                        this.raiseEvent("AuditCertificateMismatchEventType", {
+                            certificate: { dataType: DataType.ByteString, value: certificate },
+                            sourceName: { dataType: DataType.String, value: "Security/Certificate" },
+                            comment: { dataType: DataType.String, value: certificateStatus.toString() }
+                        });
+                        break;
+                    
+                }
+            }
             if (
                 StatusCodes.BadCertificateUntrusted === certificateStatus ||
                 StatusCodes.BadCertificateTimeInvalid === certificateStatus ||
@@ -1507,6 +1590,7 @@ export class OPCUAServer extends OPCUABaseServer {
                 StatusCodes.Good !== certificateStatus
             ) {
                 debugLog("isValidX509IdentityToken => certificateStatus = ", certificateStatus?.toString());
+
                 return callback(null, StatusCodes.BadIdentityTokenRejected);
             }
             if (StatusCodes.Good !== certificateStatus) {
@@ -1570,12 +1654,10 @@ export class OPCUAServer extends OPCUABaseServer {
             password = buff.slice(4, 4 + length).toString("utf-8");
         }
 
-        if (typeof this.userManager.isValidUserAsync === "function") {
-            this.userManager.isValidUserAsync.call(session, userName, password, callback);
-        } else {
-            const authorized = this.userManager.isValidUser!.call(session, userName, password);
-            async.setImmediate(() => callback(null, authorized));
-        }
+        this.userManager
+            .isValidUser(session, userName, password)
+            .then((isValid) => callback(null, isValid))
+            .catch((err) => callback(err));
     }
 
     /**
@@ -1589,7 +1671,7 @@ export class OPCUAServer extends OPCUABaseServer {
         endpointDescription: EndpointDescription,
         callback: (err: Error | null, statusCode?: StatusCode) => void
     ): void {
-        assert(callback instanceof Function);
+        assert(typeof callback === "function");
         /* istanbul ignore next */
         if (!userIdentityToken) {
             throw new Error("Invalid token");
@@ -1682,12 +1764,12 @@ export class OPCUAServer extends OPCUABaseServer {
         // A Server application should limit the number of Sessions. To protect against misbehaving Clients and denial
         // of service attacks, the Server shall close the oldest Session that is not activated before reaching the
         // maximum number of supported Sessions
-        if (this.currentSessionCount >= this.maxAllowedSessionNumber) {
+        if (this.currentSessionCount >= this.engine.serverCapabilities.maxSessions) {
             await _attempt_to_close_some_old_unactivated_session(this);
         }
 
         // check if session count hasn't reach the maximum allowed sessions
-        if (this.currentSessionCount >= this.maxAllowedSessionNumber) {
+        if (this.currentSessionCount >= this.engine.serverCapabilities.maxSessions) {
             return rejectConnection(this, StatusCodes.BadTooManySessions);
         }
 
@@ -1759,7 +1841,7 @@ export class OPCUAServer extends OPCUABaseServer {
         assert(session.sessionTimeout === revisedSessionTimeout);
 
         session.clientDescription = request.clientDescription;
-        session.sessionName = request.sessionName || "<unknown session name>";
+        session.sessionName = request.sessionName || `<unknown session name ${unnamed_session_count++}>`;
 
         // Depending upon on the  SecurityPolicy  and the  SecurityMode  of the  SecureChannel,  the exchange of
         // ApplicationInstanceCertificates   and  Nonces  may be optional and the signatures may be empty. See
@@ -2048,10 +2130,9 @@ export class OPCUAServer extends OPCUABaseServer {
                 if (statusCode !== StatusCodes.Good) {
                     /* istanbul ignore next */
                     if (!(statusCode && statusCode instanceof StatusCode)) {
-                        const a = 23;
+                        return rejectConnection(this, StatusCodes.BadCertificateInvalid);
                     }
-                    assert(statusCode && statusCode instanceof StatusCode, "expecting statusCode");
-                    return rejectConnection(this, statusCode!);
+                    return rejectConnection(this, statusCode);
                 }
                 session.userIdentityToken = request.userIdentityToken as UserIdentityToken;
 
@@ -2159,7 +2240,13 @@ export class OPCUAServer extends OPCUABaseServer {
         // --- check that provided session matches session attached to channel
         if (channel.channelId !== session.channelId) {
             if (!(request instanceof ActivateSessionRequest)) {
-                errorLog(chalk.red.bgWhite("ERROR: channel.channelId !== session.channelId"), channel.channelId, session.channelId);
+                errorLog(
+                    chalk.red.bgWhite(
+                        "ERROR: channel.channelId !== session.channelId  on processing request " + request.constructor.name
+                    ),
+                    channel.channelId,
+                    session.channelId
+                );
             }
             message.session_statusCode = StatusCodes.BadSecureChannelIdInvalid;
         } else if (channel_has_session(channel, session)) {
@@ -2200,13 +2287,14 @@ export class OPCUAServer extends OPCUABaseServer {
 
         function sendResponse(response1: Response) {
             try {
-                assert(response1 instanceof ResponseClass);
+                assert(response1 instanceof ResponseClass || response1 instanceof ServiceFault);
                 if (message.session) {
                     const counterName = ResponseClass.name.replace("Response", "");
                     message.session.incrementRequestTotalCounter(counterName);
                 }
                 return channel.send_response("MSG", response1, message);
             } catch (err) {
+                warningLog(err);
                 // istanbul ignore next
                 if (err instanceof Error) {
                     // istanbul ignore next
@@ -2336,10 +2424,6 @@ export class OPCUAServer extends OPCUABaseServer {
                     return sendError(StatusCodes.BadNothingToDo);
                 }
 
-                //  if (request.subscriptionIds.length > OPCUAServer.MAX_SUBSCRIPTION) {
-                //    return sendError(StatusCodes.BadTooManyOperations);
-                //  }
-
                 const results: any[] = subscriptionIds.map((subscriptionId: number) => actionToPerform(session, subscriptionId));
 
                 // resolve potential pending promises ....
@@ -2352,7 +2436,7 @@ export class OPCUAServer extends OPCUABaseServer {
                 const response = new ResponseClass({
                     responseHeader: {
                         serviceResult:
-                            request.subscriptionIds.length > OPCUAServer.MAX_SUBSCRIPTION
+                            request.subscriptionIds.length > this.engine.serverCapabilities.maxSubscriptionsPerSession
                                 ? StatusCodes.BadTooManyOperations
                                 : StatusCodes.Good
                     },
@@ -2800,7 +2884,11 @@ export class OPCUAServer extends OPCUABaseServer {
             (session: ServerSession, sendResponse: (response: Response) => void, sendError: (statusCode: StatusCode) => void) => {
                 const context = new SessionContext({ session, server: this });
 
-                if (session.currentSubscriptionCount >= OPCUAServer.MAX_SUBSCRIPTION) {
+                if (session.currentSubscriptionCount >= this.engine.serverCapabilities.maxSubscriptionsPerSession) {
+                    return sendError(StatusCodes.BadTooManySubscriptions);
+                }
+
+                if (this.currentSubscriptionCount >= this.engine.serverCapabilities.maxSubscriptions) {
                     return sendError(StatusCodes.BadTooManySubscriptions);
                 }
 
@@ -3037,7 +3125,7 @@ export class OPCUAServer extends OPCUABaseServer {
             (session: ServerSession, sendResponse: (response: Response) => void, sendError: (statusCode: StatusCode) => void) => {
                 assert(session);
                 assert(session.publishEngine); // server.publishEngine doesn't exists, OPCUAServer has probably shut down already
-                session.publishEngine._on_PublishRequest(request, (request1: PublishRequest, response: PublishResponse) => {
+                session.publishEngine._on_PublishRequest(request, (_request1, response) => {
                     sendResponse(response);
                 });
             }
@@ -3104,7 +3192,7 @@ export class OPCUAServer extends OPCUABaseServer {
 
                     sendResponse(response);
                 } catch (err) {
-                    console.log(err);
+                    warningLog(err);
                     return sendError(StatusCodes.BadInternalError);
                 }
             }
@@ -3146,16 +3234,20 @@ export class OPCUAServer extends OPCUABaseServer {
                     linksToAdd,
                     linksToRemove
                 );
-                const response = new SetTriggeringResponse({
-                    responseHeader: { serviceResult: statusCode },
+                if (statusCode !== StatusCodes.Good) {
+                    const response = new ServiceFault({ responseHeader: { serviceResult: statusCode } });
+                    sendResponse(response);
+                } else {
+                    const response = new SetTriggeringResponse({
+                        responseHeader: { serviceResult: statusCode },
 
-                    addResults,
-                    removeResults,
-                    addDiagnosticInfos: null,
-                    removeDiagnosticInfos: null
-                });
-
-                sendResponse(response);
+                        addResults,
+                        removeResults,
+                        addDiagnosticInfos: null,
+                        removeDiagnosticInfos: null
+                    });
+                    sendResponse(response);
+                }
             }
         );
     }
@@ -3339,6 +3431,7 @@ export class OPCUAServer extends OPCUABaseServer {
                         response = new CallResponse({
                             results: results as CallMethodResultOptions[]
                         });
+                        filterDiagnosticInfo(request.requestHeader.returnDiagnostics, response);
                         sendResponse(response);
                     }
                 );
@@ -3355,11 +3448,8 @@ export class OPCUAServer extends OPCUABaseServer {
             message,
             channel,
             (session: ServerSession, sendResponse: (response: Response) => void, sendError: (statusCode: StatusCode) => void) => {
-                let response;
-
                 if (!request.nodesToRegister || request.nodesToRegister.length === 0) {
-                    response = new RegisterNodesResponse({ responseHeader: { serviceResult: StatusCodes.BadNothingToDo } });
-                    return sendResponse(response);
+                    return sendError(StatusCodes.BadNothingToDo);
                 }
                 if (this.engine.serverCapabilities.operationLimits.maxNodesPerRegisterNodes > 0) {
                     if (request.nodesToRegister.length > this.engine.serverCapabilities.operationLimits.maxNodesPerRegisterNodes) {
@@ -3375,7 +3465,7 @@ export class OPCUAServer extends OPCUABaseServer {
                 // NodeId from the request.
                 const registeredNodeIds = request.nodesToRegister.map((nodeId) => session.registerNode(nodeId));
 
-                response = new RegisterNodesResponse({
+                const response = new RegisterNodesResponse({
                     registeredNodeIds
                 });
                 sendResponse(response);
@@ -3392,13 +3482,10 @@ export class OPCUAServer extends OPCUABaseServer {
             message,
             channel,
             (session: ServerSession, sendResponse: (response: Response) => void, sendError: (statusCode: StatusCode) => void) => {
-                let response;
-
                 request.nodesToUnregister = request.nodesToUnregister || [];
 
                 if (!request.nodesToUnregister || request.nodesToUnregister.length === 0) {
-                    response = new UnregisterNodesResponse({ responseHeader: { serviceResult: StatusCodes.BadNothingToDo } });
-                    return sendResponse(response);
+                    return sendError(StatusCodes.BadNothingToDo);
                 }
 
                 if (this.engine.serverCapabilities.operationLimits.maxNodesPerRegisterNodes > 0) {
@@ -3411,7 +3498,7 @@ export class OPCUAServer extends OPCUABaseServer {
 
                 request.nodesToUnregister.map((nodeId: NodeId) => session.unRegisterNode(nodeId));
 
-                response = new UnregisterNodesResponse({});
+                const response = new UnregisterNodesResponse({});
                 sendResponse(response);
             }
         );
@@ -3530,7 +3617,7 @@ export class OPCUAServer extends OPCUABaseServer {
         return endPoint;
     }
 
-    protected async initializeCM(): Promise<void> {
+    public async initializeCM(): Promise<void> {
         await super.initializeCM();
         await this.userCertificateManager.initialize();
     }
@@ -3608,6 +3695,87 @@ export interface RaiseEventTransitionEventData extends RaiseEventData {}
 export interface RaiseEventAuditUrlMismatchEventTypeData extends RaiseEventData {
     endpointUrl: PseudoVariantString;
 }
+
+/**
+ * The SourceName for Events of this type shall be “Security/Certificate”.
+ */
+export interface RaiseAuditCertificateEventData extends RaiseEventData {
+    certificate: PseudoVariantByteString;
+    sourceName: PseudoVariantStringPredefined<"Security/Certificate">;
+}
+
+/**
+ * This EventType inherits all Properties of the AuditCertificateEventType.
+ * Either the InvalidHostname or InvalidUri shall be provided.
+ */
+export interface RaiseAuditCertificateDataMismatchEventData extends RaiseAuditCertificateEventData {
+    /**
+     * InvalidHostname is the string that represents the host name passed in as part of the URL
+     * that is found to be invalid. If the host name was not invalid it can be null.
+     */
+    invalidHostname: PseudoVariantString;
+    /*
+     * InvalidUri is the URI that was passed in and found to not match what is contained in
+     * the certificate. If the URI was not invalid it can be null.
+     */
+    invalidUri: PseudoVariantString;
+}
+export interface RaiseAuditCertificateUntrustedEventData extends RaiseAuditCertificateEventData {}
+/**
+ * This EventType inherits all Properties of the AuditCertificateEventType.
+ *
+ * The SourceName for Events of this type shall be “Security/Certificate”.
+ *
+ * The Message Variable shall include a description of why the certificate was expired
+ * (i.e. time before start or time after end).
+ *
+ * There are no additional Properties defined for this EventType.
+ *
+ */
+export interface RaiseAuditCertificateExpiredEventData extends RaiseAuditCertificateEventData {}
+/**
+ * This EventType inherits all Properties of the AuditCertificateEventType.
+ *
+ * The SourceName for Events of this type shall be “Security/Certificate”.
+ *
+ * The Message shall include a description of why the certificate is invalid.
+ *
+ * There are no additional Properties defined for this EventType.
+ */
+export interface RaiseAuditCertificateInvalidEventData extends RaiseAuditCertificateEventData {}
+/**
+ * This EventType inherits all Properties of the AuditCertificateEventType.
+ *
+ * The SourceName for Events of this type shall be “Security/Certificate”.
+ *
+ * The Message Variable shall include a description of why the certificate is not trusted.
+ * If a trust chain is involved then the certificate that failed in the trust chain should be described.
+ * There are no additional Properties defined for this EventType.
+ */
+export interface RaiseAuditCertificateUntrustedEventData extends RaiseAuditCertificateEventData {}
+/**
+ * This EventType inherits all Properties of the AuditCertificateEventType.
+ *
+ * The SourceName for Events of this type shall be “Security/Certificate”.
+ *
+ * The Message Variable shall include a description of why the certificate is revoked
+ * (was the revocation list unavailable or was the certificate on the list).
+ *
+ *  There are no additional Properties defined for this EventType.
+ */
+export interface RaiseAuditCertificateRevokedEventData extends RaiseAuditCertificateEventData {
+    sourceName: PseudoVariantStringPredefined<"Security/Certificate">;
+}
+/**
+ * This EventType inherits all Properties of the AuditCertificateEventType.
+ *
+ * The SourceName for Events of this type shall be “Security/Certificate”.
+ *
+ * The Message Variable shall include a description of misuse of the certificate.
+ *
+ * There are no additional Properties defined for this EventType
+ */
+export interface RaiseAuditCertificateMismatchEventData extends RaiseAuditCertificateEventData {}
 export interface OPCUAServer {
     /**
      * @internal
@@ -3627,6 +3795,12 @@ export interface OPCUAServer {
     raiseEvent(eventType: "AuditUrlMismatchEventType", options: RaiseEventAuditUrlMismatchEventTypeData): void;
 
     raiseEvent(eventType: "TransitionEventType", options: RaiseEventTransitionEventData): void;
+
+    raiseEvent(eventType: "AuditCertificateInvalidEventType", options: RaiseAuditCertificateInvalidEventData): void;
+    raiseEvent(eventType: "AuditCertificateExpiredEventType", options: RaiseAuditCertificateExpiredEventData): void;
+    raiseEvent(eventType: "AuditCertificateUntrustedEventType", options: RaiseAuditCertificateUntrustedEventData): void;
+    raiseEvent(eventType: "AuditCertificateRevokedEventType", options: RaiseAuditCertificateRevokedEventData): void;
+    raiseEvent(eventType: "AuditCertificateMismatchEventType", options: RaiseAuditCertificateMismatchEventData): void;
 }
 
 export interface OPCUAServer extends EventEmitter {

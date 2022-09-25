@@ -10,7 +10,7 @@ import { decodeExpandedNodeId } from "node-opcua-basic-types";
 import { BinaryStream } from "node-opcua-binary-stream";
 import { Certificate, PrivateKeyPEM, readCertificate, readPrivateKeyPEM, split_der } from "node-opcua-crypto";
 import { makeBufferFromTrace } from "node-opcua-debug";
-import { constructObject } from "node-opcua-factory";
+import { BaseUAObject, getStandardDataTypeFactory } from "node-opcua-factory";
 import {
     computeSignature,
     getCryptoFactory,
@@ -33,23 +33,24 @@ const doDebug = false;
 
 function readMessage(name: string): Buffer {
     const filename = path.join(__dirname, "./fixtures", name);
-    const text = fs.readFileSync(filename, "ascii");
+    const text = fs.readFileSync(filename, "utf-8");
     const message = makeBufferFromTrace(text);
     return message;
 }
 
 async function decodeMessage(buffer: Buffer): Promise<any> {
-    /*
-    const offset = 16 * 3 + 6;
-    buffer = buffer.slice(offset);
-    */
-    const messageBuilder = new MessageBuilder({});
+    const messageBuilder = new MessageBuilder({
+        maxChunkCount: 1,
+        maxChunkSize: buffer.length + 100,
+        maxMessageSize: buffer.length + 100
+    });
+
     messageBuilder.setSecurity(MessageSecurityMode.None, SecurityPolicy.None);
-    let objMessage: any = null;
+    let objMessage: BaseUAObject | null = null;
     messageBuilder.once("full_message_body", (fullMessageBody: Buffer) => {
         const stream = new BinaryStream(fullMessageBody);
         const id = decodeExpandedNodeId(stream);
-        objMessage = constructObject(id);
+        objMessage = getStandardDataTypeFactory().constructObject(id);
         objMessage.decode(stream);
     });
     messageBuilder.feed(buffer);

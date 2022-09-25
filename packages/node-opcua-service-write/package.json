@@ -1,30 +1,24 @@
 {
     "name": "node-opcua-service-write",
-    "version": "2.62.4",
+    "version": "2.77.0",
     "description": "pure nodejs OPCUA SDK - module -service-write",
     "scripts": {
         "test": "mocha",
-        "clean": "node -e \"require('rimraf').sync('_generated_')\"  && node -e \"require('rimraf').sync('dist');\"",
+        "clean": "npx rimraf node_modules dist *.tsbuildinfo _generated_",
         "__generate": "node ./generate",
         "build": "tsc -b"
     },
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "dependencies": {
-        "node-opcua-assert": "2.55.0",
-        "node-opcua-basic-types": "2.62.4",
-        "node-opcua-binary-stream": "2.55.0",
-        "node-opcua-data-value": "2.62.4",
-        "node-opcua-factory": "2.62.4",
-        "node-opcua-nodeid": "2.62.4",
-        "node-opcua-numeric-range": "2.62.4",
-        "node-opcua-service-secure-channel": "2.62.4",
-        "node-opcua-types": "2.62.4"
+        "node-opcua-types": "2.77.0"
     },
     "devDependencies": {
-        "node-opcua-data-model": "2.62.4",
-        "node-opcua-packet-analyzer": "2.62.4",
-        "node-opcua-variant": "2.62.4",
+        "node-opcua-data-model": "2.77.0",
+        "node-opcua-data-value": "2.77.0",
+        "node-opcua-numeric-range": "2.77.0",
+        "node-opcua-packet-analyzer": "2.77.0",
+        "node-opcua-variant": "2.77.0",
         "should": "^13.2.3"
     },
     "author": "Etienne Rossignon",

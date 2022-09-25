@@ -17,12 +17,12 @@ describe("testing Client - Umbrella-A ", function () {
     const test = this;
     test.port = port;
 
-    before((done) => beforeTest(test, done));
-    beforeEach((done) => beforeEachTest(test, done));
-    afterEach((done) => afterEachTest(test, done));
-    after((done) => afterTest(test, done));
+    before(async () => await beforeTest(test));
+    beforeEach(async () => await beforeEachTest(test));
+    afterEach(async () => await afterEachTest(test));
+    after(async () => await afterTest(test));
 
-    require("./u_test_e2e_client")(test);
+    require("./u_test_e2e_client").t(test);
 
     require("./u_test_e2e_call_service")(test);
     require("./u_test_e2e_ClientSession_readVariableValue")(test);
