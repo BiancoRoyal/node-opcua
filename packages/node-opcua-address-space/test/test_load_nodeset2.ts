@@ -294,7 +294,7 @@ describe("testing NodeSet XML file loading", function (this: any) {
         // xx debugLog(xml);
         xml.should.eql(
             `<?xml version="1.0"?>
-<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd" xmlns:ns1="http://opcfoundation.org/UA/DI/Type.xsd">
     <NamespaceUris>
         <Uri>http://opcfoundation.org/UA/DI/</Uri>
     </NamespaceUris>
@@ -336,7 +336,7 @@ describe("testing NodeSet XML file loading", function (this: any) {
             </Field>
         </Definition>
     </UADataType>
-    <UAVariable NodeId="ns=1;i=6450" BrowseName="EnumStrings" ValueRank="1" DataType="LocalizedText">
+    <UAVariable NodeId="ns=1;i=6450" BrowseName="EnumStrings" ParentNodeId="ns=1;i=6244" ValueRank="1" DataType="LocalizedText">
         <DisplayName>EnumStrings</DisplayName>
         <References>
             <Reference ReferenceType="HasTypeDefinition">i=68</Reference>

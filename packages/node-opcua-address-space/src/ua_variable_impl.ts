@@ -310,6 +310,12 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
     public __waiting_callbacks?: any[];
 
     get typeDefinitionObj(): UAVariableType {
+        // istanbul ignore next
+        if (super.typeDefinitionObj && super.typeDefinitionObj.nodeClass !== NodeClass.VariableType) {
+            throw new Error(
+                "Invalid type definition node class , expecting a VariableType got " + NodeClass[super.typeDefinitionObj.nodeClass]
+            );
+        }
         return super.typeDefinitionObj as UAVariableType;
     }
     get typeDefinition(): NodeId {
@@ -381,6 +387,25 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
             return false;
         }
         return this.checkPermissionAndAccessLevelPrivate(context, PermissionType.Write, AccessLevelFlag.CurrentWrite);
+    }
+
+    public canUserReadHistory(context: ISessionContext): boolean {
+        return this.checkPermissionAndAccessLevelPrivate(context, PermissionType.ReadHistory, AccessLevelFlag.HistoryRead);
+    }
+    public canUserWriteHistorizingAttribute(context: ISessionContext): boolean {
+        if (context && !context.checkPermission(this, PermissionType.WriteHistorizing)) {
+            return false;
+        }
+        return true;
+    }
+    public canUserInsertHistory(context: ISessionContext): boolean {
+        return this.checkPermissionAndAccessLevelPrivate(context, PermissionType.InsertHistory, AccessLevelFlag.HistoryWrite);
+    }
+    public canUserModifyHistory(context: ISessionContext): boolean {
+        return this.checkPermissionAndAccessLevelPrivate(context, PermissionType.ModifyHistory, AccessLevelFlag.HistoryWrite);
+    }
+    public canUserDeleteHistory(context: ISessionContext): boolean {
+        return this.checkPermissionAndAccessLevelPrivate(context, PermissionType.DeleteHistory, AccessLevelFlag.HistoryWrite);
     }
 
     /**
@@ -943,6 +968,10 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
         if (!callback) {
             throw new Error("Internal error");
         }
+
+        if (!this.canUserWriteAttribute(context, writeValueOptions.attributeId!)) {
+            return callback(null, StatusCodes.BadUserAccessDenied);
+        }
         const writeValue: WriteValue =
             writeValueOptions instanceof WriteValue ? (writeValueOptions as WriteValue) : new WriteValue(writeValueOptions);
 
@@ -966,18 +995,20 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
                 break;
             case AttributeIds.Historizing:
                 if (writeValue.value!.value.dataType !== DataType.Boolean) {
-                    return callback(null, StatusCodes.BadNotSupported);
+                    return callback(null, StatusCodes.BadTypeMismatch);
+                }
+                if (!this.canUserWriteHistorizingAttribute(context)) {
+                    return callback(null, StatusCodes.BadUserAccessDenied);
                 }
                 // if the variable has no historizing in place reject
-                if (!(this as any)["hA Configuration"]) {
+                if (!this.getChildByName("HA Configuration")) {
                     return callback(null, StatusCodes.BadNotSupported);
                 }
                 // check if user is allowed to do that !
                 // TODO
-
                 this.historizing = !!writeValue.value!.value.value; // yes ! indeed !
-
                 return callback(null, StatusCodes.Good);
+
             default:
                 super.writeAttribute(context, writeValue, callback);
                 break;
@@ -1490,6 +1521,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
         if (typeof this._historyRead !== "function") {
             return callback!(null, new HistoryReadResult({ statusCode: StatusCodes.BadNotReadable }));
         }
+
         this._historyRead(context, historyReadDetails, indexRange, dataEncoding, continuationData, callback!);
     }
 
@@ -1528,6 +1560,12 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
         continuationData: ContinuationData,
         callback: CallbackT<HistoryReadResult>
     ): void {
+        if (!this.canUserReadHistory(context)) {
+            const result = new HistoryReadResult({
+                statusCode: StatusCodes.BadUserAccessDenied
+            });
+            callback(null, result);
+        }
         const result = new HistoryReadResult({
             statusCode: StatusCodes.BadHistoryOperationUnsupported
         });

@@ -173,6 +173,7 @@ import { ISocketData } from "./i_socket_data";
 import { IChannelData } from "./i_channel_data";
 import { UAUserManagerBase, makeUserManager, UserManagerOptions } from "./user_manager";
 import { bindRoleSet } from "./user_manager_ua";
+import { SamplingFunc } from "./sampling_func";
 
 function isSubscriptionIdInvalid(subscriptionId: number): boolean {
     return subscriptionId < 0 || subscriptionId >= 0xffffffff;
@@ -403,7 +404,7 @@ function thumbprint(certificate?: Certificate): string {
  */
 function monitoredItem_read_and_record_value(
     self: MonitoredItem,
-    context: ISessionContext | null,
+    context: ISessionContext,
     oldValue: DataValue,
     node: UAVariable,
     itemToMonitor: any,
@@ -447,13 +448,7 @@ function monitoredItem_read_and_record_value_async(
     });
 }
 
-function build_scanning_node_function(
-    context: ISessionContext,
-    addressSpace: AddressSpace,
-    monitoredItem: MonitoredItem,
-    itemToMonitor: any
-): (dataValue: DataValue, callback: (err: Error | null, dataValue?: DataValue) => void) => void {
-    assert(context instanceof SessionContext);
+function build_scanning_node_function(addressSpace: AddressSpace, itemToMonitor: any): SamplingFunc {
     assert(itemToMonitor instanceof ReadValueId);
 
     const node = addressSpace.findNode(itemToMonitor.nodeId) as UAVariable;
@@ -462,7 +457,11 @@ function build_scanning_node_function(
     if (!node) {
         errorLog(" INVALID NODE ID  , ", itemToMonitor.nodeId.toString());
         dump(itemToMonitor);
-        return (oldData: DataValue, callback: (err: Error | null, dataValue?: DataValue) => void) => {
+        return (
+            _sessionContext: ISessionContext,
+            _oldData: DataValue,
+            callback: (err: Error | null, dataValue?: DataValue) => void
+        ) => {
             callback(
                 null,
                 new DataValue({
@@ -483,13 +482,14 @@ function build_scanning_node_function(
 
         return function func(
             this: MonitoredItem,
+            sessionContext: ISessionContext,
             oldDataValue: DataValue,
             callback: (err: Error | null, dataValue?: DataValue) => void
         ) {
             assert(this instanceof MonitoredItem);
             assert(oldDataValue instanceof DataValue);
             assert(typeof callback === "function");
-            monitoredItem_read_and_record_value_func(this, context, oldDataValue, node, itemToMonitor, callback);
+            monitoredItem_read_and_record_value_func(this, sessionContext, oldDataValue, node, itemToMonitor, callback);
         };
     } else {
         // Attributes, other than the  Value  Attribute, are only monitored for a change in value.
@@ -499,13 +499,14 @@ function build_scanning_node_function(
         // only record value when it has changed
         return function func(
             this: MonitoredItem,
+            sessionContext: ISessionContext,
             oldDataValue: DataValue,
             callback: (err: Error | null, dataValue?: DataValue) => void
         ) {
             assert(this instanceof MonitoredItem);
             assert(oldDataValue instanceof DataValue);
             assert(typeof callback === "function");
-            const newDataValue = node.readAttribute(null, itemToMonitor.attributeId);
+            const newDataValue = node.readAttribute(sessionContext, itemToMonitor.attributeId);
             callback(null, newDataValue);
         };
     }
@@ -513,7 +514,7 @@ function build_scanning_node_function(
 
 function prepareMonitoredItem(context: ISessionContext, addressSpace: AddressSpace, monitoredItem: MonitoredItem) {
     const itemToMonitor = monitoredItem.itemToMonitor;
-    const readNodeFunc = build_scanning_node_function(context, addressSpace, monitoredItem, itemToMonitor);
+    const readNodeFunc = build_scanning_node_function(addressSpace, itemToMonitor);
     monitoredItem.samplingFunc = readNodeFunc;
 }
 
@@ -1574,7 +1575,6 @@ export class OPCUAServer extends OPCUABaseServer {
                             comment: { dataType: DataType.String, value: certificateStatus.toString() }
                         });
                         break;
-                    
                 }
             }
             if (
@@ -1651,7 +1651,7 @@ export class OPCUAServer extends OPCUABaseServer {
             }
 
             const length = buff.readUInt32LE(0) - serverNonce.length;
-            password = buff.slice(4, 4 + length).toString("utf-8");
+            password = buff.subarray(4, 4 + length).toString("utf-8");
         }
 
         this.userManager
@@ -1833,7 +1833,8 @@ export class OPCUAServer extends OPCUABaseServer {
         // see Release 1.02  27  OPC Unified Architecture, Part 4
         const session = this.createSession({
             clientDescription: request.clientDescription,
-            sessionTimeout: revisedSessionTimeout
+            sessionTimeout: revisedSessionTimeout,
+            server: this
         });
         session.endpoint = endpoint;
 
@@ -2101,8 +2102,6 @@ export class OPCUAServer extends OPCUABaseServer {
                     return rejectConnection(this, StatusCodes.BadIdentityChangeNotSupported); // not sure about this code !
                 }
             }
-
-            moveSessionToChannel(session, channel);
         } else if (session.status === "screwed") {
             // session has been used before being activated => this should be detected and session should be dismissed.
             return rejectConnection(this, StatusCodes.BadSessionClosed);
@@ -2134,7 +2133,6 @@ export class OPCUAServer extends OPCUABaseServer {
                     }
                     return rejectConnection(this, statusCode);
                 }
-                session.userIdentityToken = request.userIdentityToken as UserIdentityToken;
 
                 // check if user access is granted
                 this.isUserAuthorized(
@@ -2150,6 +2148,11 @@ export class OPCUAServer extends OPCUABaseServer {
                         if (!authorized) {
                             return rejectConnection(this, StatusCodes.BadUserAccessDenied);
                         } else {
+                            if (session.status === "active") {
+                                moveSessionToChannel(session, channel);
+                            }
+                            session.userIdentityToken = request.userIdentityToken as UserIdentityToken;
+
                             // extract : OPC UA part 4 - 5.6.3
                             // Once used, a serverNonce cannot be used again. For that reason, the Server returns a new
                             // serverNonce each time the ActivateSession Service is called.
@@ -2160,13 +2163,6 @@ export class OPCUAServer extends OPCUABaseServer {
                             response = new ActivateSessionResponse({ serverNonce: session.nonce });
                             channel.send_response("MSG", response, message);
 
-                            const userIdentityTokenPasswordRemoved = (userIdentityToken: any) => {
-                                const a = userIdentityToken.clone();
-                                // remove password
-                                a.password = "*************";
-                                return a;
-                            };
-
                             // send OPCUA Event Notification
                             // see part 5 : 6.4.3 AuditEventType
                             //              6.4.7 AuditSessionEventType
@@ -2175,49 +2171,11 @@ export class OPCUAServer extends OPCUABaseServer {
                             // xx assert(session.channel.clientCertificate instanceof Buffer);
                             assert(session.sessionTimeout > 0);
 
-                            if (this.isAuditing) {
-                                this.raiseEvent("AuditActivateSessionEventType", {
-                                    /* part 5 -  6.4.3 AuditEventType */
-                                    actionTimeStamp: { dataType: "DateTime", value: new Date() },
-                                    status: { dataType: "Boolean", value: true },
+                            raiseAuditActivateSessionEventType.call(this, session);
 
-                                    serverId: { dataType: "String", value: "" },
+                            this.emit("session_activated", session, userIdentityTokenPasswordRemoved(session.userIdentityToken));
 
-                                    // ClientAuditEntryId contains the human-readable AuditEntryId defined in Part 3.
-                                    clientAuditEntryId: { dataType: "String", value: "" },
-
-                                    // The ClientUserId identifies the user of the client requesting an action.
-                                    // The ClientUserId can be obtained from the UserIdentityToken passed in the
-                                    // ActivateSession call.
-                                    clientUserId: { dataType: "String", value: "cc" },
-
-                                    sourceName: { dataType: "String", value: "Session/ActivateSession" },
-
-                                    /* part 5 - 6.4.7 AuditSessionEventType */
-                                    sessionId: { dataType: "NodeId", value: session.nodeId },
-
-                                    /* part 5 - 6.4.10 AuditActivateSessionEventType */
-                                    clientSoftwareCertificates: {
-                                        arrayType: VariantArrayType.Array,
-                                        dataType: "ExtensionObject" /* SignedSoftwareCertificate */,
-                                        value: []
-                                    },
-                                    // UserIdentityToken reflects the userIdentityToken parameter of the ActivateSession
-                                    // Service call.
-                                    // For Username/Password tokens the password should NOT be included.
-                                    userIdentityToken: {
-                                        dataType: "ExtensionObject" /*  UserIdentityToken */,
-                                        value: userIdentityTokenPasswordRemoved(session.userIdentityToken)
-                                    },
-
-                                    // SecureChannelId shall uniquely identify the SecureChannel. The application shall
-                                    // use the same identifier in all AuditEvents related to the Session Service Set
-                                    // (AuditCreateSessionEventType, AuditActivateSessionEventType and their subtypes) and
-                                    // the SecureChannel Service Set (AuditChannelEventType and its subtypes).
-                                    secureChannelId: { dataType: "String", value: session.channel!.channelId!.toString() }
-                                });
-                            }
-                            this.emit("session_activated", session, userIdentityTokenPasswordRemoved);
+                            session.resendMonitoredItemInitialValues();
                         }
                     }
                 );
@@ -2574,7 +2532,7 @@ export class OPCUAServer extends OPCUABaseServer {
                 const requestedMaxReferencesPerNode = Math.min(9876, request.requestedMaxReferencesPerNode);
                 assert(request.nodesToBrowse[0].schema.name === "BrowseDescription");
 
-                const context = new SessionContext({ session, server: this });
+                const context = session.sessionContext;
 
                 const f = callbackify(this.engine.browseWithAutomaticExpansion).bind(this.engine);
                 (f as any)(request.nodesToBrowse, context, (err?: Error | null, results?: BrowseResult[]) => {
@@ -2676,7 +2634,7 @@ export class OPCUAServer extends OPCUABaseServer {
             message,
             channel,
             (session: ServerSession, sendResponse: (response: Response) => void, sendError: (statusCode: StatusCode) => void) => {
-                const context = new SessionContext({ session, server: this });
+                const context = session.sessionContext;
 
                 let response;
 
@@ -2778,7 +2736,7 @@ export class OPCUAServer extends OPCUABaseServer {
                     }
                 }
 
-                const context = new SessionContext({ session, server: this });
+                const context = session.sessionContext;
 
                 // ask for a refresh of asynchronous variables
                 this.engine.refreshValues(request.nodesToRead, 0, (err?: Error | null) => {
@@ -2849,7 +2807,7 @@ export class OPCUAServer extends OPCUABaseServer {
                     nodeToWrite.nodeId = session.resolveRegisteredNode(nodeToWrite.nodeId);
                 }
 
-                const context = new SessionContext({ session, server: this });
+                const context = session.sessionContext;
 
                 assert(request.nodesToWrite[0].schema.name === "WriteValue");
                 this.engine.write(context, request.nodesToWrite, (err: Error | null, results?: StatusCode[]) => {
@@ -2882,7 +2840,7 @@ export class OPCUAServer extends OPCUABaseServer {
             message,
             channel,
             (session: ServerSession, sendResponse: (response: Response) => void, sendError: (statusCode: StatusCode) => void) => {
-                const context = new SessionContext({ session, server: this });
+                const context = session.sessionContext;
 
                 if (session.currentSubscriptionCount >= this.engine.serverCapabilities.maxSubscriptionsPerSession) {
                     return sendError(StatusCodes.BadTooManySubscriptions);
@@ -3417,7 +3375,7 @@ export class OPCUAServer extends OPCUABaseServer {
                 /* jshint validthis: true */
                 const addressSpace = this.engine.addressSpace!;
 
-                const context = new SessionContext({ session, server: this });
+                const context = session.sessionContext;
 
                 async.map(
                     request.methodsToCall,
@@ -3620,6 +3578,58 @@ export class OPCUAServer extends OPCUABaseServer {
     public async initializeCM(): Promise<void> {
         await super.initializeCM();
         await this.userCertificateManager.initialize();
+    }
+}
+
+const userIdentityTokenPasswordRemoved = (userIdentityToken: any) => {
+    const a = userIdentityToken.clone();
+    // remove password
+    a.password = "*************";
+    return a;
+};
+
+function raiseAuditActivateSessionEventType(this: OPCUAServer, session: ServerSession) {
+    if (this.isAuditing) {
+        this.raiseEvent("AuditActivateSessionEventType", {
+            /* part 5 -  6.4.3 AuditEventType */
+            actionTimeStamp: { dataType: "DateTime", value: new Date() },
+            status: { dataType: "Boolean", value: true },
+
+            serverId: { dataType: "String", value: "" },
+
+            // ClientAuditEntryId contains the human-readable AuditEntryId defined in Part 3.
+            clientAuditEntryId: { dataType: "String", value: "" },
+
+            // The ClientUserId identifies the user of the client requesting an action.
+            // The ClientUserId can be obtained from the UserIdentityToken passed in the
+            // ActivateSession call.
+            clientUserId: { dataType: "String", value: "cc" },
+
+            sourceName: { dataType: "String", value: "Session/ActivateSession" },
+
+            /* part 5 - 6.4.7 AuditSessionEventType */
+            sessionId: { dataType: "NodeId", value: session.nodeId },
+
+            /* part 5 - 6.4.10 AuditActivateSessionEventType */
+            clientSoftwareCertificates: {
+                arrayType: VariantArrayType.Array,
+                dataType: "ExtensionObject" /* SignedSoftwareCertificate */,
+                value: []
+            },
+            // UserIdentityToken reflects the userIdentityToken parameter of the ActivateSession
+            // Service call.
+            // For Username/Password tokens the password should NOT be included.
+            userIdentityToken: {
+                dataType: "ExtensionObject" /*  UserIdentityToken */,
+                value: userIdentityTokenPasswordRemoved(session.userIdentityToken)
+            },
+
+            // SecureChannelId shall uniquely identify the SecureChannel. The application shall
+            // use the same identifier in all AuditEvents related to the Session Service Set
+            // (AuditCreateSessionEventType, AuditActivateSessionEventType and their subtypes) and
+            // the SecureChannel Service Set (AuditChannelEventType and its subtypes).
+            secureChannelId: { dataType: "String", value: session.channel!.channelId!.toString() }
+        });
     }
 }
 

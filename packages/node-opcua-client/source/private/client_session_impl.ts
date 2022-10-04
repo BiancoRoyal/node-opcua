@@ -83,10 +83,11 @@ import { WriteRequest, WriteResponse, WriteValue } from "node-opcua-service-writ
 import { StatusCode, StatusCodes, Callback, CallbackT } from "node-opcua-status-code";
 import { ErrorCallback } from "node-opcua-status-code";
 import {
+    AggregateConfigurationOptions,
     BrowseNextRequest,
     BrowseNextResponse,
     HistoryReadValueIdOptions,
-    ServiceFault,
+    UserTokenType,
     WriteValueOptions
 } from "node-opcua-types";
 import { buffer_ellipsis, getFunctionParameterNames, isNullOrUndefined, lowerFirstLetter } from "node-opcua-utils";
@@ -117,6 +118,7 @@ import { ClientSessionKeepAliveManager } from "../client_session_keepalive_manag
 import { ClientSubscription } from "../client_subscription";
 import { Request, Response } from "../common";
 import { repair_client_session } from "../reconnection";
+import { UserIdentityInfo } from "../user_identity_info";
 
 import { ClientSidePublishEngine } from "./client_publish_engine";
 import { ClientSubscriptionImpl } from "./client_subscription_impl";
@@ -238,6 +240,7 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
     public lastRequestSentTime: Date;
     public lastResponseReceivedTime: Date;
     public serverCertificate: Certificate;
+    public userIdentityInfo?: UserIdentityInfo;
     public name = "";
 
     public serverNonce?: Nonce;
@@ -312,6 +315,29 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
         return this._publishEngine!;
     }
 
+    public changeUser(userIdentityInfo: UserIdentityInfo): Promise<StatusCode>;
+    public changeUser(userIdentityInfo: UserIdentityInfo, callback: CallbackT<StatusCode>): void;
+    public changeUser(userIdentityInfo: UserIdentityInfo, callback?: CallbackT<StatusCode>): any {
+        userIdentityInfo = userIdentityInfo || {
+            type: UserTokenType.Anonymous
+        };
+        if (!this._client || !this.userIdentityInfo) {
+            warningLog("changeUser: invalid session");
+            return callback!(null, StatusCodes.BadInternalError);
+        }
+
+        const old_userIdentity: UserIdentityInfo = this.userIdentityInfo;
+ 
+        this._client._activateSession(this, userIdentityInfo, (err1: Error | null, session2?: ClientSessionImpl) => {
+            if (err1) {
+                this.userIdentityInfo = old_userIdentity;
+                console.log("err1  = ", err1.message);
+                return callback!(null, StatusCodes.BadUserAccessDenied);
+            }
+            this.userIdentityInfo = userIdentityInfo;
+            callback!(null, StatusCodes.Good);
+        });
+    }
     /**
      * @method browse
      * @async
@@ -763,6 +789,40 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
         aggregateFn: AggregateFunction,
         processingInterval: number
     ): Promise<HistoryReadResult>;
+    public readAggregateValue(
+        nodesToRead: HistoryReadValueIdOptions[],
+        startTime: DateTime,
+        endTime: DateTime,
+        aggregateFn: AggregateFunction[],
+        processingInterval: number,
+        aggregateConfiguration: AggregateConfigurationOptions,
+        callback: Callback<HistoryReadResult[]>
+    ): void;
+    public async readAggregateValue(
+        nodesToRead: HistoryReadValueIdOptions[],
+        startTime: DateTime,
+        endTime: DateTime,
+        aggregateFn: AggregateFunction[],
+        processingInterval: number,
+        aggregateConfiguration: AggregateConfigurationOptions
+    ): Promise<HistoryReadResult[]>;
+    public readAggregateValue(
+        nodeToRead: HistoryReadValueIdOptions,
+        startTime: DateTime,
+        endTime: DateTime,
+        aggregateFn: AggregateFunction,
+        processingInterval: number,
+        aggregateConfiguration: AggregateConfigurationOptions,
+        callback: Callback<HistoryReadResult>
+    ): void;
+    public async readAggregateValue(
+        nodeToRead: HistoryReadValueIdOptions,
+        startTime: DateTime,
+        endTime: DateTime,
+        aggregateFn: AggregateFunction,
+        processingInterval: number,
+        aggregateConfiguration: AggregateConfigurationOptions
+    ): Promise<HistoryReadResult>;
 
     public readAggregateValue(
         arg0: HistoryReadValueIdOptions[] | HistoryReadValueIdOptions,
@@ -772,8 +832,16 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
         processingInterval: number,
         ...args: any[]
     ): any {
-        const callback = args[0];
+        const callback = typeof args[0] === "function" ? args[0] : args[1];
         assert(typeof callback === "function");
+        const defaultAggregateFunction = {
+            percentDataBad: 100,
+            percentDataGood: 100,
+            treatUncertainAsBad: true,
+            useServerCapabilitiesDefaults: true,
+            useSlopedExtrapolation: false
+        };
+        const aggregateConfiguration = typeof args[0] === "function" ? defaultAggregateFunction : args[0];
 
         const isArray = Array.isArray(arg0);
 
@@ -791,7 +859,8 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
             aggregateType: aggregateFns,
             endTime,
             processingInterval,
-            startTime
+            startTime,
+            aggregateConfiguration
         });
 
         const request = new HistoryReadRequest({
@@ -2277,3 +2346,4 @@ ClientSessionImpl.prototype.unregisterNodes = thenify.withCallback(ClientSession
 ClientSessionImpl.prototype.readNamespaceArray = thenify.withCallback(ClientSessionImpl.prototype.readNamespaceArray, opts);
 ClientSessionImpl.prototype.getBuiltInDataType = thenify.withCallback(ClientSessionImpl.prototype.getBuiltInDataType, opts);
 ClientSessionImpl.prototype.constructExtensionObject = callbackify(ClientSessionImpl.prototype.constructExtensionObject);
+ClientSessionImpl.prototype.changeUser = thenify.withCallback(ClientSessionImpl.prototype.changeUser, opts);

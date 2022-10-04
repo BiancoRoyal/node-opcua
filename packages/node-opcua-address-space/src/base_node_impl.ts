@@ -677,6 +677,9 @@ export class BaseNodeImpl extends EventEmitter implements BaseNode {
         ) {
             return callback(null, StatusCodes.BadAttributeIdInvalid);
         }
+        if (!this.canUserWriteAttribute(context, writeValue.attributeId)) {
+            return callback(null, StatusCodes.BadUserAccessDenied);
+        }
         // by default Node is read-only,
         // this method needs to be overridden to change the behavior
         callback(null, StatusCodes.BadNotWritable);
@@ -1263,6 +1266,23 @@ export class BaseNodeImpl extends EventEmitter implements BaseNode {
     private _clear_caches() {
         BaseNode_clearCache(this);
     }
+
+    public canUserWriteAttribute(context: ISessionContext | null, attributeId: AttributeIds): boolean {
+        // the Client is allowed to write to Attributes other than the Value,
+        // Historizing or RolePermissions Attribute
+        if (!context) return true;
+        if (attributeId === AttributeIds.Historizing) {
+            return context.checkPermission(this, PermissionType.WriteHistorizing);
+        }
+        if (attributeId === AttributeIds.RolePermissions) {
+            return context.checkPermission(this, PermissionType.WriteRolePermissions);
+        }
+        if (attributeId === AttributeIds.Value) {
+            return context.checkPermission(this, PermissionType.Write);
+        }
+        return context.checkPermission(this, PermissionType.WriteAttribute);
+    }
+
     private _readAccessRestrictions(context: ISessionContext | null): DataValue {
         // https://reference.opcfoundation.org/v104/Core/docs/Part3/8.56/
         if (this.accessRestrictions === undefined) {
@@ -1281,7 +1301,7 @@ export class BaseNodeImpl extends EventEmitter implements BaseNode {
         // https://reference.opcfoundation.org/v104/Core/docs/Part3/4.8.3/
 
         // to do check that current user can read permission
-        if (context && !context?.checkPermission(this as any, PermissionType.ReadRolePermissions)) {
+        if (context && !context.checkPermission(this, PermissionType.ReadRolePermissions)) {
             return new DataValue({
                 statusCode: StatusCodes.BadSecurityModeInsufficient
             });
@@ -1312,6 +1332,16 @@ export class BaseNodeImpl extends EventEmitter implements BaseNode {
     }
 
     private _readUserRolePermissions(context: ISessionContext | null): DataValue {
+        const allUserCanSeeTheirOwnRolePermissions = true;
+        if (!allUserCanSeeTheirOwnRolePermissions) {
+            // to do check that current user can read permission
+            if (context && !context.checkPermission(this, PermissionType.ReadRolePermissions)) {
+                return new DataValue({
+                    statusCode: StatusCodes.BadSecurityModeInsufficient
+                });
+            }
+        }
+
         if (this.rolePermissions === undefined) {
             // to do : If not specified, the value of DefaultUserRolePermissions Property from
             // the Namespace Metadata Object associated with the Node is used instead.
@@ -1320,8 +1350,8 @@ export class BaseNodeImpl extends EventEmitter implements BaseNode {
             });
         }
         const context1: ISessionContext = context === null ? SessionContext.defaultContext : context;
-        // for the time being ...
-        // get user Permission
+
+        // for the time being  get user Permission
         const rolePermissions = this.rolePermissions
             .map(({ roleId, permissions }) => {
                 return new RolePermissionType({
@@ -1330,6 +1360,7 @@ export class BaseNodeImpl extends EventEmitter implements BaseNode {
                 });
             })
             .filter(({ roleId }) => context1.currentUserHasRole(roleId));
+
         return new DataValue({
             statusCode: StatusCodes.Good,
             value: {
