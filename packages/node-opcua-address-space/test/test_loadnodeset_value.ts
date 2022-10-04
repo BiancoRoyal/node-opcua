@@ -97,7 +97,7 @@ describe("Testing loading nodeset with extension objects values in types", () =>
         value.value.F2.should.eql([100, 200, 300]);
     });
 
-    const x = (a: string) => a.replace(/^ +/gm, "");
+    const x = (a: string) => a.replace(/^ +/gm, "").split("\n");
 
     it("LNEX4 - export back a nodeset2.xml file with dataType & enum as values", async () => {
         await generateAddressSpace(addressSpace, [nodesets.standard, xml_file1]);
@@ -107,7 +107,7 @@ describe("Testing loading nodeset with extension objects values in types", () =>
 
         // prettier-ignore
         x(xml).should.eql(x(`<?xml version="1.0"?>
-<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd" xmlns:ns1="http://sterfive.com/Small_model/Type.xsd">
     <NamespaceUris>
         <Uri>http://sterfive.com/Small_model/</Uri>
     </NamespaceUris>
@@ -147,14 +147,14 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Field Name="Blue" Value="300"/>
         </Definition>
     </UADataType>
-    <UAVariable NodeId="ns=1;i=6001" BrowseName="EnumValues" ValueRank="1" ArrayDimensions="3" DataType="EnumValueType">
+    <UAVariable NodeId="ns=1;i=6001" BrowseName="EnumValues" ParentNodeId="ns=1;i=3002" ValueRank="1" ArrayDimensions="3" DataType="EnumValueType">
         <DisplayName>EnumValues</DisplayName>
         <References>
             <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
             <Reference ReferenceType="HasModellingRule">i=78</Reference>
         </References>
         <Value>
-            <ListOfExtensionObject>
+            <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
                 <ExtensionObject>
                     <TypeId>
                         <Identifier>i=7616</Identifier>
@@ -219,6 +219,15 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Field Name="F2" ArrayDimensions="0" ValueRank="1" DataType="ns=1;i=3002"/>
         </Definition>
     </UADataType>
+    <UAVariable NodeId="ns=1;i=6006" BrowseName="1:MyStructType" DataType="String">
+        <DisplayName>MyStructType</DisplayName>
+        <References>
+            <Reference ReferenceType="HasTypeDefinition">i=69</Reference>
+        </References>
+        <Value>
+            <uax:String>MyStructDataType</uax:String>
+        </Value>
+    </UAVariable>
     <UAObject NodeId="ns=1;i=5001" BrowseName="Default Binary" SymbolicName="DefaultBinary">
         <DisplayName>Default Binary</DisplayName>
         <References>
@@ -276,7 +285,7 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Field Name="Reverse" Value="1"/>
         </Definition>
     </UADataType>
-    <UAVariable NodeId="ns=1;i=1250" BrowseName="EnumStrings" ValueRank="1" ArrayDimensions="2" DataType="LocalizedText">
+    <UAVariable NodeId="ns=1;i=1250" BrowseName="EnumStrings" ParentNodeId="ns=1;i=49" ValueRank="1" ArrayDimensions="2" DataType="LocalizedText">
         <DisplayName>EnumStrings</DisplayName>
         <References>
             <Reference ReferenceType="HasTypeDefinition">i=68</Reference>
@@ -311,7 +320,7 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Reference ReferenceType="HasSubtype" IsForward="false">ns=1;i=39</Reference>
         </References>
     </UAObjectType>
-    <UAVariable NodeId="ns=1;i=1522" BrowseName="1:FlowDirection" DataType="1:FlowDirection">
+    <UAVariable NodeId="ns=1;i=1522" BrowseName="1:FlowDirection" ParentNodeId="ns=1;i=40" DataType="1:FlowDirection">
         <DisplayName>FlowDirection</DisplayName>
         <References>
             <Reference ReferenceType="HasModellingRule">i=78</Reference>
@@ -329,12 +338,12 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Reference ReferenceType="HasComponent">ns=1;i=1194</Reference>
         </References>
         <Value>
-            <ExtensionObject>
+            <ExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
                 <TypeId>
                     <Identifier>ns=1;i=182</Identifier>
                 </TypeId>
                 <Body>
-                    <ConnectionDetails>
+                    <ConnectionDetails xmlns="http://sterfive.com/Small_model/Types.xsd">
                         <Certificates>
                             <ByteString>SGVsbG8=</ByteString>
                             <ByteString>V29ybGQ=</ByteString>
@@ -345,14 +354,14 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             </ExtensionObject>
         </Value>
     </UAVariableType>
-    <UAVariable NodeId="ns=1;i=11333" BrowseName="1:Url" DataType="String">
+    <UAVariable NodeId="ns=1;i=11333" BrowseName="1:Url" ParentNodeId="ns=1;i=42" DataType="String">
         <DisplayName>Url</DisplayName>
         <References>
             <Reference ReferenceType="HasTypeDefinition">i=63</Reference>
             <Reference ReferenceType="HasModellingRule">i=78</Reference>
         </References>
     </UAVariable>
-    <UAVariable NodeId="ns=1;i=1194" BrowseName="1:Certificates" AccessLevel="3" ValueRank="1" DataType="ByteString">
+    <UAVariable NodeId="ns=1;i=1194" BrowseName="1:Certificates" ParentNodeId="ns=1;i=42" AccessLevel="3" ValueRank="1" DataType="ByteString">
         <DisplayName>Certificates</DisplayName>
         <References>
             <Reference ReferenceType="HasTypeDefinition">i=63</Reference>
@@ -366,16 +375,7 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Reference ReferenceType="HasTypeDefinition">i=69</Reference>
         </References>
         <Value>
-            <String>ConnectionDetails</String>
-        </Value>
-    </UAVariable>
-    <UAVariable NodeId="ns=1;i=6006" BrowseName="1:MyStructType" DataType="String">
-        <DisplayName>MyStructType</DisplayName>
-        <References>
-            <Reference ReferenceType="HasTypeDefinition">i=69</Reference>
-        </References>
-        <Value>
-            <String>MyStructDataType</String>
+            <uax:String>ConnectionDetails</uax:String>
         </Value>
     </UAVariable>
     <UAVariable NodeId="ns=1;i=6009" BrowseName="1:TestVar" AccessLevel="3" DataType="1:MyStructDataType">
@@ -385,12 +385,12 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Reference ReferenceType="HasTypeDefinition">i=63</Reference>
         </References>
         <Value>
-            <ExtensionObject>
+            <ExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
                 <TypeId>
                     <Identifier>ns=1;i=5002</Identifier>
                 </TypeId>
                 <Body>
-                    <MyStructDataType>
+                    <MyStructDataType xmlns="http://sterfive.com/Small_model/Types.xsd">
                         <F1>Orange_200</F1>
                         <F2>
                             <MyEnum>Green_100</MyEnum>
@@ -450,7 +450,7 @@ describe("Testing loading nodeset with extension objects values in types", () =>
 
         // prettier-ignore
         x(xml).should.eql(x(`<?xml version="1.0"?>
-<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uax="http://opcfoundation.org/UA/2008/02/Types.xsd" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd" xmlns:ns1="MyNamespace/Type.xsd" xmlns:ns2="http://opcfoundation.org/UA/AutoID/Type.xsd" xmlns:ns3="http://opcfoundation.org/UA/DI/Type.xsd">
     <NamespaceUris>
         <Uri>MyNamespace</Uri>
         <Uri>http://opcfoundation.org/UA/AutoID/</Uri>
@@ -477,12 +477,12 @@ describe("Testing loading nodeset with extension objects values in types", () =>
             <Reference ReferenceType="HasTypeDefinition">i=63</Reference>
         </References>
         <Value>
-            <ExtensionObject>
+            <ExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
                 <TypeId>
                     <Identifier>ns=2;i=5012</Identifier>
                 </TypeId>
                 <Body>
-                    <RfidScanResult>
+                    <RfidScanResult xmlns="http://opcfoundation.org/UA/AutoID/Types.xsd">
                         <CodeType>Hello</CodeType>
                         <ScanData>
                             <Epc>
@@ -543,7 +543,7 @@ describe("Testing loading nodeset with extension objects values in types", () =>
     });
 
     it("LNEX7- should load nodeset with extension objects and Int64/UInt64 elements", async () => {
-        const doDebug = false;
+        const doDebug = true;
 
         const xml_file = path.join(__dirname, "../test_helpers/test_fixtures/nodeset_with_int64_values.xml");
         await generateAddressSpace(addressSpace, [nodesets.standard, xml_file]);

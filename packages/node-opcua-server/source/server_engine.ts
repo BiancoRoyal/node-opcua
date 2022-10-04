@@ -5,7 +5,7 @@ import { EventEmitter } from "events";
 import * as async from "async";
 import * as chalk from "chalk";
 import { assert } from "node-opcua-assert";
-import { BinaryStream} from "node-opcua-binary-stream";
+import { BinaryStream } from "node-opcua-binary-stream";
 import {
     addElement,
     AddressSpace,
@@ -29,6 +29,7 @@ import {
     DTServerStatus,
     resolveOpaqueOnAddressSpace,
     ContinuationData,
+    IServerBase,
     UARole
 } from "node-opcua-address-space";
 import { generateAddressSpace } from "node-opcua-address-space/nodeJS";
@@ -81,7 +82,8 @@ import {
     ReadValueId,
     TimeZoneDataType,
     ProgramDiagnosticDataType,
-    CallMethodResultOptions
+    CallMethodResultOptions,
+    AggregateConfiguration
 } from "node-opcua-types";
 import { DataType, isValidVariant, Variant, VariantArrayType } from "node-opcua-variant";
 
@@ -94,6 +96,7 @@ import { ServerSession } from "./server_session";
 import { Subscription } from "./server_subscription";
 import { sessionsCompatibleForTransfer } from "./sessions_compatible_for_transfer";
 import { OPCUAServerOptions } from "./opcua_server";
+import { IUserManager } from "node-opcua-address-space/source";
 
 const debugLog = make_debugLog(__filename);
 const errorLog = make_errorLog(__filename);
@@ -266,6 +269,44 @@ function _get_next_subscriptionId() {
     return next_subscriptionId++;
 }
 
+function checkReadProcessedDetails(historyReadDetails: ReadProcessedDetails): StatusCode {
+    if (!historyReadDetails.aggregateConfiguration) {
+        historyReadDetails.aggregateConfiguration = new AggregateConfiguration({
+            useServerCapabilitiesDefaults: true
+        });
+    }
+    if (historyReadDetails.aggregateConfiguration.useServerCapabilitiesDefaults) {
+        return StatusCodes.Good;
+    }
+
+    // The PercentDataGood and PercentDataBad shall follow the following relationship
+    //          PercentDataGood ≥ (100 – PercentDataBad).
+    // If they are equal the result of the PercentDataGood calculation is used.
+    // If the values entered for PercentDataGood and PercentDataBad do not result in a valid calculation
+    //  (e.g. Bad = 80; Good = 0) the result will have a StatusCode of Bad_AggregateInvalidInputs.
+    if (
+        historyReadDetails.aggregateConfiguration.percentDataGood <
+        100 - historyReadDetails.aggregateConfiguration.percentDataBad
+    ) {
+        return StatusCodes.BadAggregateInvalidInputs;
+    }
+    // The StatusCode Bad_AggregateInvalidInputs will be returned if the value of PercentDataGood
+    // or PercentDataBad exceed 100.
+    if (
+        historyReadDetails.aggregateConfiguration.percentDataGood > 100 ||
+        historyReadDetails.aggregateConfiguration.percentDataGood < 0
+    ) {
+        return StatusCodes.BadAggregateInvalidInputs;
+    }
+    if (
+        historyReadDetails.aggregateConfiguration.percentDataBad > 100 ||
+        historyReadDetails.aggregateConfiguration.percentDataBad < 0
+    ) {
+        return StatusCodes.BadAggregateInvalidInputs;
+    }
+    return StatusCodes.Good;
+}
+
 export type StringGetter = () => string;
 
 export interface ServerEngineOptions {
@@ -284,6 +325,7 @@ export interface ServerEngineOptions {
 export interface CreateSessionOption {
     clientDescription?: ApplicationDescription;
     sessionTimeout?: number;
+    server: IServerBase;
 }
 
 export type ClosingReason = "Timeout" | "Terminated" | "CloseSession" | "Forcing";
@@ -400,7 +442,7 @@ export class ServerEngine extends EventEmitter {
                 counter += session.currentSubscriptionCount;
             });
             // we also need to add the orphan subscriptions
-            counter += this._orphanPublishEngine ? this._orphanPublishEngine .subscriptions.length : 0;
+            counter += this._orphanPublishEngine ? this._orphanPublishEngine.subscriptions.length : 0;
             return counter;
         });
 
@@ -1556,6 +1598,12 @@ export class ServerEngine extends EventEmitter {
             if (!historyReadDetails.aggregateType || historyReadDetails.aggregateType.length !== nodesToRead.length) {
                 return callback(null, [new HistoryReadResult({ statusCode: StatusCodes.BadInvalidArgument })]);
             }
+
+            // chkec parameters
+            const parameterStatus = checkReadProcessedDetails(historyReadDetails);
+            if (parameterStatus !== StatusCodes.Good) {
+                return callback(null, [new HistoryReadResult({ statusCode: parameterStatus })]);
+            }
             const promises: Promise<HistoryReadResult>[] = [];
             let index = 0;
             for (const nodeToRead of nodesToRead) {
@@ -1632,7 +1680,7 @@ export class ServerEngine extends EventEmitter {
      */
     public createSession(options: CreateSessionOption): ServerSession {
         options = options || {};
-
+        options.server = options.server || {};
         debugLog("createSession : increasing serverDiagnosticsSummary cumulatedSessionCount/currentSessionCount ");
         this.serverDiagnosticsSummary.cumulatedSessionCount += 1;
         this.serverDiagnosticsSummary.currentSessionCount += 1;
@@ -1642,7 +1690,7 @@ export class ServerEngine extends EventEmitter {
         const sessionTimeout = options.sessionTimeout || 1000;
         assert(typeof sessionTimeout === "number");
 
-        const session = new ServerSession(this, sessionTimeout);
+        const session = new ServerSession(this, options.server.userManager!, sessionTimeout);
 
         debugLog("createSession :sessionTimeout = ", session.sessionTimeout);
 
@@ -1851,7 +1899,7 @@ export class ServerEngine extends EventEmitter {
         if (subscription.$session) {
             subscription.$session._unexposeSubscriptionDiagnostics(subscription);
         }
-        
+
         await ServerSidePublishEngine.transferSubscription(subscription, session.publishEngine, sendInitialValues);
         subscription.$session = session;
 
@@ -1987,14 +2035,18 @@ export class ServerEngine extends EventEmitter {
     }
 
     private _exposeSubscriptionDiagnostics(subscription: Subscription): void {
-        debugLog("ServerEngine#_exposeSubscriptionDiagnostics", subscription.subscriptionId);
-        const subscriptionDiagnosticsArray = this._getServerSubscriptionDiagnosticsArrayNode();
-        const subscriptionDiagnostics = subscription.subscriptionDiagnostics;
-        assert((subscriptionDiagnostics as any).$subscription === subscription);
-        assert(subscriptionDiagnostics instanceof SubscriptionDiagnosticsDataType);
+        try {
+            debugLog("ServerEngine#_exposeSubscriptionDiagnostics", subscription.subscriptionId);
+            const subscriptionDiagnosticsArray = this._getServerSubscriptionDiagnosticsArrayNode();
+            const subscriptionDiagnostics = subscription.subscriptionDiagnostics;
+            assert((subscriptionDiagnostics as any).$subscription === subscription);
+            assert(subscriptionDiagnostics instanceof SubscriptionDiagnosticsDataType);
 
-        if (subscriptionDiagnostics && subscriptionDiagnosticsArray) {
-            addElement(subscriptionDiagnostics, subscriptionDiagnosticsArray);
+            if (subscriptionDiagnostics && subscriptionDiagnosticsArray) {
+                addElement(subscriptionDiagnostics, subscriptionDiagnosticsArray);
+            }
+        } catch (err) {
+            console.log("err", err);
         }
     }
 
