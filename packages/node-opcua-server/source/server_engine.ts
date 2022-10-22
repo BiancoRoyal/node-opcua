@@ -96,7 +96,6 @@ import { ServerSession } from "./server_session";
 import { Subscription } from "./server_subscription";
 import { sessionsCompatibleForTransfer } from "./sessions_compatible_for_transfer";
 import { OPCUAServerOptions } from "./opcua_server";
-import { IUserManager } from "node-opcua-address-space/source";
 
 const debugLog = make_debugLog(__filename);
 const errorLog = make_errorLog(__filename);
@@ -123,25 +122,13 @@ function setSubscriptionDurable(
 ) {
     // see https://reference.opcfoundation.org/v104/Core/docs/Part5/9.3/
     // https://reference.opcfoundation.org/v104/Core/docs/Part4/6.8/
-    assert(Array.isArray(inputArguments));
     assert(typeof callback === "function");
-    assert(Object.prototype.hasOwnProperty.call(context, "session"), " expecting a session id in the context object");
-    const session = context.session as ServerSession;
-    if (!session) {
-        return callback(null, { statusCode: StatusCodes.BadInternalError });
-    }
-    const subscriptionId = inputArguments[0].value as UInt32;
-    const lifetimeInHours = inputArguments[1].value as UInt32;
 
-    const subscription = session.getSubscription(subscriptionId);
-    if (!subscription) {
-        // subscription may belongs to a different session  that ours
-        if (this.findSubscription(subscriptionId)) {
-            // if yes, then access to  Subscription data should be denied
-            return callback(null, { statusCode: StatusCodes.BadUserAccessDenied });
-        }
-        return callback(null, { statusCode: StatusCodes.BadSubscriptionIdInvalid });
-    }
+    const data = _getSubscription.call(this, inputArguments, context);
+    if (data.statusCode) return callback(null, { statusCode: data.statusCode });
+    const { subscription } = data;
+
+    const lifetimeInHours = inputArguments[1].value as UInt32;
     if (subscription.monitoredItemCount > 0) {
         // This is returned when a Subscription already contains MonitoredItems.
         return callback(null, { statusCode: StatusCodes.BadInvalidState });
@@ -199,8 +186,7 @@ function setSubscriptionDurable(
     callback(null, callMethodResult);
 }
 
-// binding methods
-function getMonitoredItemsId(
+function requestServerStateChange(
     this: ServerEngine,
     inputArguments: Variant[],
     context: ISessionContext,
@@ -209,23 +195,70 @@ function getMonitoredItemsId(
     assert(Array.isArray(inputArguments));
     assert(typeof callback === "function");
     assert(Object.prototype.hasOwnProperty.call(context, "session"), " expecting a session id in the context object");
-
     const session = context.session as ServerSession;
     if (!session) {
         return callback(null, { statusCode: StatusCodes.BadInternalError });
     }
 
+    return callback(null, { statusCode: StatusCodes.BadNotImplemented });
+}
+
+function _getSubscription(
+    this: ServerEngine,
+    inputArguments: Variant[],
+    context: ISessionContext
+): { subscription: Subscription, statusCode?: never } | { statusCode: StatusCode, subscription?: never } {
+    assert(Array.isArray(inputArguments));
+    assert(Object.prototype.hasOwnProperty.call(context, "session"), " expecting a session id in the context object");
+    const session = context.session as ServerSession;
+    if (!session) {
+        return { statusCode: StatusCodes.BadInternalError };
+    }
     const subscriptionId = inputArguments[0].value;
     const subscription = session.getSubscription(subscriptionId);
     if (!subscription) {
         // subscription may belongs to a different session  that ours
         if (this.findSubscription(subscriptionId)) {
             // if yes, then access to  Subscription data should be denied
-            return callback(null, { statusCode: StatusCodes.BadUserAccessDenied });
+            return { statusCode: StatusCodes.BadUserAccessDenied };
         }
-
-        return callback(null, { statusCode: StatusCodes.BadSubscriptionIdInvalid });
+        return { statusCode: StatusCodes.BadSubscriptionIdInvalid };
     }
+    return { subscription };
+
+}
+function resendData(
+    this: ServerEngine,
+    inputArguments: Variant[],
+    context: ISessionContext,
+    callback: CallbackT<CallMethodResultOptions>
+): void {
+    assert(typeof callback === "function");
+
+    const data = _getSubscription.call(this, inputArguments, context);
+    if (data.statusCode) return callback(null, { statusCode: data.statusCode });
+    const { subscription } = data;
+
+    subscription.resendInitialValues().then(() => {
+        callback(null, { statusCode: StatusCodes.Good });
+    }).catch((err) => callback(err));
+
+}
+
+
+// binding methods
+function getMonitoredItemsId(
+    this: ServerEngine,
+    inputArguments: Variant[],
+    context: ISessionContext,
+    callback: CallbackT<CallMethodResultOptions>
+) {
+    assert(typeof callback === "function");
+
+    const data = _getSubscription.call(this, inputArguments, context);
+    if (data.statusCode) return callback(null, { statusCode: data.statusCode });
+    const { subscription } = data;
+
     const result = subscription.getMonitoredItems();
     assert(result.statusCode);
     assert(result.serverHandles.length === result.clientHandles.length);
@@ -330,7 +363,7 @@ export interface CreateSessionOption {
 
 export type ClosingReason = "Timeout" | "Terminated" | "CloseSession" | "Forcing";
 
-export type ShutdownTask = (this: ServerEngine) => void | Promise<void>;
+export type ServerEngineShutdownTask = (this: ServerEngine) => void | Promise<void>;
 /**
  *
  */
@@ -352,7 +385,7 @@ export class ServerEngine extends EventEmitter {
     private _sessions: { [key: string]: ServerSession };
     private _closedSessions: { [key: string]: ServerSession };
     private _orphanPublishEngine?: ServerSidePublishEngineForOrphanSubscription;
-    private _shutdownTasks: ShutdownTask[];
+    private _shutdownTasks: ServerEngineShutdownTask[];
     private _applicationUri: string;
     private _expectedShutdownTime!: Date;
     private _serverStatus: ServerStatusDataType;
@@ -511,7 +544,7 @@ export class ServerEngine extends EventEmitter {
      * register a function that will be called when the server will perform its shut down.
      * @method registerShutdownTask
      */
-    public registerShutdownTask(task: (this: ServerEngine) => void): void {
+    public registerShutdownTask(task: ServerEngineShutdownTask): void {
         assert(typeof task === "function");
         this._shutdownTasks.push(task);
     }
@@ -1202,6 +1235,8 @@ export class ServerEngine extends EventEmitter {
 
             this.__internal_bindMethod(makeNodeId(MethodIds.Server_GetMonitoredItems), getMonitoredItemsId.bind(this));
             this.__internal_bindMethod(makeNodeId(MethodIds.Server_SetSubscriptionDurable), setSubscriptionDurable.bind(this));
+            this.__internal_bindMethod(makeNodeId(MethodIds.Server_ResendData), resendData.bind(this));
+            this.__internal_bindMethod(makeNodeId(MethodIds.Server_RequestServerStateChange), requestServerStateChange.bind(this));
 
             // fix getMonitoredItems.outputArguments arrayDimensions
             const fixGetMonitoredItemArgs = () => {
@@ -1415,7 +1450,7 @@ export class ServerEngine extends EventEmitter {
                 (!dataValue.serverTimestamp || dataValue.serverTimestamp.getTime() === minOPCUADate.getTime())
             ) {
                 dataValue.serverTimestamp = context.currentTime.timestamp;
-                dataValue.sourcePicoseconds = 0; // context.currentTime.picosecond // do we really need picosecond here ? this would inflate binary data
+                dataValue.serverPicoseconds = 0; // context.currentTime.picoseconds; 
             }
             dataValues.push(dataValue);
         }
@@ -2246,8 +2281,8 @@ export class ServerEngine extends EventEmitter {
         } else {
             warningLog(
                 chalk.yellow("WARNING:  cannot bind a method with id ") +
-                    chalk.cyan(nodeId.toString()) +
-                    chalk.yellow(". please check your nodeset.xml file or add this node programmatically")
+                chalk.cyan(nodeId.toString()) +
+                chalk.yellow(". please check your nodeset.xml file or add this node programmatically")
             );
             warningLog(traceFromThisProjectOnly());
         }

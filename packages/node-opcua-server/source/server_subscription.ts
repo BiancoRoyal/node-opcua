@@ -6,7 +6,7 @@
 import { EventEmitter } from "events";
 import * as chalk from "chalk";
 
-import { SessionContext,AddressSpace, BaseNode, Duration, UAObjectType } from "node-opcua-address-space";
+import { SessionContext, AddressSpace, BaseNode, Duration, UAObjectType } from "node-opcua-address-space";
 import { assert } from "node-opcua-assert";
 import { Byte, UInt32 } from "node-opcua-basic-types";
 import { SubscriptionDiagnosticsDataType } from "node-opcua-common";
@@ -81,19 +81,22 @@ function _adjust_maxKeepAliveCount(maxKeepAliveCount?: number /*,publishingInter
     return maxKeepAliveCount;
 }
 
+const MaxUint32 = 0xFFFFFFFF;
+
 function _adjust_lifeTimeCount(lifeTimeCount: number, maxKeepAliveCount: number, publishingInterval: number): number {
     lifeTimeCount = lifeTimeCount || 1;
-
-    // let's make sure that lifeTimeCount is at least three time maxKeepAliveCount
-    // Note : the specs say ( part 3  - CreateSubscriptionParameter )
-    //        "The lifetime count shall be a minimum of three times the keep keep-alive count."
-    lifeTimeCount = Math.max(lifeTimeCount, maxKeepAliveCount * 3);
 
     const minTicks = Math.ceil(Subscription.minimumLifetimeDuration / publishingInterval);
     const maxTicks = Math.floor(Subscription.maximumLifetimeDuration / publishingInterval);
 
     lifeTimeCount = Math.max(minTicks, lifeTimeCount);
     lifeTimeCount = Math.min(maxTicks, lifeTimeCount);
+
+    // let's make sure that lifeTimeCount is at least three time maxKeepAliveCount
+    // Note : the specs say ( part 3  - CreateSubscriptionParameter )
+    //        "The lifetime count shall be a minimum of three times the keep keep-alive count."
+    lifeTimeCount = Math.max(lifeTimeCount, Math.min(maxKeepAliveCount * 3, MaxUint32));
+
     return lifeTimeCount;
 }
 
@@ -1362,7 +1365,7 @@ export class Subscription extends EventEmitter {
         const availableSequenceNumbers = this.getAvailableSequenceNumbers();
         assert(
             !response.notificationMessage ||
-                availableSequenceNumbers[availableSequenceNumbers.length - 1] === response.notificationMessage.sequenceNumber
+            availableSequenceNumbers[availableSequenceNumbers.length - 1] === response.notificationMessage.sequenceNumber
         );
         response.availableSequenceNumbers = availableSequenceNumbers;
 
@@ -1439,7 +1442,7 @@ export class Subscription extends EventEmitter {
             } else {
                 debugLog(
                     "     -> subscription.state === LATE , " +
-                        "because keepAlive Response cannot be send due to lack of PublishRequest"
+                    "because keepAlive Response cannot be send due to lack of PublishRequest"
                 );
                 if (this.messageSent || this.keepAliveCounterHasExpired) {
                     this.state = SubscriptionState.LATE;

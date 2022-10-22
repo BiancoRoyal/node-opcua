@@ -52,6 +52,7 @@ import * as semver from "semver";
 
 import { AddressSpacePrivate } from "../../src/address_space_private";
 import { NamespacePrivate } from "../../src/namespace_private";
+import { NodeSetLoaderOptions } from "../interfaces/nodeset_loader_options";
 import { promoteObjectsAndVariables } from "./namespace_post_step";
 import { ensureDatatypeExtracted } from "./ensure_datatype_extracted";
 import { decodeXmlExtensionObject } from "./decode_xml_extension_object";
@@ -1774,10 +1775,7 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
     };
 }
 
-export interface NodeSetLoaderOptions {
-    loadDraftNodes?: boolean;
-    loadDeprecatedNodes?: boolean;
-}
+
 
 export class NodeSetLoader {
     _s: NodeSet2ParserEngine;
