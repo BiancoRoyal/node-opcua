@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-utils",
-    "version": "2.77.0",
+    "version": "2.82.0",
     "description": "pure nodejs OPCUA SDK - module -utils",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -17,7 +17,7 @@
     },
     "devDependencies": {
         "should": "^13.2.3",
-        "sinon": "^14.0.0"
+        "sinon": "^14.0.1"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",

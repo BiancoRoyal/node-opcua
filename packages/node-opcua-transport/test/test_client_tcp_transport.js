@@ -365,6 +365,41 @@ describe("testing ClientTCP_transport", function () {
         });
     });
 
+    it("should send socket_closed on internal timeout - #1205", function (done) {
+        
+        transport.timeout = 100;
+        
+        transport.on("connect", ()=>{
+            console.log("B - transport connected")
+        });
+
+        const spyOnServerWrite = sinon.spy(function (socket, data) {
+            assert(data);
+            // received Fake HEL Message
+            // send Fake ACK response
+            const messageChunk = packTcpMessage("ACK", fakeAcknowledgeMessage);
+            socket.write(messageChunk);
+        });
+
+        fakeServer.pushResponse(spyOnServerWrite);
+
+        transport.on("socket_closed", function () {
+            clearTimeout(timeoutId);
+            done();
+        });
+
+        transport.connect(endpointUrl,  () => {
+            console.log("A  - transport connected");
+        });
+        
+        console.log("transport.timeout ", transport.timeout);
+        const timeoutId = setTimeout(()=>{
+            done(new Error("the ClientTCP_transport didn't receive the socket_close event as the communication timed out"))
+        }, transport.timeout + 10000);
+
+    });
+
+
     it("should returns an error if url has invalid port", function (done) {
         transport.connect("opc.tcp://localhost:XXXXX/SomeAddress", function (err) {
             if (err) {
@@ -383,4 +418,5 @@ describe("testing ClientTCP_transport", function () {
             }
         });
     });
+
 });

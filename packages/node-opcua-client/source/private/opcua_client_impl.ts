@@ -453,18 +453,13 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
     }
 
     /**
-     * @method changeSessionIdentity
-     * @param session
-     * @param userIdentityInfo
-     * @param callback
-     * @async
-     * @deprecated : use session.changeUser instead
+     * @deprecated use session.changeUser instead
      */
     public async changeSessionIdentity(session: ClientSession, userIdentityInfo: UserIdentityInfo): Promise<StatusCode>;
     public changeSessionIdentity(session: ClientSession, userIdentityInfo: UserIdentityInfo, callback: CallbackT<StatusCode>): void;
     public changeSessionIdentity(...args: any[]): any {
         warningLog(
-            "[NODE-OPCUA-W27] OPCUAClient.changeSessionIdentity(session,...) is deprecated use ClientSession.changeUser instead"
+            "[NODE-OPCUA-W27] OPCUAClient.changeSessionIdentity(session,userIdentity) is deprecated use ClientSession.changeUser(userIdentity) instead"
         );
         const session = args[0] as ClientSessionImpl;
         const userIdentityInfo = args[1] as UserIdentityInfo;
@@ -1120,12 +1115,14 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 
         if (!this.endpoint) {
             if (this.endpointMustExist) {
-                debugLog(
+                warningLog(
                     "OPCUAClientImpl#endpointMustExist = true and endpoint with url ",
                     this._secureChannel!.endpointUrl,
                     " cannot be found"
                 );
-
+                const infos = this._serverEndpoints.map((endpoint: EndpointDescription) => `${endpoint.endpointUrl} ${MessageSecurityMode[ endpoint.securityMode]}, ${endpoint.securityPolicyUri } `);
+                warningLog("Valid endpoints are ");
+                warningLog("   "+ infos.join("\n   "));
                 return false;
             } else {
                 // fallback :
