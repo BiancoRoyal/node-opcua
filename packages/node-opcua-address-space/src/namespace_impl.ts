@@ -46,6 +46,7 @@ import {
     CreateNodeOptions,
     EnumerationItem,
     INamespace,
+    RequiredModel,
     UADataType,
     UAEventType,
     UAMethod,
@@ -123,6 +124,7 @@ import { UAReferenceTypeImpl } from "./ua_reference_type_impl";
 import { UAViewImpl } from "./ua_view_impl";
 import { UAStateMachineImpl, UATransitionImpl } from "./state_machine/finite_state_machine";
 import { _addMultiStateValueDiscrete } from "./data_access/ua_multistate_value_discrete_impl";
+import { notDeepEqual } from "assert";
 
 function _makeHashKey(nodeId: NodeId): string | number {
     switch (nodeId.identifierType) {
@@ -218,7 +220,6 @@ export class NamespaceImpl implements NamespacePrivate {
     public readonly namespaceUri: string;
     public addressSpace: AddressSpacePrivate;
     public readonly index: number;
-
     public emulateVersion103 = false;
 
     public version = "0.0.0";
@@ -226,6 +227,7 @@ export class NamespaceImpl implements NamespacePrivate {
 
     public registerSymbolicNames = false;
 
+    private _requiredModels?: RequiredModel[];
     private _objectTypeMap: Map<string, UAObjectType>;
     private _variableTypeMap: Map<string, UAVariableType>;
     private _referenceTypeMap: Map<string, UAReferenceType>;
@@ -1416,7 +1418,13 @@ export class NamespaceImpl implements NamespacePrivate {
     // State and Transition
     // -------------------------------------------------------------------------
     public toNodeset2XML(): string {
-        return "";
+        return "<toNodeset2XML>has not be installed</toNodeset2XML>!";
+    }
+    public setRequiredModels(requiredModels: RequiredModel[]): void {
+        this._requiredModels = requiredModels;
+    }
+    public getRequiredModels(): RequiredModel[] | undefined {
+        return this._requiredModels;
     }
 
     // -------------------------------------------------------------------------
@@ -1896,7 +1904,9 @@ export class NamespaceImpl implements NamespacePrivate {
     private _registerObjectType(node: UAObjectType) {
         assert(this.index === node.nodeId.namespace);
         const key = node.browseName.name!;
-        assert(!this._objectTypeMap.has(key), " UAObjectType already declared");
+        if (this._objectTypeMap.has(key)) {
+            throw new Error(" UAObjectType already declared " + node.browseName.toString() + "  " + node.nodeId.toString());
+        }
         this._objectTypeMap.set(key, node);
     }
 

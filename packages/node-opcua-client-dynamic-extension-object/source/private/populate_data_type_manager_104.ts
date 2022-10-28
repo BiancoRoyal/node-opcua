@@ -6,7 +6,7 @@ import { NodeId, NodeIdLike, resolveNodeId } from "node-opcua-nodeid";
 import { IBasicSession, BrowseDescriptionLike } from "node-opcua-pseudo-session";
 import { createDynamicObjectConstructor as createDynamicObjectConstructorAndRegister } from "node-opcua-schemas";
 import { StatusCodes } from "node-opcua-status-code";
-import { ReferenceDescription, BrowseResult, BrowseDescriptionOptions } from "node-opcua-types";
+import { ReferenceDescription, BrowseResult, BrowseDescriptionOptions, StructureDefinition, DataTypeDefinition } from "node-opcua-types";
 
 //
 import { ExtraDataTypeManager } from "../extra_data_type_manager";
@@ -14,6 +14,7 @@ import {
     CacheForFieldResolution,
     convertDataTypeDefinitionToStructureTypeSchema
 } from "../convert_data_type_definition_to_structuretype_schema";
+
 const errorLog = make_errorLog(__filename);
 const debugLog = make_debugLog(__filename);
 
@@ -41,12 +42,16 @@ export async function readDataTypeDefinitionAndBuildType(
         }
         const isAbstract = isAbstractDataValue.value.value as boolean;
 
+        let dataTypeDefinition: DataTypeDefinition = dataTypeDefinitionDataValue.value.value as DataTypeDefinition;
         /* istanbul ignore next */
         if (dataTypeDefinitionDataValue.statusCode !== StatusCodes.Good) {
-            throw new Error(" Cannot find dataType Definition ! with nodeId =" + dataTypeNodeId.toString());
+            if (!isAbstract) {
+                throw new Error(" Cannot find dataType Definition ! with nodeId =" + dataTypeNodeId.toString());
+            }
+            // it is OK to not have dataTypeDefinition for Abstract type!
+            dataTypeDefinition = new StructureDefinition();
         }
-        const dataTypeDefinition = dataTypeDefinitionDataValue.value.value;
-
+  
         const schema = await convertDataTypeDefinitionToStructureTypeSchema(
             session,
             dataTypeNodeId,
@@ -177,10 +182,14 @@ export async function populateDataTypeManager104(session: IBasicSession, dataTyp
         const dataTypeNodeId = r.nodeId;
         try {
             const dataTypeFactory = dataTypeManager.getDataTypeFactory(dataTypeNodeId.namespace);
+            if(!dataTypeFactory) {
+                throw new Error("cannot find dataType Manager for namespace of " + dataTypeNodeId.toString());
+            }
             if (dataTypeNodeId.namespace === 0) {
                 // already known I guess
                 return;
             }
+
             // if not found already
             if (dataTypeFactory.getStructureInfoForDataType(dataTypeNodeId)) {
                 // already known !
