@@ -123,7 +123,6 @@ function isNodeIdString(str: unknown): boolean {
     return str.substring(0, 2) === "i=" || str.substring(0, 3) === "ns=";
 }
 
-
 /**
  * `AddressSpace` is a collection of UA nodes.
  *
@@ -423,7 +422,9 @@ export class AddressSpace implements AddressSpacePrivate {
         // +-> Structure
         //       +-> Node
         //            +-> ObjectNode
-        if (dataType instanceof NodeId) {
+        if (dataType instanceof UADataTypeImpl) {
+            return this.findDataType(dataType.nodeId);
+        } else if (dataType instanceof NodeId) {
             return _find_by_node_id<UADataType>(this, dataType!, namespaceIndex);
         }
         if (typeof dataType === "number") {
@@ -1346,29 +1347,16 @@ export class AddressSpace implements AddressSpacePrivate {
                 _nodeId = (_nodeId as any).nodeId as NodeId;
             }
             _nodeId = resolveNodeId(_nodeId);
-            /* istanbul ignore next */
-            if (!(_nodeId instanceof NodeId) || _nodeId.isEmpty()) {
-                // tslint:disable:no-console
-                console.log("xx =>", JSON.stringify(params, null, " "));
-                throw new Error(" Invalid reference nodeId " + _nodeId.toString());
-            }
             params.nodeId = _nodeId;
         }
         return new ReferenceImpl(params);
     }
 
-    /**
-     *
-     * @param references
-     */
     public normalizeReferenceTypes(references: AddReferenceOpts[] | ReferenceImpl[] | null): UAReference[] {
         if (!references || references.length === 0) {
             return [];
         }
-        references = references as UAReference[] | AddReferenceOpts[];
-        assert(Array.isArray(references));
-
-        return (references as any).map((el: UAReference | AddReferenceOpts) => this.normalizeReferenceType(el));
+        return references.map((el) => this.normalizeReferenceType(el));
     }
 
     // -- Historical Node  -----------------------------------------------------------------------------------------
