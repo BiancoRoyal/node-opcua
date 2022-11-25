@@ -40,6 +40,7 @@ import { UANamespace_process_modelling_rule } from "./namespace_private";
 import { ReferenceImpl } from "./reference_impl";
 import { BaseNodeImpl, getReferenceType } from "./base_node_impl";
 import { AddressSpacePrivate } from "./address_space_private";
+import { wipeMemorizedStuff } from "./tool_isSupertypeOf";
 
 // eslint-disable-next-line prefer-const
 let doTrace = checkDebugFlag("INSTANTIATE");
@@ -49,17 +50,35 @@ const g_weakMap = new WeakMap();
 
 const warningLog = make_warningLog(__filename);
 
+interface BaseNodeCacheInner {
+    typeDefinition?: NodeId;
+    _childByNameMap?: Record<string, BaseNode>;
+    typeDefinitionObj?: UAVariableType | UAObjectType | null;
+    _aggregates?: BaseNode[];
+    _components?: BaseNode[];
+    _properties?: BaseNode[];
+    _notifiers?: BaseNode[];
+    _eventSources?: BaseNode[];
+    _methods?: UAMethod[];
+    _ref?: Record<string, UAReference[]>;
+    _encoding?: Record<string, UAObject | null>;
+    _subtype_id?: Record<string, UAReferenceType[]> | null;
+    _subtype_idx?: Record<string, UAReferenceType> | null;
+    _subtype_idxVersion?: number;
+    _allSubTypes?: UAReferenceType[] | null;
+    _allSubTypesVersion?: number;
+    _subtypeOfObj?: BaseNode | null;
+}
+
 interface BaseNodeCache {
     __address_space: IAddressSpace | null;
     _browseFilter?: (this: BaseNode, context?: ISessionContext) => boolean;
-    _cache: any;
+    _cache: BaseNodeCacheInner;
     _description?: LocalizedText;
     _displayName: LocalizedText[];
     _parent?: BaseNode | null;
-
     _back_referenceIdx: { [key: string]: UAReference };
     _referenceIdx: { [key: string]: UAReference };
-
     _subtype_idxVersion: number;
     _subtype_idx: any;
 }
@@ -100,7 +119,7 @@ export function BaseNode_getPrivate(self: BaseNode): BaseNodeCache {
     return g_weakMap.get(self);
 }
 
-export function BaseNode_getCache(node: BaseNode): any {
+export function BaseNode_getCache(node: BaseNode): BaseNodeCacheInner {
     return BaseNode_getPrivate(node)._cache;
 }
 export function BaseNode_clearCache(node: BaseNode): void {
@@ -108,6 +127,7 @@ export function BaseNode_clearCache(node: BaseNode): void {
     if (_private && _private._cache) {
         _private._cache = {};
     }
+    wipeMemorizedStuff(node);
 }
 const hasTypeDefinition_ReferenceTypeNodeId = resolveNodeId("HasTypeDefinition");
 
@@ -484,7 +504,8 @@ function _clone_collection_new(
         }
 
         if (optionalFilter && node && !optionalFilter.shouldKeep(node)) {
-            doTrace && traceLog(extraInfo.pad(), "skipping optional ", node.browseName.toString(), "that doesn't appear in the filter");
+            doTrace &&
+                traceLog(extraInfo.pad(), "skipping optional ", node.browseName.toString(), "that doesn't appear in the filter");
             continue; // skip this node
         }
         const key = node.browseName.toString();
@@ -541,7 +562,7 @@ function _extractInterfaces2(typeDefinitionNode: UAObjectType | UAVariableType, 
 
     const hasInterfaceReference = addressSpace.findReferenceType("HasInterface");
     if (!hasInterfaceReference) {
-        // this version of the standard UA namespace doesn't support Interface yet 
+        // this version of the standard UA namespace doesn't support Interface yet
         return [];
     }
     // example:
@@ -662,6 +683,10 @@ function _cloneInterface(
 
     extraInfo = extraInfo || defaultExtraInfo;
     const addressSpace = node.addressSpace;
+
+    if (node.nodeClass !== NodeClass.Object && node.nodeClass !== NodeClass.Variable) {
+        return;
+    }
     const typeDefinitionNode = node.typeDefinitionObj;
     if (!typeDefinitionNode) {
         return;
@@ -669,10 +694,7 @@ function _cloneInterface(
     const interfaces = _extractInterfaces2(typeDefinitionNode, extraInfo);
     if (interfaces.length === 0) {
         if (doTrace) {
-            traceLog(
-                extraInfo.pad(),
-                chalk.yellow("No interface for ", node.browseName.toString(), node.nodeId.toString())
-            );
+            traceLog(extraInfo.pad(), chalk.yellow("No interface for ", node.browseName.toString(), node.nodeId.toString()));
         }
         return;
     }
@@ -797,25 +819,25 @@ export function _clone<T extends UAObject | UAVariable | UAMethod>(
         const browseNameMap = new Set<string>();
         _clone_children_references(this, cloneObj, options.copyAlsoModellingRules, newFilter!, extraInfo, browseNameMap);
 
-        //
-        let typeDefinitionNode: UAVariableType | UAObjectType | null = this.typeDefinitionObj;
-        while (typeDefinitionNode) {
-            doTrace &&
-                traceLog(
-                    extraInfo?.pad(),
-                    chalk.blueBright("---------------------- Exploring ", typeDefinitionNode.browseName.toString())
+        if (this.nodeClass === NodeClass.Object || this.nodeClass === NodeClass.Variable) {
+            let typeDefinitionNode: UAVariableType | UAObjectType | null = this.typeDefinitionObj;
+            while (typeDefinitionNode) {
+                doTrace &&
+                    traceLog(
+                        extraInfo?.pad(),
+                        chalk.blueBright("---------------------- Exploring ", typeDefinitionNode.browseName.toString())
+                    );
+                _clone_children_references(
+                    typeDefinitionNode,
+                    cloneObj,
+                    options.copyAlsoModellingRules,
+                    newFilter,
+                    extraInfo,
+                    browseNameMap
                 );
-            _clone_children_references(
-                typeDefinitionNode,
-                cloneObj,
-                options.copyAlsoModellingRules,
-                newFilter,
-                extraInfo,
-                browseNameMap
-            );
-            typeDefinitionNode = typeDefinitionNode.subtypeOfObj;
+                typeDefinitionNode = typeDefinitionNode.subtypeOfObj;
+            }
         }
-
         _clone_non_hierarchical_references(this, cloneObj, options.copyAlsoModellingRules, newFilter, extraInfo, browseNameMap);
     }
     cloneObj.propagate_back_references();
