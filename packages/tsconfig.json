@@ -4,7 +4,7 @@
         "strictFunctionTypes": true,
         "noImplicitAny": true,
         "noImplicitReturns": true,
-        "target": "es6",
+        "target": "es2015",
         "module": "commonjs",
         "declaration": true,
         "sourceMap": true,
@@ -50,6 +50,7 @@
         { "path": "node-opcua-service-secure-channel" },
         { "path": "node-opcua-types" },
         { "path": "node-opcua-nodeset-woodworking" },
-        { "path": "node-opcua-nodeset-ijt" }
+        { "path": "node-opcua-nodeset-ijt" },
+        { "path": "node-opcua-units" }
     ]
 }

@@ -28,7 +28,8 @@ import {
     AccessLevelFlag,
     makeAccessLevelFlag,
     AttributeIds,
-    isDataEncoding
+    isDataEncoding,
+    QualifiedName
 } from "node-opcua-data-model";
 import { extractRange, sameDataValue, DataValue, DataValueLike, DataValueT } from "node-opcua-data-value";
 import { coerceClock, getCurrentClock, PreciseClock } from "node-opcua-date-time";
@@ -87,6 +88,8 @@ import {
     propagateTouchValueUpward,
     setExtensionObjectValue,
     _bindExtensionObject,
+    _bindExtensionObjectArray,
+    _bindExtensionObjectMatrix,
     _installExtensionObjectBindingOnProperties,
     _setExtensionObject,
     _touchValue
@@ -97,9 +100,7 @@ const warningLog = make_warningLog(__filename);
 const doDebug = checkDebugFlag(__filename);
 const errorLog = make_errorLog(__filename);
 
-function isGoodish(statusCode: StatusCode) {
-    return statusCode.value < 0x10000000;
-}
+
 
 export function adjust_accessLevel(accessLevel: string | number | null): AccessLevelFlag {
     accessLevel = utils.isNullOrUndefined(accessLevel) ? "CurrentRead | CurrentWrite" : accessLevel;
@@ -494,7 +495,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
 
         let dataValue = this.$dataValue;
 
-        if (isGoodish(dataValue.statusCode)) {
+        if (dataValue.statusCode.isGoodish()) {
             // note : extractRange will clone the dataValue
             dataValue = extractRange(dataValue, indexRange);
         }
@@ -542,7 +543,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
     public asyncRefresh(oldestDate: Date, callback: CallbackT<DataValue>): void;
     public asyncRefresh(oldestDate: Date): Promise<DataValue>;
     public asyncRefresh(...args: any[]): any {
-        if (isGoodish(this.$dataValue.statusCode)) {
+        if (this.$dataValue.statusCode.isGoodish()) {
             this.verifyVariantCompatibility(this.$dataValue.value);
         }
 
@@ -1473,24 +1474,41 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
      * @return {ExtensionObject}
      */
     public bindExtensionObjectScalar(
-        optionalExtensionObject: ExtensionObject,
+        optionalExtensionObject?: ExtensionObject,
         options?: BindExtensionObjectOptions
     ): ExtensionObject | null {
-        return this.bindExtensionObject(optionalExtensionObject, options) as ExtensionObject | null;
+        return _bindExtensionObject(this, optionalExtensionObject, options) as ExtensionObject;
     }
 
     public bindExtensionObjectArray(
-        optionalExtensionObject: ExtensionObject[],
+        optionalExtensionObject?: ExtensionObject[],
         options?: BindExtensionObjectOptions
     ): ExtensionObject[] | null {
-        return this.bindExtensionObject(optionalExtensionObject, options) as ExtensionObject[] | null;
+        assert(this.valueRank === 1, "expecting a Array variable here");
+        return _bindExtensionObjectArray(this, optionalExtensionObject, options) as ExtensionObject[];
     }
 
     public bindExtensionObject(
         optionalExtensionObject?: ExtensionObject | ExtensionObject[],
         options?: BindExtensionObjectOptions
     ): ExtensionObject | ExtensionObject[] | null {
-        return _bindExtensionObject(this, optionalExtensionObject, options);
+        if (optionalExtensionObject) {
+            if (optionalExtensionObject instanceof Array) {
+                return this.bindExtensionObjectArray(optionalExtensionObject, options);
+            } else {
+                return this.bindExtensionObjectScalar(optionalExtensionObject, options);
+            }
+        }
+        assert(optionalExtensionObject === undefined);
+        if (this.valueRank === -1) {
+            return this.bindExtensionObjectScalar(undefined, options);
+        } else if (this.valueRank === 1) {
+            return this.bindExtensionObjectArray(undefined, options);
+        } else if (this.valueRank > 1) {
+            return _bindExtensionObjectMatrix(this, undefined, options);
+        }
+        //  unsupported case ... 
+        return null;
     }
 
     public updateExtensionObjectPartial(partialExtensionObject?: { [key: string]: any }): ExtensionObject {
@@ -1832,14 +1850,15 @@ UAVariableImpl.prototype.writeAttribute = thenify.withCallback(UAVariableImpl.pr
 UAVariableImpl.prototype.historyRead = thenify.withCallback(UAVariableImpl.prototype.historyRead);
 UAVariableImpl.prototype.readValueAsync = thenify.withCallback(UAVariableImpl.prototype.readValueAsync);
 
-export interface UAVariableImpl {
-    $$variableType?: any;
-    $$dataType?: any;
-    $$getElementBrowseName: any;
-    $$extensionObjectArray: any;
-    $$indexPropertyName: any;
+export interface UAVariableImplExtArray {
+    $$variableType?: UAVariableType;
+    $$dataType: UADataType;
+    $$getElementBrowseName: (extObject: ExtensionObject, index: number | number[]) => QualifiedName;
+    $$extensionObjectArray: ExtensionObject[];
+    $$indexPropertyName: string;
 }
-
+export interface UAVariableImpl extends UAVariableImplExtArray {
+}
 function check_valid_array(dataType: DataType, array: any): boolean {
     if (Array.isArray(array)) {
         return true;
@@ -1980,7 +1999,7 @@ function _Variable_bind_with_async_refresh(this: UAVariableImpl, options: any) {
 
     this.refreshFunc = options.refreshFunc;
 
-    // assert(this.readValue().statusCode === StatusCodes.BadNodeIdUnknown);
+    // assert(this.readValue().statusCode.equals(StatusCodes.BadNodeIdUnknown));
     this.$dataValue.statusCode = StatusCodes.UncertainInitialValue;
 
     // TO DO : REVISIT THIS ASSUMPTION
@@ -2071,7 +2090,7 @@ function _Variable_bind_with_simple_get(this: UAVariableImpl, options: GetterOpt
         if (is_StatusCode(value)) {
             return new DataValue({ statusCode: value });
         } else {
-            if (!this.$dataValue || !isGoodish(this.$dataValue.statusCode) || !sameVariant(this.$dataValue.value, value)) {
+            if (!this.$dataValue || !this.$dataValue.statusCode.isGoodish() || !sameVariant(this.$dataValue.value, value)) {
                 this.setValueFromSource(value, StatusCodes.Good);
             }
             return this.$dataValue;
