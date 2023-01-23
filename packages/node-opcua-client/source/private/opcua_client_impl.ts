@@ -755,7 +755,11 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         }
         // istanbul ignore next
         if (!this.__resolveEndPoint() || !this.endpoint) {
-            return callback!(new Error(" End point must exist " + this._secureChannel.endpointUrl));
+            return callback!(            
+                new Error(
+                    " End point must exist " + this._secureChannel!.endpointUrl + 
+                    "  securityMode = " + MessageSecurityMode[this.securityMode] + 
+                    "  securityPolicy = " + this.securityPolicy));
         }
 
         assert(
@@ -844,6 +848,9 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         //        which are two different nonce, with different size (although they share the same name )
         this.clientNonce = crypto.randomBytes(32);
 
+        // recycle session name if already exists
+        const sessionName =  session.name 
+
         const request = new CreateSessionRequest({
             clientCertificate: this.getCertificate(),
             clientDescription: applicationDescription,
@@ -852,7 +859,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
             maxResponseMessageSize: 800000,
             requestedSessionTimeout: this.requestedSessionTimeout,
             serverUri: this.serverUri,
-            sessionName: this._nextSessionName()
+            sessionName,
         });
 
         // a client Nonce must be provided if security mode is set
@@ -897,7 +904,6 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 
             // todo: verify SignedSoftwareCertificates and  response.serverSignature
 
-            session = session || new ClientSessionImpl(this);
             session.name = request.sessionName || "";
             session.sessionId = response.sessionId;
             session.authenticationToken = response.authenticationToken;
@@ -1152,20 +1158,27 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         assert(this._secureChannel);
         if (!this.__resolveEndPoint() || !this.endpoint) {
             /* istanbul ignore next */
-            if (doDebug && this._serverEndpoints) {
-                debugLog(
+            if (this._serverEndpoints) {
+                warningLog("server endpoints =",
                     this._serverEndpoints.map(
                         (endpoint) =>
-                            endpoint.endpointUrl + " " + endpoint.securityMode.toString() + " " + endpoint.securityPolicyUri
-                    )
+                            endpoint.endpointUrl + " "
+                             + MessageSecurityMode[endpoint.securityMode] + " " 
+                             + endpoint.securityPolicyUri + " " 
+                             + endpoint.userIdentityTokens?.map((u)=> UserTokenType[u.tokenType]).join(",")
+                    ).join('\n')
                 );
             }
-            return callback(new Error(" End point must exist " + this._secureChannel!.endpointUrl));
+            return callback(new Error(
+                " End point must exist " + this._secureChannel!.endpointUrl + 
+                "  securityMode = " + MessageSecurityMode[this.securityMode] + 
+                "  securityPolicy = " + this.securityPolicy));
         }
         this.serverUri = this.endpoint.server.applicationUri || "invalid application uri";
         this.endpointUrl = this._secureChannel!.endpointUrl;
 
         const session = new ClientSessionImpl(this);
+        session.name = this._nextSessionName();
         this.__createSession_step2(session, callback);
     }
 

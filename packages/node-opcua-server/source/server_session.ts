@@ -52,12 +52,6 @@ const theWatchDog = new WatchDog();
 
 const registeredNodeNameSpace = 9999;
 
-function compareSessionId(
-    sessionDiagnostics1: SessionDiagnosticsDataType | SessionSecurityDiagnosticsDataType,
-    sessionDiagnostics2: SessionDiagnosticsDataType | SessionSecurityDiagnosticsDataType
-) {
-    return sessionDiagnostics1.sessionId.toString() === sessionDiagnostics2.sessionId.toString();
-}
 
 function on_channel_abort(this: ServerSession) {
     debugLog("ON CHANNEL ABORT ON  SESSION!!!");
@@ -609,7 +603,7 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
         assert(subscriptionDiagnostics instanceof SubscriptionDiagnosticsDataType);
         if (subscriptionDiagnostics && subscriptionDiagnosticsArray) {
             // subscription.id,"on session", session.nodeId.toString());
-            removeElement(subscriptionDiagnosticsArray, subscriptionDiagnostics);
+            removeElement(subscriptionDiagnosticsArray, (a) => a.subscriptionId === subscription.id);
         }
         debugLog("ServerSession#_unexposeSubscriptionDiagnostics");
     }
@@ -872,8 +866,7 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
         }
         if (this.sessionDiagnostics) {
             const sessionDiagnosticsArray = this.getSessionDiagnosticsArray()!;
-            removeElement(sessionDiagnosticsArray, this.sessionDiagnostics.$extensionObject);
-
+            removeElement(sessionDiagnosticsArray, (a) => sameNodeId(a.sessionId, this.getSessionId()));
             this.addressSpace.deleteNode(this.sessionDiagnostics);
 
             assert(this._sessionDiagnostics!.$session === this);
@@ -885,7 +878,7 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
 
         if (this.sessionSecurityDiagnostics) {
             const sessionSecurityDiagnosticsArray = this.getSessionSecurityDiagnosticsArray()!;
-            removeElement(sessionSecurityDiagnosticsArray, this.sessionSecurityDiagnostics.$extensionObject);
+            removeElement(sessionSecurityDiagnosticsArray, (a) => sameNodeId(a.sessionId, this.getSessionId()));
 
             this.addressSpace.deleteNode(this.sessionSecurityDiagnostics);
 
