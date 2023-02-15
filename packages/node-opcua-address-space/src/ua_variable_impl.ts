@@ -247,6 +247,17 @@ function default_func(this: UAVariable, dataValue1: DataValue, callback1: Callba
 interface UAVariableOptions extends InternalBaseNodeOptions {
     value?: any;
     dataType: NodeId | string;
+    /**
+     * This attribute indicates whether the Value attribute of the Variableis an array and how many dimensions the array has.
+     * It may have the following values:
+     *   * n > 1: the Value is an array with the specified number of dimensions.
+     *   * OneDimension (1): The value is an array with one dimension.
+     *   * OneOrMoreDimensions (0): The value is an array with one or more dimensions.
+     *   * Scalar (−1): The value is not an array.
+     *   * Any (−2): The value can be a scalar or an array with any number of dimensions.
+     *   * ScalarOrOneDimension (−3): The value can be a scalar or a one dimensional array.
+     *   * All DataTypes are considered to be scalar, even if they have array-like semantics like ByteString and String.
+     */
     valueRank?: number;
     arrayDimensions?: null | number[];
     accessLevel?: any;
@@ -288,6 +299,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
     private _basicDataType?: DataType;
 
     public $extensionObject?: any;
+    public $set_ExtensionObject?: (newValue: ExtensionObject, sourceTimestamp: PreciseClock, cache: Set<UAVariableImpl>) => void;
 
     public $historicalDataConfiguration?: UAHistoricalDataConfiguration;
     public varHistorian?: IVariableHistorian;
@@ -314,6 +326,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
     get typeDefinitionObj(): UAVariableType {
         // istanbul ignore next
         if (super.typeDefinitionObj && super.typeDefinitionObj.nodeClass !== NodeClass.VariableType) {
+            console.log(super.typeDefinitionObj.toString());
             throw new Error(
                 "Invalid type definition node class , expecting a VariableType got " + NodeClass[super.typeDefinitionObj.nodeClass]
             );
@@ -817,13 +830,13 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
             if (dataValue.value.dataType === DataType.ExtensionObject) {
                 const valueIsCorrect = this.checkExtensionObjectIsCorrect(dataValue.value.value);
                 if (!valueIsCorrect) {
-                    errorLog("Invalid value !");
+                    errorLog("setValueFromSource Invalid value !");
                     errorLog(this.toString());
                     errorLog(dataValue.toString());
                     this.checkExtensionObjectIsCorrect(dataValue.value.value);
                 }
                 // ----------------------------------
-                if (this.$extensionObject) {
+                if (this.$extensionObject || this.$$extensionObjectArray) {
                     // we have an extension object already bound to this node
                     // the client is asking us to replace the object entierly by a new one
                     // const ext = dataValue.value.value;
@@ -1492,12 +1505,21 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
         optionalExtensionObject?: ExtensionObject | ExtensionObject[],
         options?: BindExtensionObjectOptions
     ): ExtensionObject | ExtensionObject[] | null {
+
+        // coerce to ExtensionObject[] when this.valueRank === 1
+        if (optionalExtensionObject && this.valueRank === 1 && !Array.isArray(optionalExtensionObject) && optionalExtensionObject instanceof ExtensionObject) {
+            warningLog("bindExtensionObject: coerce to ExtensionObject[] when this.valueRank === 1");
+            optionalExtensionObject = [optionalExtensionObject];
+        }
+
         if (optionalExtensionObject) {
             if (optionalExtensionObject instanceof Array) {
-                assert(this.valueRank >= 1, "expecting an Array of Matrix variable here");
+                assert(this.valueRank >= 1, "bindExtensionObject: expecting an Array of Matrix variable here");
                 return _bindExtensionObjectArrayOrMatrix(this, optionalExtensionObject, options);
             } else {
-                assert(this.valueRank === -1, "expecting an Scalar variable here");
+                if (this.valueRank !== -1 && this.valueRank !== 0) {
+                    throw new Error("bindExtensionObject: expecting an Scalar variable here but got value rank " + this.valueRank);
+                }
                 return _bindExtensionObject(this, optionalExtensionObject, options) as ExtensionObject;
             }
         }
@@ -1746,6 +1768,11 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
             this.$dataValue.sourceTimestamp = dataValue.sourceTimestamp;
             this.$dataValue.sourcePicoseconds = dataValue.sourcePicoseconds;
 
+        } else if (this._basicDataType === DataType.ExtensionObject && this.valueRank === -1 && this.$set_ExtensionObject && dataValue.value.arrayType === VariantArrayType.Scalar) {
+            // the entire extension object is changed. 
+            this.$dataValue.statusCode = this.$dataValue.statusCode || StatusCodes.Good;
+            const preciseClock = coerceClock(this.$dataValue.sourceTimestamp, this.$dataValue.sourcePicoseconds);
+            this.$set_ExtensionObject(dataValue.value.value, preciseClock, new Set())
         } else {
             this.$dataValue = dataValue;
             this.$dataValue.statusCode = this.$dataValue.statusCode || StatusCodes.Good;
