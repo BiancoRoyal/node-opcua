@@ -7,7 +7,6 @@ import { NodeId, resolveNodeId } from "node-opcua-nodeid";
 import { IBasicSession } from "node-opcua-pseudo-session";
 import { ReadValueIdOptions } from "node-opcua-service-read";
 import { BrowsePath, makeBrowsePath } from "node-opcua-service-translate-browse-path";
-import { StatusCodes } from "node-opcua-status-code";
 import { DataType, VariantArrayType } from "node-opcua-variant";
 import { MethodIds } from "node-opcua-constants";
 
@@ -20,15 +19,41 @@ const doDebug = checkDebugFlag("FileType");
 import { OpenFileMode } from "../open_mode";
 export { OpenFileMode } from "../open_mode";
 
+
+export interface IClientFile {
+    fileHandle: number;
+    open(mode: OpenFileMode): Promise<number>;
+    close(): Promise<void>;
+    getPosition(): Promise<UInt64>;
+    setPosition(position: UInt64 | UInt32): Promise<void>;
+    read(bytesToRead: UInt32 | Int32 | Int64 | UInt64): Promise<Buffer>;
+    write(data: Buffer): Promise<void>;
+    openCount(): Promise<UInt16>;
+    size(): Promise<UInt64>;
+    session: IBasicSession;
+}
+export interface IClientFilePriv extends IClientFile {
+    readonly fileNodeId: NodeId;
+    openMethodNodeId?: NodeId;
+    closeMethodNodeId?: NodeId;
+    setPositionNodeId?: NodeId;
+    getPositionNodeId?: NodeId;
+    readNodeId?: NodeId;
+    writeNodeId?: NodeId;
+    openCountNodeId?: NodeId;
+    sizeNodeId?: NodeId;
+    ensureInitialized(): Promise<void>;
+}
+
 /**
  *
  *
  */
-export class ClientFile {
+export class ClientFile implements IClientFile {
     public static useGlobalMethod = false;
 
     public fileHandle = 0;
-    protected session: IBasicSession;
+    public session: IBasicSession;
     protected readonly fileNodeId: NodeId;
 
     private openMethodNodeId?: NodeId;
@@ -281,20 +306,7 @@ export class ClientFile {
     }
 }
 
-export async function readFile(clientFile: ClientFile): Promise<Buffer> {
-    await clientFile.open(OpenFileMode.Read);
-    try {
-        const fileSize = await clientFile.size();
-        const data = await clientFile.read(fileSize);
-        return data;
-    } finally {
-        await clientFile.close();
-    }
-}
 
-export async function readOPCUAFile(clientFile: ClientFile): Promise<Buffer> {
-    return await readFile(clientFile);
-}
 
 
 /**
