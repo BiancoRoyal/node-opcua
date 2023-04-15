@@ -19,14 +19,17 @@ import {
     UAReference,
     UAVariable,
     UAVariableType,
-    CloneFilter
+    CloneFilter,
+    CloneHelper,
+    reconstructFunctionalGroupType,
+    reconstructNonHierarchicalReferences
 } from "node-opcua-address-space-base";
-import { ReferenceTypeIds } from "node-opcua-constants";
+
 import { coerceQualifiedName, NodeClass, QualifiedName, BrowseDirection, AttributeIds } from "node-opcua-data-model";
 import { DataValue, DataValueLike } from "node-opcua-data-value";
 import { checkDebugFlag, make_debugLog, make_warningLog, make_errorLog } from "node-opcua-debug";
-import { coerceNodeId, makeNodeId, NodeId, NodeIdLike, sameNodeId } from "node-opcua-nodeid";
-import { StatusCode, StatusCodes } from "node-opcua-status-code";
+import { coerceNodeId, NodeId, NodeIdLike, sameNodeId } from "node-opcua-nodeid";
+import { StatusCodes } from "node-opcua-status-code";
 import { UInt32 } from "node-opcua-basic-types";
 import { isNullOrUndefined } from "node-opcua-utils";
 import { DataType, Variant, VariantArrayType, verifyRankAndDimensions } from "node-opcua-variant";
@@ -36,7 +39,7 @@ import { makeOptionalsMap, OptionalMap } from "../source/helpers/make_optionals_
 
 import { AddressSpacePrivate } from "./address_space_private";
 import { BaseNodeImpl, InternalBaseNodeOptions } from "./base_node_impl";
-import { _clone_children_references, ToStringBuilder, UAVariableType_toString } from "./base_node_private";
+import { _clone_hierarchical_references, ToStringBuilder, UAVariableType_toString } from "./base_node_private";
 import * as tools from "./tool_isSubtypeOf";
 import { get_subtypeOfObj } from "./tool_isSubtypeOf";
 import { get_subtypeOf } from "./tool_isSubtypeOf";
@@ -50,7 +53,6 @@ const errorLog = make_errorLog(__filename);
 // eslint-disable-next-line prefer-const
 let doTrace = checkDebugFlag("INSTANTIATE");
 const traceLog = errorLog;
-
 
 interface InstantiateS {
     propertyOf?: any;
@@ -104,7 +106,7 @@ export interface UAVariableTypeOptions extends InternalBaseNodeOptions {
     dataType: NodeIdLike;
 }
 
-function deprecate<T>(func: T):T {
+function deprecate<T>(func: T): T {
     return func;
 }
 export class UAVariableTypeImpl extends BaseNodeImpl implements UAVariableType {
@@ -120,8 +122,8 @@ export class UAVariableTypeImpl extends BaseNodeImpl implements UAVariableType {
 
     public isSubtypeOf = tools.construct_isSubtypeOf<UAVariableType>(UAVariableTypeImpl);
 
-     /** @deprecated - use  isSubtypeOf instead */
-     public isSupertypeOf = deprecate(tools.construct_isSubtypeOf<UAVariableType>(UAVariableTypeImpl));
+    /** @deprecated - use  isSubtypeOf instead */
+    public isSupertypeOf = deprecate(tools.construct_isSubtypeOf<UAVariableType>(UAVariableTypeImpl));
 
     public readonly isAbstract: boolean;
     public dataType: NodeId;
@@ -403,96 +405,6 @@ class MandatoryChildOrRequestedOptionalFilter implements CloneFilter {
     }
 }
 
-/*
- * @function _get_parent_as_VariableOrObjectType
- * @param originalObject
- * @return {null|BaseNode}
- * @private
- */
-function _get_parent_as_VariableOrObjectType(originalObject: BaseNode): UAVariableType | UAObjectType | null {
-    if (originalObject.nodeClass === NodeClass.Method) {
-        return null;
-    }
-
-    const addressSpace = originalObject.addressSpace;
-
-    const parents = originalObject.findReferencesEx("HasChild", BrowseDirection.Inverse);
-
-    // istanbul ignore next
-    if (parents.length > 1) {
-        warningLog(" object ", originalObject.browseName.toString(), " has more than one parent !");
-        warningLog(originalObject.toString());
-        warningLog(" parents : ");
-        for (const parent of parents) {
-            warningLog("     ", parent.toString(), addressSpace.findNode(parent.nodeId)!.browseName.toString());
-        }
-        return null;
-    }
-
-    assert(parents.length === 0 || parents.length === 1);
-    if (parents.length === 0) {
-        return null;
-    }
-    const theParent = addressSpace.findNode(parents[0]!.nodeId)!;
-    if (theParent && (theParent.nodeClass === NodeClass.VariableType || theParent.nodeClass === NodeClass.ObjectType)) {
-        return theParent as UAVariableType | UAObjectType;
-    }
-    return null;
-}
-
-interface CloneInfo {
-    cloned: UAObject | UAVariable | UAMethod;
-    original: UAVariableType | UAObjectType;
-}
-class CloneHelper {
-    public level = 0;
-    private readonly mapOrgToClone: Map<string, CloneInfo> = new Map();
-
-    public pad(): string {
-        return " ".padEnd(this.level * 2, " ");
-    }
-    public registerClonedObject<TT extends UAVariableType | UAObjectType, T extends UAObject | UAVariable | UAMethod>(
-        objInType: TT,
-        clonedObj: T
-    ) {
-        this.mapOrgToClone.set(objInType.nodeId.toString(), {
-            cloned: clonedObj,
-            original: objInType
-        });
-
-        //
-        //   /-----------------------------\
-        //   | AcknowledgeableConditionType |
-        //   \-----------------------------/
-        //              ^        |
-        //              |        +---------------------|- (EnabledState)   (shadow element)
-        //              |
-        //   /-----------------------------\
-        //   |        AlarmConditionType   |
-        //   \-----------------------------/
-        //              |
-        //              +-------------------------------|- EnabledState    <
-        //
-        // find also child object with the same browse name that are
-        // overridden in the SuperType
-        //
-        const origParent = _get_parent_as_VariableOrObjectType(objInType);
-        if (origParent) {
-            let base = origParent.subtypeOfObj;
-            while (base) {
-                const shadowChild = base.getChildByName(objInType.browseName) as UAObjectType | UAVariableType | null;
-                if (shadowChild) {
-                    this.mapOrgToClone.set(shadowChild.nodeId.toString(), {
-                        cloned: clonedObj,
-                        original: shadowChild
-                    });
-                }
-                base = base.subtypeOfObj;
-            }
-        }
-        // find subTypeOf
-    }
-}
 // install properties and components on a instantiated Object
 //
 // based on their ModelingRule
@@ -508,12 +420,13 @@ function _initialize_properties_and_components<B extends UAObject | UAVariable |
     typeDefinitionNode: T,
     copyAlsoModellingRules: boolean,
     optionalsMap: OptionalMap,
-    extraInfo: CloneHelper
+    extraInfo: CloneHelper,
+    browseNameMap: Set<string>
 ) {
     if (doDebug) {
         debugLog("instance browseName =", instance.browseName.toString());
-        debugLog("typeNode         =", typeDefinitionNode.browseName.toString());
-        debugLog("optionalsMap     =", Object.keys(optionalsMap).join(" "));
+        debugLog("typeNode            =", typeDefinitionNode.browseName.toString());
+        debugLog("optionalsMap        =", Object.keys(optionalsMap).join(" "));
 
         const c = typeDefinitionNode.findReferencesEx("Aggregates");
         debugLog("typeDefinition aggregates      =", c.map((x) => x.node!.browseName.toString()).join(" "));
@@ -532,9 +445,7 @@ function _initialize_properties_and_components<B extends UAObject | UAVariable |
             typeDefinitionNode.browseName.toString()
         );
 
-    const browseNameMap = new Set<string>();
-
-    _clone_children_references(typeDefinitionNode, instance, copyAlsoModellingRules, filter, extraInfo, browseNameMap);
+    _clone_hierarchical_references(typeDefinitionNode, instance, copyAlsoModellingRules, filter, extraInfo, browseNameMap);
 
     // now apply recursion on baseTypeDefinition  to get properties and components from base class
 
@@ -561,7 +472,8 @@ function _initialize_properties_and_components<B extends UAObject | UAVariable |
         baseTypeDefinition,
         copyAlsoModellingRules,
         optionalsMap,
-        extraInfo
+        extraInfo,
+        browseNameMap
     );
     extraInfo.level--;
 }
@@ -616,9 +528,9 @@ export function assertUnusedChildBrowseName(addressSpace: AddressSpacePrivate, o
     if (parent && hasChildWithBrowseName(parent, coerceQualifiedName(options.browseName))) {
         throw new Error(
             "object " +
-            parent.browseName.name!.toString() +
-            " have already a child with browseName " +
-            options.browseName.toString()
+                parent.browseName.name!.toString() +
+                " have already a child with browseName " +
+                options.browseName.toString()
         );
     }
 }
@@ -626,181 +538,27 @@ export function assertUnusedChildBrowseName(addressSpace: AddressSpacePrivate, o
 exports.assertUnusedChildBrowseName = assertUnusedChildBrowseName;
 exports.initialize_properties_and_components = initialize_properties_and_components;
 
-const hasTypeDefinitionNodeId = makeNodeId(ReferenceTypeIds.HasTypeDefinition);
-const hasModellingRuleNodeId = makeNodeId(ReferenceTypeIds.HasModellingRule);
-
-/**
- * remove unwanted reference such as HasTypeDefinition and HasModellingRule
- * from the list
- */
-function _remove_unwanted_ref(references: UAReference[]): UAReference[] {
-    // filter out HasTypeDefinition (i=40) , HasModellingRule (i=37);
-    references = references.filter(
-        (reference: UAReference) =>
-            !sameNodeId(reference.referenceType, hasTypeDefinitionNodeId) &&
-            !sameNodeId(reference.referenceType, hasModellingRuleNodeId)
-    );
-    return references;
-}
-
-/**
- *
- */
-function findNonHierarchicalReferences(originalObject: BaseNode): UAReference[] {
-    // todo: MEMOIZE this method
-    const addressSpace: IAddressSpace = originalObject.addressSpace;
-    const referenceId = addressSpace.findReferenceType("NonHierarchicalReferences");
-    if (!referenceId) {
-        return [];
-    }
-    assert(referenceId);
-
-    // we need to explore the non hierarchical references backwards
-    let references = originalObject.findReferencesEx("NonHierarchicalReferences", BrowseDirection.Inverse);
-
-    references = ([] as UAReference[]).concat(
-        references,
-        originalObject.findReferencesEx("HasEventSource", BrowseDirection.Inverse)
-    );
-
-    const parent = _get_parent_as_VariableOrObjectType(originalObject);
-
-    if (parent && parent.subtypeOfObj) {
-        // parent is a ObjectType or VariableType and is not a root type
-        assert(parent.nodeClass === NodeClass.VariableType || parent.nodeClass === NodeClass.ObjectType);
-
-        // let investigate the same child base child
-        const child = parent.subtypeOfObj!.getChildByName(originalObject.browseName);
-
-        if (child) {
-            const baseRef = findNonHierarchicalReferences(child);
-            references = ([] as UAReference[]).concat(references, baseRef);
-        }
-    }
-    // perform some cleanup
-    references = _remove_unwanted_ref(references);
-
-    return references;
-}
-
-function reconstructNonHierarchicalReferences(extraInfo: any): void {
-    const findImplementedObject = (ref: UAReference): CloneInfo | null =>
-        extraInfo.mapOrgToClone.get(ref.nodeId.toString()) || null;
-
-    // navigate through original objects to find those that are being references by node that
-    // have been cloned .
-    // this could be node organized by some FunctionalGroup
-    //
-    for (const { original, cloned } of extraInfo.mapOrgToClone.values()) {
-        // find NonHierarchical References on original object
-        const originalNonHierarchical = findNonHierarchicalReferences(original);
-
-        if (originalNonHierarchical.length === 0) {
-            continue;
-        }
-
-        // istanbul ignore next
-        if (doDebug) {
-            debugLog(
-                " investigation ",
-                original.browseName.toString(),
-                cloned.nodeClass.toString(),
-                original.nodeClass.toString(),
-                original.nodeId.toString(),
-                cloned.nodeId.toString()
-            );
-        }
-
-        for (const ref of originalNonHierarchical) {
-            const info = findImplementedObject(ref);
-
-            // if the object pointed by this reference is also cloned ...
-            if (info) {
-                const originalDest = info.original;
-                const cloneDest = info.cloned;
-
-                // istanbul ignore next
-                if (doDebug) {
-                    debugLog(
-                        chalk.cyan("   adding reference "),
-                        ref.referenceType,
-                        " from cloned ",
-                        cloned.nodeId.toString(),
-                        cloned.browseName.toString(),
-                        " to cloned ",
-                        cloneDest.nodeId.toString(),
-                        cloneDest.browseName.toString()
-                    );
-                }
-
-                // restore reference
-                cloned.addReference({
-                    isForward: false,
-                    nodeId: cloneDest.nodeId,
-                    referenceType: ref.referenceType
-                });
-            }
-        }
-    }
-}
-
-/**
- * recreate functional group types according to type definition
- *
- * @method reconstructFunctionalGroupType
- * @param baseType
- */
-
-/* @example:
- *
- *    MyDeviceType
- *        |
- *        +----------|- ParameterSet(BaseObjectType)
- *        |                   |
- *        |                   +-----------------|- Parameter1
- *        |                                             ^
- *        +----------|- Config(FunctionalGroupType)     |
- *                                |                     |
- *                                +-------- Organizes---+
- */
-function reconstructFunctionalGroupType(extraInfo: any) {
-    // navigate through original objects to find those that are being organized by some FunctionalGroup
-    for (const { original, cloned } of extraInfo.mapOrgToClone.values()) {
-        const organizedByArray = original.findReferencesEx("Organizes", BrowseDirection.Inverse);
-
-        for (const ref of organizedByArray) {
-            const info = extraInfo.mapOrgToClone.get(ref.nodeId.toString());
-            if (!info) continue;
-
-            const folder = info.original;
-
-            assert(folder.typeDefinitionObj.browseName.name.toString() === "FunctionalGroupType");
-
-            // now create the same reference with the instantiated function group
-            const destFolder = info.cloned;
-
-            assert(ref.referenceType);
-
-            destFolder.addReference({
-                isForward: !ref.isForward,
-                nodeId: cloned.nodeId,
-                referenceType: ref.referenceType
-            });
-        }
-    }
-}
-
 export function initialize_properties_and_components<
     B extends UAObject | UAVariable | UAMethod,
     T extends UAVariableType | UAObjectType
 >(instance: B, topMostType: T, nodeType: T, copyAlsoModellingRules: boolean, optionals?: string[]): void {
     const extraInfo = new CloneHelper();
 
-    extraInfo.registerClonedObject(nodeType, instance);
+    extraInfo.registerClonedObject(instance, nodeType);
 
     const optionalsMap = makeOptionalsMap(optionals);
 
-    _initialize_properties_and_components(instance, topMostType, nodeType, copyAlsoModellingRules, optionalsMap, extraInfo);
+    const browseNameMap = new Set<string>();
+
+    _initialize_properties_and_components(
+        instance,
+        topMostType,
+        nodeType,
+        copyAlsoModellingRules,
+        optionalsMap,
+        extraInfo,
+        browseNameMap
+    );
 
     reconstructFunctionalGroupType(extraInfo);
 

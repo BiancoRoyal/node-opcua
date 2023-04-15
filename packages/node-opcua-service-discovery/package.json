@@ -1,7 +1,7 @@
 {
     "name": "node-opcua-service-discovery",
-    "version": "2.96.0",
-    "description": "pure nodejs OPCUA SDK - module -service-discovery",
+    "version": "2.99.0",
+    "description": "pure nodejs OPCUA SDK - module service-discovery",
     "scripts": {
         "build": "tsc -b",
         "test": "mocha",
@@ -12,10 +12,10 @@
     "types": "./dist/index.d.ts",
     "dependencies": {
         "chalk": "4.1.2",
-        "node-opcua-assert": "2.88.0",
-        "node-opcua-debug": "2.90.1",
-        "node-opcua-object-registry": "2.90.1",
-        "node-opcua-types": "2.96.0",
+        "node-opcua-assert": "2.98.1",
+        "node-opcua-debug": "2.99.0",
+        "node-opcua-object-registry": "2.99.0",
+        "node-opcua-types": "2.99.0",
         "sterfive-bonjour-service": "1.1.4"
     },
     "author": "Etienne Rossignon",
@@ -33,5 +33,9 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c"
+    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c",
+    "files": [
+        "dist",
+        "source"
+    ]
 }

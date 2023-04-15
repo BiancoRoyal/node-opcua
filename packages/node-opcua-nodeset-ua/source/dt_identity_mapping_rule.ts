@@ -9,7 +9,7 @@ import { EnumIdentityCriteria } from "./enum_identity_criteria"
  * | namespace |http://opcfoundation.org/UA/                      |
  * | nodeClass |DataType                                          |
  * | name      |IdentityMappingRuleType                           |
- * | isAbstract|true                                              |
+ * | isAbstract|false                                             |
  */
 export interface DTIdentityMappingRule extends DTStructure {
   criteriaType: EnumIdentityCriteria; // Int32 ns=0;i=15632

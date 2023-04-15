@@ -9,6 +9,7 @@ import { UAObject } from "./ua_object";
 import { UAObjectType } from "./ua_object_type";
 import { UAReference } from "./ua_reference";
 import { UAVariable } from "./ua_variable";
+import { CloneHelper } from "./clone_helper";
 
 export interface CloneFilter {
     shouldKeep(node: BaseNode): boolean;
@@ -25,17 +26,11 @@ export interface CloneExtraInfo {
     /* */
     level: number;
     pad(): string;
-    registerClonedObject(clonedObject: BaseNode, originalObject: BaseNode): void;
+    registerClonedObject(clonedNode: BaseNode, originalNode: BaseNode): void;
+    getCloned(originalObject: BaseNode): BaseNode | null;
 }
-export const defaultCloneExtraInfo: CloneExtraInfo = {
-    level: 0,
-    pad(this: CloneExtraInfo) {
-        return " ".padEnd(this.level * 2);
-    },
-    registerClonedObject(_clonedObject: BaseNode, _originalObject: BaseNode): void {
-        // nothing to do
-    }
-};
+
+export const makeDefaultCloneExtraInfo = (): CloneExtraInfo =>   new CloneHelper();
 
 export interface CloneOptions /* extends ConstructNodeIdOptions */ {
     namespace: INamespace;
