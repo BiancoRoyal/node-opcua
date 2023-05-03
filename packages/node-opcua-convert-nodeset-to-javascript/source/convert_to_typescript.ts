@@ -46,7 +46,7 @@ import { Options } from "./options";
 import { toFilename } from "./private/to_filename";
 import { f1, f2, quotifyIfNecessary, toComment, toJavascritPropertyName } from "./utils2";
 import { _exportDataTypeToTypescript } from "./_dataType";
-import { getCorrepondingJavascriptType2 } from "./private/get_corresponding_data_type";
+import { getCorrespondingJavascriptType2 } from "./private/get_corresponding_data_type";
 const warningLog = make_warningLog("typescript");
 const doDebug = false;
 const baseExtension = "_Base";
@@ -137,7 +137,7 @@ export async function extractClassDefinition(session: IBasicSession, nodeId: Nod
             extraImports.push(i);
             cache.ensureImported(i);
         };
-        const { jtype } = await getCorrepondingJavascriptType2(session, nodeId, dataTypeNodeId!, cache, importCollector);
+        const { jtype } = await getCorrespondingJavascriptType2(session, nodeId, dataTypeNodeId!, cache, importCollector);
         dataTypeName = jtype; // with decoration
         if (!dataTypeNodeId?.isEmpty()) {
             // "DT" + (await getBrowseName(session, dataTypeNodeId!))?.name! || "";
@@ -445,7 +445,7 @@ async function extractVariableExtra(session: IBasicSession, nodeId: NodeId, cach
     if (nodeClass === NodeClass.Variable) {
         const dataTypeNodeId = await getDataTypeNodeId(session, nodeId);
 
-        const { dataType, jtype } = await getCorrepondingJavascriptType2(session, nodeId, dataTypeNodeId!, cache, importCollector);
+        const { dataType, jtype } = await getCorrespondingJavascriptType2(session, nodeId, dataTypeNodeId!, cache, importCollector);
 
         cache && cache.referenceBasicType("DataType");
         importCollector({ name: "DataType", namespace: -1, module: "BasicType" });
@@ -749,7 +749,6 @@ function dumpUsedExport(currentType: string, namespaceIndex: number, cache: Cach
     return f.toString();
 }
 
-
 export type Type = "enum" | "basic" | "structure" | "ua";
 
 function calculateChevrons(classDef: ClassDefinition, classDefDerived?: { dataType: DataType }) {
@@ -868,6 +867,7 @@ export async function _convertTypeToTypescript(
 
     await preDumpChildren("    ", classDef, f, cache);
 
+    const n =(n?: NodeId |null)=> n?.toString().replace(/ns=([0-9]+);/, "");
     //  f.write(superType.toString());
     f.write(`/**`);
     if (description.text) {
@@ -878,10 +878,10 @@ export async function _convertTypeToTypescript(
     f.write(` * |----------------|${f2("-")}|`);
     f.write(` * |namespace       |${f1(cache.namespace[nodeId.namespace].namespaceUri)}|`);
     f.write(` * |nodeClass       |${f1(NodeClass[nodeClass])}|`);
-    f.write(` * |typedDefinition |${f1(browseName.toString() + " " + nodeId.toString())}|`);
+    f.write(` * |typedDefinition |${f1(browseName.name!.toString() + " " + n(nodeId))}|`);
     if (nodeClass === NodeClass.VariableType) {
         f.write(` * |dataType        |${f1(DataType[dataType])}|`);
-        f.write(` * |dataType Name   |${f1(dataTypeName + " " + dataTypeNodeId?.toString())}|`);
+        f.write(` * |dataType Name   |${f1(dataTypeName + " " + n(dataTypeNodeId))}|`);
     }
     f.write(` * |isAbstract      |${f1(isAbstract.toString())}|`);
     f.write(` */`);
@@ -914,7 +914,7 @@ export async function _convertTypeToTypescript(
                 //
                 const baseName = `${baseInterfaceName?.name}${baseExtension}${chevronsBase.chevronsExtend}`;
                 f.write(`export type ${classBaseName} = ${baseName};`);
-            }  else {
+            } else {
                 if (baseInterfaceName?.name === "UAVariableT") {
                     f.write(`export interface ${classBaseName}  {`);
                 } else {

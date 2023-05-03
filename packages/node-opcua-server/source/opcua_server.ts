@@ -8,7 +8,7 @@
 
 import * as crypto from "crypto";
 import { EventEmitter } from "events";
-import { callbackify } from "util";
+import { callbackify, types } from "util";
 
 import * as async from "async";
 import * as chalk from "chalk";
@@ -168,7 +168,7 @@ import { RegisterServerManager } from "./register_server_manager";
 import { RegisterServerManagerHidden } from "./register_server_manager_hidden";
 import { RegisterServerManagerMDNSONLY } from "./register_server_manager_mdns_only";
 import { ServerCapabilitiesOptions } from "./server_capabilities";
-import { OPCUAServerEndPoint } from "./server_end_point";
+import { EndpointDescriptionEx, OPCUAServerEndPoint } from "./server_end_point";
 import { ClosingReason, CreateSessionOption, ServerEngine } from "./server_engine";
 import { ServerSession } from "./server_session";
 import { CreateMonitoredItemHook, DeleteMonitoredItemHook, Subscription } from "./server_subscription";
@@ -642,10 +642,10 @@ function validate_security_endpoint(
     if (endpoints.length === 0) {
         // we have a UrlMismatch here
         const ua_server = server.engine.addressSpace!.rootFolder.objects.server;
+        errorLog("Cannot find suitable endpoints in available endpoints. endpointUri =", request.endpointUrl);
         ua_server.raiseEvent("AuditUrlMismatchEventType", {
             endpointUrl: { dataType: DataType.String, value: request.endpointUrl }
         });
-        debugLog("Cannot find endpoint  in available endpoints with endpointUri", request.endpointUrl);
         if (OPCUAServer.requestExactEndpointUrl) {
             return { errCode: StatusCodes.BadServiceUnsupported };
         } else {
@@ -653,7 +653,7 @@ function validate_security_endpoint(
         }
     }
     // ignore restricted endpoints
-    endpoints = endpoints.filter((e: EndpointDescription) => !(e as any).restricted);
+    endpoints = endpoints.filter((e: EndpointDescription) => !(e as EndpointDescriptionEx).restricted);
 
     const endpoints_matching_security_mode = endpoints.filter((e: EndpointDescription) => {
         return e.securityMode === channel.securityMode;
@@ -781,7 +781,7 @@ export interface OPCUAServerOptions extends OPCUABaseServerOptions, OPCUAServerE
      * the maximum number of simultaneous sessions allowed.
      * @default 10
      * @deprecated use serverCapabilities: { maxSessions: } instead
-    
+
      */
     maxAllowedSessionNumber?: number;
 
@@ -798,8 +798,16 @@ export interface OPCUAServerOptions extends OPCUABaseServerOptions, OPCUAServerE
      *
      * example:
      *
-     * ``` javascript
-     *
+     * ```javascript
+     * import { nodesets } from "node-opcua-nodesets";
+     * const server = new OPCUAServer({
+     *     nodeset_filename: [
+     *         nodesets.standard,
+     *         nodesets.di,
+     *         nodesets.adi,
+     *         nodesets.machinery,
+     *     ],
+     * });
      * ```
      */
     nodeset_filename?: string[] | string;
@@ -1148,7 +1156,7 @@ export class OPCUAServer extends OPCUABaseServer {
             const hostname = getFullyQualifiedDomainName();
 
             endpointDefinitions.push({
-                port: options.port || 26543,
+                port: options.port  === undefined ? 26543 : options.port,
 
                 allowAnonymous: options.allowAnonymous,
                 alternateHostname: options.alternateHostname,
@@ -2257,7 +2265,7 @@ export class OPCUAServer extends OPCUABaseServer {
             } catch (err) {
                 warningLog(err);
                 // istanbul ignore next
-                if (err instanceof Error) {
+                if (types.isNativeError(err)) {
                     // istanbul ignore next
                     errorLog(
                         "Internal error in issuing response\nplease contact support@sterfive.com",
@@ -3526,7 +3534,7 @@ export class OPCUAServer extends OPCUABaseServer {
         }
         const hostname = getFullyQualifiedDomainName();
         endpointOptions.hostname = endpointOptions.hostname || hostname;
-        endpointOptions.port = endpointOptions.port || 26543;
+        endpointOptions.port = endpointOptions.port === undefined ? 26543 : endpointOptions.port ;
 
         /* istanbul ignore next */
         if (
