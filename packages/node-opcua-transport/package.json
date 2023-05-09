@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-transport",
-    "version": "2.102.0",
+    "version": "2.103.0",
     "description": "pure nodejs OPCUA SDK - module transport",
     "main": "./dist/source/index.js",
     "types": "./dist/source/index.d.ts",
@@ -28,7 +28,7 @@
     "devDependencies": {
         "node-opcua-leak-detector": "2.99.0",
         "should": "^13.2.3",
-        "sinon": "^15.0.3"
+        "sinon": "^15.0.4"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",
