@@ -2,7 +2,8 @@
 "use strict";
 import { Socket } from "net";
 import * as fs from "fs";
-import * as should from "should";
+import * as os from "os";
+import should from "should";
 import * as async from "async";
 import {
     DataType,
@@ -22,7 +23,8 @@ import {
     ConnectionStrategy,
     ConnectionStrategyOptions
 } from "node-opcua";
-import * as chalk from "chalk";
+import chalk from "chalk";
+import "mocha";
 
 import { readCertificate } from "node-opcua-crypto";
 
@@ -168,7 +170,7 @@ describe("KJH1 testing basic Client-Server communication", function (this: Mocha
         (client as any).protocolVersion = 0;
 
         const unused_port = 8909;
-        const bad_endpointUrl = "opc.tcp://" + "localhost" + ":" + unused_port;
+        const bad_endpointUrl = "opc.tcp://" + os.hostname()+ ":" + unused_port;
 
         let _err: Error | undefined = undefined;
         try {
@@ -176,7 +178,7 @@ describe("KJH1 testing basic Client-Server communication", function (this: Mocha
         } catch (err) {
             _err = err as Error;
         }
-        _err!.message.should.match(/connect ECONNREFUSED/);
+        _err!.message.should.match(/connect ECONNREFUSED|The connection may have been rejected by server/);
 
         await client.connect(endpointUrl);
         await client.disconnect();
@@ -659,7 +661,7 @@ describe("KJH2 testing ability for client to reconnect when server close connect
     });
 
     it("TR14 - it should be possible to disconnect a client which is attempting to establish it's first connection to a unavailable server", async () => {
-        const endpointUrl = "opc.tcp://localhost:11111"; // uri of an unavailable opcua server
+        const endpointUrl = `opc.tcp://${os.hostname()}:11111`; // uri of an unavailable opcua server
 
         // use robust connectionStrategy
         await f(
@@ -1014,7 +1016,7 @@ describe("KJH2 testing ability for client to reconnect when server close connect
         // the client with indefinitely try to connect, causing the callback function
         // passed to the client#connect method not to be called.
         let connect_done = false;
-        let connect_err = null;
+        let connect_err: Error | undefined = undefined;
         (async () => {
             client.connect(endpointUrl, function (err) {
                 connect_err = err;

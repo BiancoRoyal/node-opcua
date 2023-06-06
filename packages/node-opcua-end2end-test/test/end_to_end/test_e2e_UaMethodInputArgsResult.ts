@@ -1,5 +1,6 @@
+import * as os from "os";
 import { ClientSession, DataType, DiagnosticInfo, OPCUAClient, OPCUAServer, StatusCodes } from "node-opcua";
-import * as should from "should";
+import should from "should";
 
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
 describe("list status codes for input arguments", () => {
@@ -49,7 +50,7 @@ describe("list status codes for input arguments", () => {
                 callback(null, { statusCode: StatusCodes.Good, inputArgumentResults: [StatusCodes.Good] });
             });
         await server.start();
-        await client.connect(`opc.tcp://localhost:${port}/UA/NodeOPCUA`);
+        await client.connect(`opc.tcp://${os.hostname()}:${port}/UA/NodeOPCUA`);
         clientSession = await client.createSession();
     });
 

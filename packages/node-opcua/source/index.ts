@@ -6,7 +6,7 @@
 // tslint:disable:no-console
 // tslint:disable:variable-name
 
-import * as chalk from "chalk";
+import chalk from "chalk";
 
 const semver = require("semver");
 const minimumNodeVersionRequired = ">=8.0.0"; // minimum
@@ -66,7 +66,8 @@ export {
     NodeClass,
     NodeClassMask,
     AttributeIds,
-    BrowseDirection
+    BrowseDirection,
+    DiagnosticInfo
 } from "node-opcua-data-model";
 
 // basic_types
@@ -91,7 +92,6 @@ export * from "node-opcua-service-secure-channel";
 export * from "node-opcua-service-translate-browse-path";
 export * from "node-opcua-service-query";
 export * from "node-opcua-service-node-management";
-export { DiagnosticInfo } from "node-opcua-data-model";
 
 // -----------------------------------------------------------------------------
 // Nodeset stuff

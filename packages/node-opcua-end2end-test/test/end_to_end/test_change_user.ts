@@ -1,6 +1,7 @@
+import * as os from "os";
 import "should";
 import "mocha";
-import * as chalk from "chalk";
+import chalk from "chalk";
 import {
     OPCUAClient,
     UserTokenType,
@@ -30,7 +31,7 @@ const users = [
 ];
 
 const port = 2237;
-const endpointUrl = `opc.tcp://localhost:${port}`;
+const endpointUrl = `opc.tcp://${os.hostname()}:${port}`;
 const nodeId = "ns=1;s=SecretValue";
 
 async function startServer() {

@@ -1,4 +1,4 @@
-import * as should from "should";
+import should from "should";
 
 import { AttributeIds, LocalizedText } from "node-opcua-data-model";
 import { CallbackT, StatusCodes } from "node-opcua-status-code";
@@ -165,11 +165,11 @@ describe("testing Method binding", () => {
     it("should bind a method with a method - MethodFunctorC ", async () => {
         const server = rootFolder.objects.server;
 
-        server.getMonitoredItems.bindMethod(fake_getMonitoredItemId);
+        server.getMonitoredItems!.bindMethod(fake_getMonitoredItemId);
 
         const inputArguments = [{ dataType: DataType.UInt32, value: 5 }];
 
-        const result = await server.getMonitoredItems.execute(null, inputArguments, context);
+        const result = await server.getMonitoredItems!.execute(null, inputArguments, context);
     });
 
     it("should bind a method with a method - MethodFunctorA ", async () => {
@@ -192,12 +192,12 @@ describe("testing Method binding", () => {
             return myResult;
         }
     
-        server.getMonitoredItems.bindMethod(method);
+        server.getMonitoredItems!.bindMethod(method);
 
         const inputArguments = [{ dataType: DataType.UInt32, value: 5 }];
-        const result = await server.getMonitoredItems.execute(null, inputArguments, context);
-        result.outputArguments[0].dataType.should.eql(DataType.UInt32);
-        result.outputArguments[1].dataType.should.eql(DataType.UInt32);
-        result.statusCode.should.eql(StatusCodes.BadBoundNotFound);
+        const result = await server.getMonitoredItems!.execute(null, inputArguments, context);
+        result.outputArguments![0]!.dataType!.should.eql(DataType.UInt32);
+        result.outputArguments![1]!.dataType!.should.eql(DataType.UInt32);
+        result.statusCode!.should.eql(StatusCodes.BadBoundNotFound);
     });
 });

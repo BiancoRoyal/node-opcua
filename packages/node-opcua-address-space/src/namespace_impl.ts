@@ -2,7 +2,7 @@
  * @module node-opcua-address-space
  */
 // tslint:disable:no-console
-import * as chalk from "chalk";
+import chalk from "chalk";
 
 import { assert } from "node-opcua-assert";
 import { coerceInt64 } from "node-opcua-basic-types";
@@ -1354,7 +1354,7 @@ export class NamespaceImpl implements NamespacePrivate {
                 return new EnumValueType({
                     description: coerceLocalizedText(enumItem.description),
                     displayName: coerceLocalizedText(enumItem.displayName),
-                    value: [0, enumItem.value]
+                    value: coerceInt64(enumItem.value)
                 });
             });
 

@@ -1,17 +1,10 @@
 "use strict";
 
-import * as should from "should";
-import { assert } from "node-opcua-assert";
 
 import {
     Variant,
     DataType,
     VariantArrayType,
-    isValidVariant,
-    buildVariantArray,
-    VARIANT_ARRAY_MASK,
-    coerceVariantType,
-    decodeVariant,
     adjustVariant
 } from "..";
 

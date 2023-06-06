@@ -6,7 +6,7 @@ import * as crypto from "crypto";
 import { EventEmitter } from "events";
 import { Socket } from "net";
 import { callbackify } from "util";
-import * as chalk from "chalk";
+import chalk from "chalk";
 
 import { assert } from "node-opcua-assert";
 import {
@@ -14,7 +14,6 @@ import {
     exploreCertificateInfo,
     extractPublicKeyFromCertificate,
     makeSHA1Thumbprint,
-    PrivateKeyPEM,
     PublicKeyLength,
     rsaLengthPublicKey,
     exploreCertificate,

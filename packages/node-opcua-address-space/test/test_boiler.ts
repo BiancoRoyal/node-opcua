@@ -1,7 +1,7 @@
 // tslint:disable:no-console
-import * as chalk from "chalk";
+import chalk from "chalk";
 import { nodesets } from "node-opcua-nodesets";
-import * as should from "should";
+import should from "should";
 import { generateAddressSpace } from "../nodeJS";
 import { SessionContext, UAStateMachineEx } from "..";
 import { AddressSpace, BaseNode, Namespace, UAProgramStateMachineEx, promoteToStateMachine } from "..";
@@ -187,7 +187,7 @@ describe("Testing Boiler System", () => {
 
         // when state is "Halted" , the Halt method is not executable
         boilerStateMachine.setState(haltedState);
-        boilerStateMachine.currentStateNode.browseName.toString().should.eql("Halted");
+        boilerStateMachine.currentStateNode!.browseName.toString().should.eql("Halted");
 
         const haltMethod = boilerStateMachine.getMethodByName("Halt")!;
         // halt method should not be executable when current State is Halted
