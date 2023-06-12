@@ -753,10 +753,10 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         if (!fs.existsSync(this.certificateFile)) {
             await withLock({ fileToLock: this.certificateFile + ".mutex" }, async () => {
                 if (fs.existsSync(this.certificateFile)) {
-                    // the file may have been created in between    
+                    // the file may have been created in between
                     return;
                 }
-                console.log("Creating default certificate ... please wait");
+                warningLog("Creating default certificate ... please wait");
                 if (this.disconnecting) return;
 
                 await ClientBaseImpl.createCertificate(
@@ -810,13 +810,13 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
 
     protected _handleUnrecoverableConnectionFailure(err: Error, callback: ErrorCallback): void {
         debugLog(err.message);
-        this.emit("connection_failed");
+        this.emit("connection_failed", err);
         this._setInternalState("disconnected");
         return callback(err);
     }
     private _handleDisconnectionWhileConnecting(err: Error, callback: ErrorCallback) {
         debugLog(err.message);
-        this.emit("connection_failed");
+        this.emit("connection_failed", err);
         this._setInternalState("disconnected");
         return callback(err);
     }
@@ -937,7 +937,6 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                     /* */
                     this._handleDisconnectionWhileConnecting(err, callback);
                 } else {
-                    console.log("REMOVE ME", err.stack);
                     err = new Error("The connection may have been rejected by server,\n" + "Err = (" + err.message + ")");
                     this._handleUnrecoverableConnectionFailure(err, callback);
                 }
