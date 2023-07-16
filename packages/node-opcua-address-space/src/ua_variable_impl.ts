@@ -249,7 +249,7 @@ interface UAVariableOptions extends InternalBaseNodeOptions {
     value?: any;
     dataType: NodeId | string;
     /**
-     * This attribute indicates whether the Value attribute of the Variableis an array and how many dimensions the array has.
+     * This attribute indicates whether the Value attribute of the Variable is an array and how many dimensions the array has.
      * It may have the following values:
      *   * n > 1: the Value is an array with the specified number of dimensions.
      *   * OneDimension (1): The value is an array with one dimension.
@@ -327,10 +327,10 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
     get typeDefinitionObj(): UAVariableType {
         // istanbul ignore next
         if (super.typeDefinitionObj && super.typeDefinitionObj.nodeClass !== NodeClass.VariableType) {
-            console.log(super.typeDefinitionObj.toString());
-            throw new Error(
-                "Invalid type definition node class , expecting a VariableType got " + NodeClass[super.typeDefinitionObj.nodeClass]
-            );
+            // this could happen in faulty external nodeset and has been seen once 
+            // in an nano server
+            warningLog(super.typeDefinitionObj.toString());
+            return this.addressSpace.findVariableType("BaseVariableType")!;
         }
         return super.typeDefinitionObj as UAVariableType;
     }
@@ -1371,7 +1371,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
             UAVariableImpl,
             options,
             optionalFilter || defaultCloneFilter,
-            extraInfo || makeDefaultCloneExtraInfo()
+            extraInfo || makeDefaultCloneExtraInfo(this)
         ) as UAVariableImpl;
 
         newVariable.bindVariable();
@@ -1387,7 +1387,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
             try {
                 newVariable.bindExtensionObject(newVariable.$dataValue.value.value);
             } catch (err) {
-                errorLog("Errro binding extension objects");
+                errorLog("Error binding extension objects");
                 errorLog((err as Error).message);
                 errorLog(this.toString());
                 errorLog("---------------------------------------");
@@ -1554,7 +1554,7 @@ export class UAVariableImpl extends BaseNodeImpl implements UAVariable {
                 return _bindExtensionObject(this, optionalExtensionObject, options) as ExtensionObject;
             }
         }
-        assert(optionalExtensionObject === undefined);
+        assert(optionalExtensionObject === undefined || optionalExtensionObject === null);
         if (this.valueRank === -1) {
             return _bindExtensionObject(this, undefined, options) as ExtensionObject;
         } else if (this.valueRank === 1) {

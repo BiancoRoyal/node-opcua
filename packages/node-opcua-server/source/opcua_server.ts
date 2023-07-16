@@ -20,9 +20,6 @@ import * as utils from "node-opcua-utils";
 
 import {
     AddressSpace,
-    callMethodHelper,
-    ContinuationPoint,
-    IUserManager,
     PseudoVariantBoolean,
     PseudoVariantByteString,
     PseudoVariantDateTime,
@@ -1051,7 +1048,7 @@ export class OPCUAServer extends OPCUABaseServer {
      * the maximum number of subscription that can be created per server
      * @deprecated
      */
-    public static deprectated_MAX_SUBSCRIPTION = 50;
+    public static deprecated_MAX_SUBSCRIPTION = 50;
 
     /**
      * the maximum number of concurrent sessions allowed on the server
@@ -1156,7 +1153,7 @@ export class OPCUAServer extends OPCUABaseServer {
             const hostname = getFullyQualifiedDomainName();
 
             endpointDefinitions.push({
-                port: options.port  === undefined ? 26543 : options.port,
+                port: options.port === undefined ? 26543 : options.port,
 
                 allowAnonymous: options.allowAnonymous,
                 alternateHostname: options.alternateHostname,
@@ -1328,7 +1325,7 @@ export class OPCUAServer extends OPCUABaseServer {
         const shutdownTime = new Date(Date.now() + timeout);
         this.engine.setShutdownTime(shutdownTime);
 
-        debugLog("OPCUAServer is now unregistering itself from  the discovery server " + this.buildInfo);
+        debugLog("OPCUAServer is now un-registering itself from  the discovery server " + this.buildInfo);
         this.registerServerManager!.stop((err?: Error | null) => {
             debugLog("OPCUAServer unregistered from discovery server", err);
             setTimeout(async () => {
@@ -2630,10 +2627,6 @@ export class OPCUAServer extends OPCUABaseServer {
             (session: ServerSession, sendResponse: (response: Response) => void, sendError: (statusCode: StatusCode) => void) => {
                 const context = session.sessionContext;
 
-                let response;
-
-                let results = [];
-
                 const timestampsToReturn = request.timestampsToReturn;
 
                 if (timestampsToReturn === TimestampsToReturn.Invalid) {
@@ -2666,20 +2659,20 @@ export class OPCUAServer extends OPCUABaseServer {
 
                 // ask for a refresh of asynchronous variables
                 this.engine.refreshValues(request.nodesToRead, request.maxAge, (err?: Error | null) => {
-                    assert(!err, " error not handled here , fix me");
-                    results = this.engine.read(context, request);
+              
+                    this.engine.read(context, request).then((results) => {
+                        assert(results[0].schema.name === "DataValue");
+                        assert(results.length === request.nodesToRead!.length);
 
-                    assert(results[0].schema.name === "DataValue");
-                    assert(results.length === request.nodesToRead!.length);
-
-                    response = new ReadResponse({
-                        diagnosticInfos: undefined,
-                        results: undefined
+                        const response = new ReadResponse({
+                            diagnosticInfos: undefined,
+                            results: undefined
+                        });
+                        // set it here for performance
+                        response.results = results;
+                        assert(response.diagnosticInfos!.length === 0);
+                        sendResponse(response);
                     });
-                    // set it here for performance
-                    response.results = results;
-                    assert(response.diagnosticInfos!.length === 0);
-                    sendResponse(response);
                 });
             }
         );
@@ -2736,25 +2729,23 @@ export class OPCUAServer extends OPCUABaseServer {
                 this.engine.refreshValues(request.nodesToRead, 0, (err?: Error | null) => {
                     assert(!err, " error not handled here , fix me"); // TODO
 
-                    this.engine.historyRead(context, request, (err1: Error | null, results?: HistoryReadResult[]) => {
-                        if (err1) {
-                            return sendError(StatusCodes.BadHistoryOperationInvalid);
-                        }
-                        if (!results) {
-                            return sendError(StatusCodes.BadHistoryOperationInvalid);
-                        }
+                    this.engine
+                        .historyRead(context, request)
+                        .then((results: HistoryReadResult[]) => {
+                            assert(results[0].schema.name === "HistoryReadResult");
+                            assert(results.length === request.nodesToRead!.length);
 
-                        assert(results[0].schema.name === "HistoryReadResult");
-                        assert(results.length === request.nodesToRead!.length);
+                            response = new HistoryReadResponse({
+                                diagnosticInfos: undefined,
+                                results
+                            });
 
-                        response = new HistoryReadResponse({
-                            diagnosticInfos: undefined,
-                            results
+                            assert(response.diagnosticInfos!.length === 0);
+                            sendResponse(response);
+                        })
+                        .catch((err) => {
+                            return sendError(StatusCodes.BadHistoryOperationInvalid);
                         });
-
-                        assert(response.diagnosticInfos!.length === 0);
-                        sendResponse(response);
-                    });
                 });
             }
         );
@@ -2804,19 +2795,21 @@ export class OPCUAServer extends OPCUABaseServer {
                 const context = session.sessionContext;
 
                 assert(request.nodesToWrite[0].schema.name === "WriteValue");
-                this.engine.write(context, request.nodesToWrite, (err: Error | null, results?: StatusCode[]) => {
-                    if (err) {
+
+                this.engine
+                    .write(context, request.nodesToWrite)
+                    .then((results: StatusCode[]) => {
+                        assert(results!.length === request.nodesToWrite!.length);
+                        response = new WriteResponse({
+                            diagnosticInfos: undefined,
+                            results
+                        });
+                        sendResponse(response);
+                    })
+                    .catch((err) => {
                         errorLog(err);
-                        return sendError(StatusCodes.BadInternalError);
-                    }
-                    assert(Array.isArray(results));
-                    assert(results!.length === request.nodesToWrite!.length);
-                    response = new WriteResponse({
-                        diagnosticInfos: undefined,
-                        results
+                        sendError(StatusCodes.BadInternalError);
                     });
-                    sendResponse(response);
-                });
             }
         );
     }
@@ -3326,14 +3319,18 @@ export class OPCUAServer extends OPCUABaseServer {
                     }
                 }
 
-                const browsePathsResults = request.browsePaths.map((browsePath) => this.engine.browsePath(browsePath));
-
-                const response = new TranslateBrowsePathsToNodeIdsResponse({
-                    diagnosticInfos: null,
-                    results: browsePathsResults
-                });
-
-                sendResponse(response);
+                this.engine
+                    .translateBrowsePaths(request.browsePaths)
+                    .then((browsePathsResults) => {
+                        const response = new TranslateBrowsePathsToNodeIdsResponse({
+                            diagnosticInfos: null,
+                            results: browsePathsResults
+                        });
+                        sendResponse(response);
+                    })
+                    .catch((err) => {
+                        sendError(StatusCodes.BadInternalError);
+                    });
             }
         );
     }
@@ -3366,27 +3363,17 @@ export class OPCUAServer extends OPCUABaseServer {
                     return sendError(StatusCodes.BadTooManyOperations);
                 }
 
-                /* jshint validthis: true */
-                const addressSpace = this.engine.addressSpace!;
-
                 const context = session.sessionContext;
-
-                async.map(
-                    request.methodsToCall,
-                    callMethodHelper.bind(null, context, addressSpace),
-                    (err?: Error | null, results?: (CallMethodResultOptions | undefined)[]) => {
-                        /* istanbul ignore next */
-                        if (err) {
-                            errorLog("ERROR in method Call !! ", err);
-                        }
-                        assert(Array.isArray(results));
-                        response = new CallResponse({
-                            results: results as CallMethodResultOptions[]
-                        });
+                this.engine
+                    .call(context, request.methodsToCall)
+                    .then((results) => {
+                        const response = new CallResponse({ results });
                         filterDiagnosticInfo(request.requestHeader.returnDiagnostics, response);
                         sendResponse(response);
-                    }
-                );
+                    })
+                    .catch((err) => {
+                        sendError(StatusCodes.BadInternalError);
+                    });
             }
         );
     }
@@ -3534,7 +3521,7 @@ export class OPCUAServer extends OPCUABaseServer {
         }
         const hostname = getFullyQualifiedDomainName();
         endpointOptions.hostname = endpointOptions.hostname || hostname;
-        endpointOptions.port = endpointOptions.port === undefined ? 26543 : endpointOptions.port ;
+        endpointOptions.port = endpointOptions.port === undefined ? 26543 : endpointOptions.port;
 
         /* istanbul ignore next */
         if (
@@ -3697,7 +3684,7 @@ export interface RaiseEventAuditActivateSessionEventData extends RaiseEventAudit
 }
 
 // tslint:disable:no-empty-interface
-export interface RaiseEventTransitionEventData extends RaiseEventData { }
+export interface RaiseEventTransitionEventData extends RaiseEventData {}
 
 export interface RaiseEventAuditUrlMismatchEventTypeData extends RaiseEventData {
     endpointUrl: PseudoVariantString;
@@ -3727,7 +3714,7 @@ export interface RaiseAuditCertificateDataMismatchEventData extends RaiseAuditCe
      */
     invalidUri: PseudoVariantString;
 }
-export interface RaiseAuditCertificateUntrustedEventData extends RaiseAuditCertificateEventData { }
+export interface RaiseAuditCertificateUntrustedEventData extends RaiseAuditCertificateEventData {}
 /**
  * This EventType inherits all Properties of the AuditCertificateEventType.
  *
@@ -3739,7 +3726,7 @@ export interface RaiseAuditCertificateUntrustedEventData extends RaiseAuditCerti
  * There are no additional Properties defined for this EventType.
  *
  */
-export interface RaiseAuditCertificateExpiredEventData extends RaiseAuditCertificateEventData { }
+export interface RaiseAuditCertificateExpiredEventData extends RaiseAuditCertificateEventData {}
 /**
  * This EventType inherits all Properties of the AuditCertificateEventType.
  *
@@ -3749,7 +3736,7 @@ export interface RaiseAuditCertificateExpiredEventData extends RaiseAuditCertifi
  *
  * There are no additional Properties defined for this EventType.
  */
-export interface RaiseAuditCertificateInvalidEventData extends RaiseAuditCertificateEventData { }
+export interface RaiseAuditCertificateInvalidEventData extends RaiseAuditCertificateEventData {}
 /**
  * This EventType inherits all Properties of the AuditCertificateEventType.
  *
@@ -3759,7 +3746,7 @@ export interface RaiseAuditCertificateInvalidEventData extends RaiseAuditCertifi
  * If a trust chain is involved then the certificate that failed in the trust chain should be described.
  * There are no additional Properties defined for this EventType.
  */
-export interface RaiseAuditCertificateUntrustedEventData extends RaiseAuditCertificateEventData { }
+export interface RaiseAuditCertificateUntrustedEventData extends RaiseAuditCertificateEventData {}
 /**
  * This EventType inherits all Properties of the AuditCertificateEventType.
  *
@@ -3782,7 +3769,7 @@ export interface RaiseAuditCertificateRevokedEventData extends RaiseAuditCertifi
  *
  * There are no additional Properties defined for this EventType
  */
-export interface RaiseAuditCertificateMismatchEventData extends RaiseAuditCertificateEventData { }
+export interface RaiseAuditCertificateMismatchEventData extends RaiseAuditCertificateEventData {}
 export interface OPCUAServer {
     /**
      * @internal

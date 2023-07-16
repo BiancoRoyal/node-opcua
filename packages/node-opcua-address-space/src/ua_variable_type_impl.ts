@@ -3,7 +3,6 @@
  */
 // tslint:disable:max-classes-per-file
 // tslint:disable:no-console
-import chalk from "chalk";
 
 import { assert } from "node-opcua-assert";
 import {
@@ -13,30 +12,23 @@ import {
     InstantiateVariableOptions,
     ModellingRuleType,
     INamespace,
-    UAMethod,
-    UAObject,
-    UAObjectType,
-    UAReference,
     UAVariable,
     UAVariableType,
-    CloneFilter,
-    CloneHelper,
-    reconstructFunctionalGroupType,
-    reconstructNonHierarchicalReferences
 } from "node-opcua-address-space-base";
+
 
 import { coerceQualifiedName, NodeClass, QualifiedName, BrowseDirection, AttributeIds } from "node-opcua-data-model";
 import { DataValue, DataValueLike } from "node-opcua-data-value";
 import { checkDebugFlag, make_debugLog, make_warningLog, make_errorLog } from "node-opcua-debug";
-import { coerceNodeId, NodeId, NodeIdLike, sameNodeId } from "node-opcua-nodeid";
+import { coerceNodeId, NodeId, NodeIdLike } from "node-opcua-nodeid";
 import { StatusCodes } from "node-opcua-status-code";
 import { UInt32 } from "node-opcua-basic-types";
 import { isNullOrUndefined } from "node-opcua-utils";
 import { DataType, Variant, VariantArrayType, verifyRankAndDimensions } from "node-opcua-variant";
 
 import { SessionContext } from "../source/session_context";
-import { makeOptionalsMap, OptionalMap } from "../source/helpers/make_optionals_map";
 
+import { initialize_properties_and_components } from "./_instantiate_helpers";
 import { AddressSpacePrivate } from "./address_space_private";
 import { BaseNodeImpl, InternalBaseNodeOptions } from "./base_node_impl";
 import { _clone_hierarchical_references, ToStringBuilder, UAVariableType_toString } from "./base_node_private";
@@ -88,7 +80,7 @@ export function topMostParentIsObjectTypeOrVariableType(addressSpace: AddressSpa
 }
 export interface UAVariableTypeOptions extends InternalBaseNodeOptions {
     /**
-     * This attribute indicates whether the Value attribute of the Variableis an array and how many dimensions the array has.
+     * This attribute indicates whether the Value attribute of the Variable is an array and how many dimensions the array has.
      * It may have the following values:
      *   * n > 1: the Value is an array with the specified number of dimensions.
      *   * OneDimension (1): The value is an array with one dimension.
@@ -316,167 +308,6 @@ export class UAVariableTypeImpl extends BaseNodeImpl implements UAVariableType {
     }
 }
 
-/**
- * return true if node is a mandatory child or a requested optional
- * @method MandatoryChildOrRequestedOptionalFilter
- * @param instance
- * @param optionalsMap
- * @return {Boolean}
- */
-class MandatoryChildOrRequestedOptionalFilter implements CloneFilter {
-    private readonly instance: BaseNode;
-    private readonly optionalsMap: any;
-    private readonly references: UAReference[];
-
-    constructor(instance: BaseNode, optionalsMap: any) {
-        // should we clone the node to be a component or propertyOf of a instance
-        assert(optionalsMap !== null && typeof optionalsMap === "object");
-        assert(null !== instance);
-        this.optionalsMap = optionalsMap;
-        this.instance = instance;
-        this.references = instance.allReferences();
-    }
-
-    public shouldKeep(node: BaseNode): boolean {
-        const addressSpace = node.addressSpace;
-
-        const alreadyIn = this.references.filter((r: UAReference) => {
-            const n = addressSpace.findNode(r.nodeId)!;
-            // istanbul ignore next
-            if (!n) {
-                warningLog(" cannot find node ", r.nodeId.toString());
-                return false;
-            }
-            return n.browseName!.name!.toString() === node.browseName!.name!.toString();
-        });
-
-        if (alreadyIn.length > 0) {
-            assert(alreadyIn.length === 1, "Duplication found ?");
-            // a child with the same browse name has already been install
-            // probably from a SuperClass, we should ignore this.
-            return false; // ignore
-        }
-
-        const modellingRule = node.modellingRule;
-
-        switch (modellingRule) {
-            case null:
-            case undefined:
-                debugLog(
-                    "node ",
-                    node.browseName.toString(),
-                    node.nodeId.toString(),
-                    " has no modellingRule ",
-                    node.parentNodeId?.toString()
-                );
-                /**
-                 * in some badly generated NodeSet2.xml file, the modellingRule is not specified
-                 *
-                 * but in some other NodeSet2.xml, this means that the data are only attached to the Type node and shall not be
-                 * instantiate in the corresponding instance (example is the state variable of a finite state machine that are only
-                 * defined in the Type node)
-                 *
-                 * we should not consider it as an error, and treat it as not present
-                 */
-                return false;
-
-            case "Mandatory":
-                return true; // keep;
-            case "Optional":
-                // only if in requested optionals
-                return node.browseName!.name! in this.optionalsMap;
-            case "OptionalPlaceholder":
-                return false; // ignored
-            default:
-                return false; // ignored
-        }
-    }
-
-    public filterFor(childInstance: UAVariable | UAObject | UAMethod): CloneFilter {
-        const browseName: string = childInstance.browseName.name!;
-
-        let map = {};
-
-        if (browseName in this.optionalsMap) {
-            map = this.optionalsMap[browseName];
-        }
-        const newFilter = new MandatoryChildOrRequestedOptionalFilter(childInstance, map);
-        return newFilter;
-    }
-}
-
-// install properties and components on a instantiated Object
-//
-// based on their ModelingRule
-//  => Mandatory                 => Installed
-//  => Optional                  => Not Installed , unless it appear in optionals array
-//  => OptionalPlaceHolder       => Not Installed
-//  => null (no modelling rule ) => Not Installed
-//
-
-function _initialize_properties_and_components<B extends UAObject | UAVariable | UAMethod, T extends UAObjectType | UAVariableType>(
-    instance: B,
-    topMostType: T,
-    typeDefinitionNode: T,
-    copyAlsoModellingRules: boolean,
-    optionalsMap: OptionalMap,
-    extraInfo: CloneHelper,
-    browseNameMap: Set<string>
-) {
-    if (doDebug) {
-        debugLog("instance browseName =", instance.browseName.toString());
-        debugLog("typeNode            =", typeDefinitionNode.browseName.toString());
-        debugLog("optionalsMap        =", Object.keys(optionalsMap).join(" "));
-
-        const c = typeDefinitionNode.findReferencesEx("Aggregates");
-        debugLog("typeDefinition aggregates      =", c.map((x) => x.node!.browseName.toString()).join(" "));
-    }
-    optionalsMap = optionalsMap || {};
-
-    if (sameNodeId(topMostType.nodeId, typeDefinitionNode.nodeId)) {
-        return; // nothing to do
-    }
-
-    const filter = new MandatoryChildOrRequestedOptionalFilter(instance, optionalsMap);
-
-    doTrace &&
-        traceLog(
-            chalk.cyan(extraInfo.pad(), "cloning relevant member of typeDefinition class"),
-            typeDefinitionNode.browseName.toString()
-        );
-
-    _clone_hierarchical_references(typeDefinitionNode, instance, copyAlsoModellingRules, filter, extraInfo, browseNameMap);
-
-    // now apply recursion on baseTypeDefinition  to get properties and components from base class
-
-    const baseTypeDefinitionNodeId = typeDefinitionNode.subtypeOf;
-    const baseTypeDefinition = typeDefinitionNode.subtypeOfObj!;
-
-    doTrace &&
-        traceLog(
-            chalk.cyan(
-                extraInfo.pad(),
-                "now apply recursion on baseTypeDefinition  to get properties and components from base class"
-            ),
-            baseTypeDefinition.browseName.toString()
-        );
-
-    // istanbul ignore next
-    if (!baseTypeDefinition) {
-        throw new Error(chalk.red("Cannot find object with nodeId ") + baseTypeDefinitionNodeId);
-    }
-    extraInfo.level++;
-    _initialize_properties_and_components(
-        instance,
-        topMostType,
-        baseTypeDefinition,
-        copyAlsoModellingRules,
-        optionalsMap,
-        extraInfo,
-        browseNameMap
-    );
-    extraInfo.level--;
-}
 
 /**
  * @method hasChildWithBrowseName
@@ -535,32 +366,3 @@ export function assertUnusedChildBrowseName(addressSpace: AddressSpacePrivate, o
     }
 }
 
-exports.assertUnusedChildBrowseName = assertUnusedChildBrowseName;
-exports.initialize_properties_and_components = initialize_properties_and_components;
-
-export function initialize_properties_and_components<
-    B extends UAObject | UAVariable | UAMethod,
-    T extends UAVariableType | UAObjectType
->(instance: B, topMostType: T, nodeType: T, copyAlsoModellingRules: boolean, optionals?: string[]): void {
-    const extraInfo = new CloneHelper();
-
-    extraInfo.registerClonedObject(instance, nodeType);
-
-    const optionalsMap = makeOptionalsMap(optionals);
-
-    const browseNameMap = new Set<string>();
-
-    _initialize_properties_and_components(
-        instance,
-        topMostType,
-        nodeType,
-        copyAlsoModellingRules,
-        optionalsMap,
-        extraInfo,
-        browseNameMap
-    );
-
-    reconstructFunctionalGroupType(extraInfo);
-
-    reconstructNonHierarchicalReferences(extraInfo);
-}
