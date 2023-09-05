@@ -1,19 +1,14 @@
 /**
  * @module node-opcua-client-private
  */
-// tslint:disable:variable-name
-// tslint:disable:no-console
-// tslint:disable:no-empty
-
-import * as crypto from "crypto";
-import { createPublicKey } from "crypto";
 import { callbackify } from "util";
+import { randomBytes, createPublicKey } from "crypto";
 import * as async from "async";
 import chalk from "chalk";
 
 import { assert } from "node-opcua-assert";
 import { createFastUninitializedBuffer } from "node-opcua-buffer-utils";
-import { Certificate, exploreCertificate, extractPublicKeyFromCertificateSync, Nonce, PrivateKey, toPem } from "node-opcua-crypto";
+import { Certificate, exploreCertificate, extractPublicKeyFromCertificateSync, makePrivateKeyFromPem, PrivateKey, Nonce, toPem } from "node-opcua-crypto";
 
 import { LocalizedText } from "node-opcua-data-model";
 import { checkDebugFlag, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
@@ -312,6 +307,7 @@ function _adjustRevisedSessionTimeout(revisedSessionTimeout: number, requestedTi
  */
 export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
     public static minimumRevisedSessionTimeout = 100.0;
+    private _retryCreateSessionTimer?: NodeJS.Timeout;
 
     public static create(options: OPCUAClientOptions): OPCUAClient {
         return new OPCUAClientImpl(options);
@@ -430,12 +426,15 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
             // we do not have a connection anymore
             return callback(new Error("Connection is closed"));
         }
+        if (this._internalState === "disconnected" || this._internalState === "disconnecting") {
+            return callback(new Error(`disconnecting`));
+        }
         return this.createSession(args[0], (err: Error | null, session?: ClientSession) => {
             if (err && err.message.match(/BadTooManySessions/)) {
                 const delayToRetry = 5; // seconds
-                errorLog(`TooManySession .... we need to retry later  ... in  ${delayToRetry} secondes`);
-                const retryCreateSessionTimer = setTimeout(() => {
-                    errorLog("TooManySession .... now retrying");
+                errorLog(`TooManySession .... we need to retry later  ... in  ${delayToRetry} secondes ${this._internalState}`);
+                this._retryCreateSessionTimer = setTimeout(() => {
+                    errorLog(`TooManySession .... now retrying (${this._internalState})`);
                     this.createSession2(userIdentityInfo, callback);
                 }, delayToRetry * 1000);
                 return;
@@ -474,6 +473,11 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
      * @param args
      */
     public closeSession(...args: any[]): any {
+
+        if (this._retryCreateSessionTimer) {
+            clearTimeout(this._retryCreateSessionTimer);
+            this._retryCreateSessionTimer = undefined;
+        } 
         super.closeSession(...args);
     }
 
@@ -840,7 +844,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 
         // note : do not confuse CreateSessionRequest.clientNonce with OpenSecureChannelRequest.clientNonce
         //        which are two different nonce, with different size (although they share the same name )
-        this.clientNonce = crypto.randomBytes(32);
+        this.clientNonce = randomBytes(32);
 
         // recycle session name if already exists
         const sessionName = session.name;
@@ -1253,7 +1257,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 
                 case UserTokenType.Certificate: {
                     const certificate = userIdentityInfo.certificateData;
-                    const privateKey = crypto.createPrivateKey(userIdentityInfo.privateKey);
+                    const privateKey = makePrivateKeyFromPem(userIdentityInfo.privateKey);
                     ({ userIdentityToken, userTokenSignature } = createX509IdentityToken(context, certificate, privateKey));
                     break;
                 }

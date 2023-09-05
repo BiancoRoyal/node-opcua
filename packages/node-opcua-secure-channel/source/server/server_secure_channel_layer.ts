@@ -2,7 +2,7 @@
 /**
  * @module node-opcua-secure-channel
  */
-import * as crypto from "crypto";
+import { createPublicKey, randomBytes } from "crypto";
 import { EventEmitter } from "events";
 import { Socket } from "net";
 import { callbackify } from "util";
@@ -283,9 +283,9 @@ export class ServerSecureChannelLayer extends EventEmitter {
     private receiverPublicKeyLength: number;
     private readonly messageChunker: MessageChunker;
 
-    private timeoutId: NodeJS.Timer | null;
+    private timeoutId: NodeJS.Timeout | null;
     private _open_secure_channel_onceClose: ErrorCallback | null = null;
-    private _securityTokenTimeout: NodeJS.Timer | null;
+    private _securityTokenTimeout: NodeJS.Timeout | null;
     private _transactionsCount: number;
     private revisedLifetime: number;
     private readonly transport: ServerTCP_transport;
@@ -520,7 +520,6 @@ export class ServerSecureChannelLayer extends EventEmitter {
     public getPrivateKey(): PrivateKey {
         if (!this.parent) {
             return invalidPrivateKey;
-            // throw new Error("getPrivateKey : cannot get PrivateKey");
         }
         return this.parent.getPrivateKey();
     }
@@ -744,15 +743,18 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
     private _start_security_token_watch_dog() {
         // install securityToken timeout watchdog
-        this._securityTokenTimeout = setTimeout(() => {
-            warningLog(
-                " Security token has really expired and shall be discarded !!!! (lifetime is = ",
-                this.securityToken.revisedLifetime,
-                ")"
-            );
-            warningLog(" Server will now refuse message with token ", this.securityToken.tokenId);
-            this._securityTokenTimeout = null;
-        }, (this.securityToken.revisedLifetime * 120) / 100);
+        this._securityTokenTimeout = setTimeout(
+            () => {
+                warningLog(
+                    " Security token has really expired and shall be discarded !!!! (lifetime is = ",
+                    this.securityToken.revisedLifetime,
+                    ")"
+                );
+                warningLog(" Server will now refuse message with token ", this.securityToken.tokenId);
+                this._securityTokenTimeout = null;
+            },
+            (this.securityToken.revisedLifetime * 120) / 100
+        );
     }
 
     private _add_new_security_token() {
@@ -1010,7 +1012,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
             }
 
             if (callback) {
-                setImmediate(callback);
+                callback();
             }
 
             /* istanbul ignore next */
@@ -1059,7 +1061,6 @@ export class ServerSecureChannelLayer extends EventEmitter {
         }
         return null;
     }
-
     private _get_security_options_for_MSG(): SecureMessageChunkManagerOptionsPartial | null {
         if (this.securityMode === MessageSecurityMode.None) {
             return null;
@@ -1121,7 +1122,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
                 extractPublicKeyFromCertificate(this.receiverCertificate, (err, keyPem) => {
                     if (!err) {
                         if (keyPem) {
-                            this.receiverPublicKey = crypto.createPublicKey(keyPem);
+                            this.receiverPublicKey = createPublicKey(keyPem);
                             this.receiverPublicKeyLength = rsaLengthPublicKey(keyPem);
                         }
                         callback(null, statusCode);
@@ -1261,7 +1262,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
             //    serverNonce shall be generated for each time a SecureChannel is renewed.
             //    This parameter shall have a length equal to key size used for the symmetric
             //    encryption algorithm that is identified by the securityPolicyUri.
-            this.serverNonce = crypto.randomBytes(cryptoFactory.symmetricKeyLength);
+            this.serverNonce = randomBytes(cryptoFactory.symmetricKeyLength);
 
             if (this.clientNonce.length !== this.serverNonce.length) {
                 warningLog(
@@ -1403,7 +1404,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
             requestId
         };
 
-        if (msgType === "CLO" && request.schema.name === "CloseSecureChannelRequest") {
+        if (msgType === "CLO" /* && request.schema.name === "CloseSecureChannelRequest" */) {
             this.close();
         } else if (msgType === "OPN" && request.schema.name === "OpenSecureChannelRequest") {
             // intercept client request to renew security Token

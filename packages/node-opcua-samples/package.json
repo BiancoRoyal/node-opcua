@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-samples",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module samples",
     "bin": {
         "simple_client": "./dist/simple_client_ts.js",
@@ -16,24 +16,26 @@
         "clean": "npx rimraf certificates"
     },
     "dependencies": {
-        "@types/underscore": "^1.11.5",
+        "@types/bcrypt": "^5.0.0",
+        "@types/underscore": "^1.11.9",
         "@types/yargs": "17.0.24",
+        "bcrypt": "^5.1.1",
         "chalk": "4.1.2",
         "easy-table": "^1.2.0",
         "env-paths": "2.2.1",
         "exit": "^0.1.2",
-        "node-opcua": "2.105.0",
-        "node-opcua-address-space": "2.105.0",
-        "node-opcua-address-space-for-conformance-testing": "2.105.0",
+        "node-opcua": "2.111.0",
+        "node-opcua-address-space": "2.111.0",
+        "node-opcua-address-space-for-conformance-testing": "2.111.0",
         "node-opcua-assert": "2.105.0",
-        "node-opcua-client-crawler": "2.105.0",
-        "node-opcua-client-proxy": "2.105.0",
-        "node-opcua-crypto": "3.0.6",
-        "node-opcua-packet-analyzer": "2.105.0",
-        "node-opcua-pki": "4.2.1",
-        "node-opcua-server-configuration": "2.105.0",
-        "node-opcua-utils": "2.105.0",
-        "node-opcua-vendor-diagnostic": "2.105.0",
+        "node-opcua-client-crawler": "2.111.0",
+        "node-opcua-client-proxy": "2.111.0",
+        "node-opcua-crypto": "4.3.1",
+        "node-opcua-packet-analyzer": "2.111.0",
+        "node-opcua-pki": "4.5.0",
+        "node-opcua-server-configuration": "2.111.0",
+        "node-opcua-utils": "2.110.0",
+        "node-opcua-vendor-diagnostic": "2.111.0",
         "sprintf-js": "^1.1.2",
         "treeify": "^1.1.0",
         "underscore": "^1.13.6",
@@ -54,7 +56,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist"
     ]

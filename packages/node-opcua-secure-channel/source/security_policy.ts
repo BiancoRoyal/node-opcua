@@ -20,7 +20,6 @@ import {
     Nonce,
     privateDecrypt_long,
     PrivateKey,
- 
     publicEncrypt_long,
     PublicKey,
  
@@ -35,6 +34,7 @@ import {
 } from "node-opcua-crypto";
 import { EncryptBufferFunc, SignBufferFunc } from "node-opcua-chunkmanager";
 import { make_warningLog } from "node-opcua-debug";
+import { KeyLike } from "crypto";
 
 // tslint:disable:no-empty
 function errorLog(...args: any[]) {
@@ -233,7 +233,6 @@ function RSAPKCS1OAEPSHA256_Verify(buffer: Buffer, signature: Signature, certifi
 }
 
 function RSAPKCS1V15SHA1_Sign(buffer: Buffer, privateKey: PrivateKey): Buffer {
-    assert(!((privateKey as any) instanceof Buffer), "privateKey should not be a Buffer but a PEM");
     const params = {
         algorithm: "RSA-SHA1",
         privateKey,
@@ -243,9 +242,6 @@ function RSAPKCS1V15SHA1_Sign(buffer: Buffer, privateKey: PrivateKey): Buffer {
 }
 
 function RSAPKCS1V15SHA256_Sign(buffer: Buffer, privateKey: PrivateKey): Buffer {
-    // xx    if (privateKey instanceof Buffer) {
-    // xx        privateKey = toPem(privateKey, "RSA PRIVATE KEY");
-    // xx   }
     const params = {
         algorithm: "RSA-SHA256",
         privateKey,
@@ -258,12 +254,12 @@ const RSAPKCS1OAEPSHA1_Sign = RSAPKCS1V15SHA1_Sign;
 
 function RSAPKCS1V15_Encrypt(buffer: Buffer, publicKey: PublicKey): Buffer {
     const keyLength = rsaLengthPublicKey(publicKey);
-    return publicEncrypt_long(buffer, publicKey, keyLength, 11, RSA_PKCS1_PADDING);
+    return publicEncrypt_long(buffer, publicKey as unknown as KeyLike, keyLength, 11, RSA_PKCS1_PADDING);
 }
 
 function RSAOAEP_Encrypt(buffer: Buffer, publicKey: PublicKey): Buffer {
     const keyLength = rsaLengthPublicKey(publicKey);
-    return publicEncrypt_long(buffer, publicKey, keyLength, 42, RSA_PKCS1_OAEP_PADDING);
+    return publicEncrypt_long(buffer, publicKey as unknown as KeyLike, keyLength, 42, RSA_PKCS1_OAEP_PADDING);
 }
 
 // export interface DerivedKeys {
@@ -318,7 +314,7 @@ export interface CryptoFactory {
     maximumAsymmetricKeyLength: number;
 
     asymmetricVerifyChunk: (self: CryptoFactory, chunk: Buffer, certificate: Certificate) => boolean;
-    asymmetricSign: (buffer: Buffer, publicKey: PublicKey) => Buffer;
+    asymmetricSign: (buffer: Buffer, privateKey: PrivateKey) => Buffer;
     asymmetricVerify: (buffer: Buffer, signature: Signature, certificate: Certificate) => boolean;
 
     asymmetricEncrypt: (buffer: Buffer, publicKey: PublicKey) => Buffer;

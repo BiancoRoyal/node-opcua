@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-service-endpoints",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module service-endpoints",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -10,7 +10,7 @@
         "build": "tsc -b"
     },
     "dependencies": {
-        "node-opcua-types": "2.105.0"
+        "node-opcua-types": "2.111.0"
     },
     "devDependencies": {
         "should": "^13.2.3"
@@ -30,7 +30,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist",
         "source"

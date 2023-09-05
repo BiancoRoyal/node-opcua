@@ -10,7 +10,6 @@ import { assert } from "node-opcua-assert";
 import { ErrorCallback, UAString } from "node-opcua-basic-types";
 import {
     coerceLocalizedText,
-    LocalizedTextLike,
     LocalizedTextOptions,
     OPCUAClientBase,
     OPCUAClientBaseOptions,
@@ -299,7 +298,7 @@ export class RegisterServerManager extends EventEmitter implements IRegisterServ
     public timeout: number;
 
     private server: IPartialServer | null;
-    private _registrationTimerId: NodeJS.Timer | null;
+    private _registrationTimerId: NodeJS.Timeout | null;
     private state: RegisterServerManagerStatus = RegisterServerManagerStatus.INACTIVE;
     private _registration_client: OPCUAClientBase | null = null;
     private selectedEndpoint?: EndpointDescription;

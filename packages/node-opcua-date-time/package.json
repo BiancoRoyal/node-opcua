@@ -2,7 +2,7 @@
     "name": "node-opcua-date-time",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module date-time",
     "scripts": {
         "build": "tsc -b",
@@ -12,15 +12,15 @@
     "dependencies": {
         "long": "^4.0.0",
         "node-opcua-assert": "2.105.0",
-        "node-opcua-binary-stream": "2.105.0",
-        "node-opcua-utils": "2.105.0"
+        "node-opcua-binary-stream": "2.110.0",
+        "node-opcua-utils": "2.110.0"
     },
     "devDependencies": {
-        "bignumber.js": "^9.1.1",
-        "node-opcua-benchmarker": "2.105.0",
-        "node-opcua-debug": "2.105.0",
+        "bignumber.js": "^9.1.2",
+        "node-opcua-benchmarker": "2.110.0",
+        "node-opcua-debug": "2.110.0",
         "should": "^13.2.3",
-        "sinon": "^15.1.0"
+        "sinon": "^15.2.0"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",
@@ -37,7 +37,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "e4d73afdfcccb3491423149d9b9785888f4ebb3c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist",
         "source"

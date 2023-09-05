@@ -1,20 +1,26 @@
+/* eslint-disable max-statements */
 // tslint:disable:no-console
 import * as path from "path";
 import "should";
-import { LocalizedText } from "node-opcua-data-model";
+import { LocalizedText, QualifiedName } from "node-opcua-data-model";
 import { StatusCodes } from "node-opcua-status-code";
-import { DataType } from "node-opcua-variant";
+import { DataType, VariantArrayType } from "node-opcua-variant";
 
 import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 import { nodesets } from "node-opcua-nodesets";
+import { NodeId } from "node-opcua-nodeid";
 import sinon from "sinon";
+import should from "should";
+
 import {
     AddressSpace,
     promoteToStateMachine,
     UAStateMachineEx,
     UAObject,
     UAStateMachineType,
-    UAFiniteStateMachineType
+    UAFiniteStateMachineType,
+    UAFiniteStateMachine,
+    UAVariable
 } from "../..";
 import { generateAddressSpace } from "../../nodeJS";
 
@@ -24,7 +30,7 @@ const doDebug = checkDebugFlag("TEST");
 // make sure extra error checking is made on object constructions
 // tslint:disable-next-line:no-var-requires
 const describe = require("node-opcua-leak-detector").describeWithLeakDetector;
-describe("Testing Finite State Machine", () => {
+describe("FSM1 - Finite State Machine - general tests", () => {
     let addressSpace: AddressSpace;
 
     before(async () => {
@@ -43,7 +49,7 @@ describe("Testing Finite State Machine", () => {
         }
     });
 
-    it("finite state machine should have expected mandatory and optional fields", async () => {
+    it("a finite state machine should have expected mandatory and optional fields", async () => {
         const stateMachineType = addressSpace.findObjectType("StateMachineType")! as UAStateMachineType;
 
         stateMachineType.currentState.modellingRule!.should.eql("Mandatory");
@@ -267,7 +273,7 @@ describe("Testing Finite State Machine", () => {
     });
 });
 
-describe("FiniteStateMachine with Multiple transition from one state to an other", () => {
+describe("FSM2 - Finite State Machine with Multiple transition from one state to an other", () => {
     // some state machine may have multiple transition from one state to the other
     // this is the case in the VisionStateMachine of the MachineVision nodeset
     // for this reason the setState method need to have a extra argument that allows disambiguation
@@ -361,5 +367,325 @@ describe("FiniteStateMachine with Multiple transition from one state to an other
         debugLog(output);
 
         output.should.eql("");
+    });
+});
+
+describe("FSM3 - Finite State Machine - testing FiniteStateMachine from companion specification", () => {
+    let clock: sinon.SinonFakeTimers | undefined;
+    beforeEach(() => {
+        clock = sinon.useFakeTimers({
+            now: 1000,
+            shouldAdvanceTime: false,
+            shouldClearNativeTimers: true
+        } as any);
+    });
+    afterEach(() => {
+        clock!.restore();
+        clock = undefined;
+    });
+    function advanceClockOneHour() {
+        const OneHour = 1000 * 60 * 60;
+        const now = new Date(Date.now() + OneHour);
+        clock!.setSystemTime(now);
+        return now;
+    }
+
+    let addressSpace: AddressSpace;
+    before(async () => {
+        addressSpace = AddressSpace.create();
+        await generateAddressSpace(addressSpace, [
+            nodesets.standard,
+            nodesets.di,
+            nodesets.machinery,
+            nodesets.ia,
+            nodesets.machineTool
+        ]);
+        addressSpace.registerNamespace("urn:my");
+        //        addressSpace.installAlarmsAndConditionsService();
+    });
+    after(async () => {
+        await addressSpace.shutdown();
+        addressSpace.dispose();
+    });
+
+    describe("FSM3-A Test FiniteStateMachine from companion specification", function () {
+        let stateMachine: UAStateMachineEx;
+
+        before(async () => {
+            const namespace = addressSpace.getOwnNamespace();
+
+            const nsMachinery = addressSpace.getNamespaceIndex("http://opcfoundation.org/UA/Machinery/");
+            const machineItemStateStateMachineType = addressSpace.findObjectType(
+                "MachineryItemState_StateMachineType",
+                nsMachinery
+            )!;
+
+            stateMachine = machineItemStateStateMachineType.instantiate({
+                browseName: "StateMachine",
+                organizedBy: addressSpace.rootFolder.objects,
+                optionals: [
+                    "AvailableStates",
+                    "AvailableTransitions",
+
+                    "CurrentState.Name",
+                    "CurrentState.Number",
+                    "CurrentState.EffectiveDisplayName",
+
+                    "LastTransition",
+                    "LastTransition.Name",
+                    "LastTransition.Number",
+                    "LastTransition.TransitionTime",
+                    "LastTransition.EffectiveTransitionTime"
+                ]
+            }) as UAStateMachineEx;
+
+            promoteToStateMachine(stateMachine);
+            console.log(
+                stateMachine
+                    .getStates()
+                    .map((s) => s.browseName.toString())
+                    .join(" ")
+            );
+        });
+
+        it("should expose availableStates automatically", () => {
+            const availableStatesNode = stateMachine.getComponentByName("AvailableStates", 0) as UAVariable;
+            should.exist(availableStatesNode, " should expose a component named 'AvailableStates'");
+            const nodeIdArrayVar = availableStatesNode.readValue().value;
+            nodeIdArrayVar.dataType.should.eql(DataType.NodeId);
+            nodeIdArrayVar.arrayType.should.eql(VariantArrayType.Array);
+            nodeIdArrayVar.value.should.be.instanceOf(Array);
+            const actualAvailableStateNodeIds = nodeIdArrayVar.value.map((nodeId: NodeId) => nodeId.toString());
+
+            const expectedAvailableStateNodeIds = stateMachine.getStates().map((s) => s.nodeId.toString());
+            actualAvailableStateNodeIds.sort().should.eql(expectedAvailableStateNodeIds.sort());
+        });
+
+        it("should expose availableTransitions automatically", () => {
+            const availableTransitionsNode = stateMachine.getComponentByName("AvailableTransitions", 0) as UAVariable;
+            should.exist(availableTransitionsNode, " should expose a component named 'AvailableTransitions'");
+            const nodeIdArrayVar = availableTransitionsNode.readValue().value;
+            nodeIdArrayVar.dataType.should.eql(DataType.NodeId);
+            nodeIdArrayVar.arrayType.should.eql(VariantArrayType.Array);
+            nodeIdArrayVar.value.should.be.instanceOf(Array);
+            const actualAvailableTransitionNodeIds = nodeIdArrayVar.value.map((nodeId: NodeId) => nodeId.toString());
+
+            const expectedAvailableTransitionNodeIds = stateMachine.getTransitions().map((s) => s.nodeId.toString());
+            actualAvailableTransitionNodeIds.sort().should.eql(expectedAvailableTransitionNodeIds.sort());
+        });
+
+        it("testing setState", () => {
+            const id = stateMachine.currentState.getPropertyByName("Id")! as UAVariable;
+            should.exist(id);
+
+            const name = stateMachine.currentState.getPropertyByName("Name")! as UAVariable;
+            should.exist(name);
+
+            const effectiveDisplayName = stateMachine.currentState.getPropertyByName("EffectiveDisplayName")! as UAVariable;
+            should.exist(effectiveDisplayName);
+
+            const number = stateMachine.currentState.getPropertyByName("Number")! as UAVariable;
+            should.exist(number);
+
+            /// ----------------------------------------------
+
+            stateMachine.setState("NotAvailable");
+            {
+                stateMachine.currentState
+                    .readValue()
+                    .value.value.text!.should.eql("NotAvailable", "the state should be NotAvailable without namespace decoration");
+
+                const state = stateMachine.getStateByName("NotAvailable")!;
+
+                {
+                    const value = id.readValue().value;
+                    value.dataType.should.eql(DataType.NodeId);
+                    (value.value as NodeId).toString().should.eql(state.nodeId.toString());
+                }
+                {
+                    const value = name.readValue().value;
+                    value.dataType.should.eql(DataType.QualifiedName);
+                    (value.value as QualifiedName).toString().should.eql("2:NotAvailable");
+                }
+                {
+                    const value = number.readValue().value;
+                    value.dataType.should.eql(DataType.UInt32);
+                    (value.value as number).should.eql(0);
+                }
+                {
+                    const value = effectiveDisplayName.readValue().value;
+                    value.dataType.should.eql(DataType.LocalizedText);
+                    (value.value as LocalizedText).text!.should.eql("NotAvailable");
+                }
+            }
+
+            stateMachine.setState("Executing");
+            {
+                stateMachine.currentState.readValue().value.value.text!.should.eql("Executing");
+                const state = stateMachine.getStateByName("Executing")!;
+
+                {
+                    const value = id.readValue().value;
+                    value.dataType.should.eql(DataType.NodeId);
+                    (value.value as NodeId).toString().should.eql(state.nodeId.toString());
+                }
+                {
+                    const value = name.readValue().value;
+                    value.dataType.should.eql(DataType.QualifiedName);
+                    (value.value as QualifiedName).toString().should.eql("2:Executing");
+                }
+                {
+                    const value = number.readValue().value;
+                    value.dataType.should.eql(DataType.UInt32);
+                    (value.value as number).should.eql(3);
+                }
+                {
+                    const value = effectiveDisplayName.readValue().value;
+                    value.dataType.should.eql(DataType.LocalizedText);
+                    (value.value as LocalizedText).text!.should.eql("Executing");
+                }
+            }
+
+            //
+        });
+
+        it("changing state should update lastTransition", () => {
+            stateMachine.setState("NotAvailable");
+            stateMachine.setState("Executing");
+
+            const NotAvailableState = stateMachine.getStateByName("NotAvailable")!;
+            const ExecutingState = stateMachine.getStateByName("Executing")!;
+            const NotAvailableToExecutingTransition = stateMachine.findTransitionNode(NotAvailableState, ExecutingState)!;
+
+            const uaLastTransition = stateMachine.getComponentByName("LastTransition")! as UAVariable;
+
+            const value = uaLastTransition.readValue().value;
+            value.dataType.should.eql(DataType.LocalizedText);
+            value.value.toString().should.eql(NotAvailableToExecutingTransition.displayName.toString());
+
+            // console.log(uaLastTransition.toString());
+            const uaLastTransitionTime = uaLastTransition.getPropertyByName("TransitionTime")! as UAVariable;
+            should.exist(uaLastTransitionTime);
+
+            const uaNumber = uaLastTransition.getPropertyByName("Number")! as UAVariable;
+            should.exist(uaNumber);
+            if (uaNumber) {
+                const value = uaNumber.readValue().value;
+                value.dataType.should.eql(DataType.UInt32);
+                value.value.should.eql(1);
+            }
+
+            const uaName = uaLastTransition.getPropertyByName("Name")! as UAVariable;
+            should.exist(uaName);
+            if (uaName) {
+                const value = uaName.readValue().value;
+                value.dataType.should.eql(DataType.QualifiedName);
+                const value2 = value.value as QualifiedName;
+                value2.name!.should.eql("FromNotAvailableToExecuting");
+                value2.namespaceIndex!.should.eql(2);
+            }
+            const uaId = uaLastTransition.getPropertyByName("Id")! as UAVariable;
+            should.exist(uaId);
+            if (uaId) {
+                const value = uaId.readValue().value;
+                value.dataType.should.eql(DataType.NodeId);
+                const value2 = value.value as NodeId;
+                value2.toString().should.eql(NotAvailableToExecutingTransition.nodeId.toString());
+            }
+        });
+
+        it("changing state should update lastUpdateDate", () => {
+            stateMachine.setState("NotAvailable");
+        });
+    });
+
+    describe("FSM3-B Test MachineState with SubMachine state", function () {
+        // MachineOperationModeStateMachineType
+        let stateMachine: UAStateMachineEx;
+
+        before(async () => {
+            const nsMachineTool = addressSpace.getNamespaceIndex("http://opcfoundation.org/UA/MachineTool/");
+            const machineItemStateStateMachineType = addressSpace.findObjectType(
+                "MachineOperationModeStateMachineType",
+                nsMachineTool
+            )!;
+
+            stateMachine = machineItemStateStateMachineType.instantiate({
+                browseName: "MachineOperationModeStateMachine",
+                organizedBy: addressSpace.rootFolder.objects,
+                optionals: [
+                    "AvailableStates",
+                    "AvailableTransitions",
+
+                    "CurrentState.Name",
+                    "CurrentState.Number",
+                    "CurrentState.EffectiveDisplayName",
+
+                    "LastTransition",
+                    "LastTransition.Name",
+                    "LastTransition.Number",
+                    "LastTransition.TransitionTime",
+                    "LastTransition.EffectiveTransitionTime",
+
+                    "MaintenanceMode",
+                    "MaintenanceMode.AvailableStates",
+                    "MaintenanceMode.AvailableTransitions",
+                    "MaintenanceMode.LastTransition",
+                    "MaintenanceMode.LastTransition.Name",
+                    "MaintenanceMode.LastTransition.Number",
+                    "MaintenanceMode.LastTransition.TransitionTime"
+                ]
+            }) as UAStateMachineEx;
+
+            promoteToStateMachine(stateMachine);
+            console.log(
+                stateMachine
+                    .getStates()
+                    .map((s) => s.browseName.toString())
+                    .join(" ")
+            );
+
+            const lastTransition = stateMachine.getComponentByName("LastTransition", 0)! as UAVariable;
+            should.exist(lastTransition);
+
+            // the sub-state machine
+            const maintenanceMode = stateMachine.getComponentByName("MaintenanceMode", nsMachineTool)! as UAStateMachineEx;
+            should.exist(maintenanceMode);
+            promoteToStateMachine(maintenanceMode);
+        });
+
+        it("should update the effectTransitionTime of the mainState when the subState is changed", () => {
+            new Date().should.eql(new Date(1000));
+
+            const lastTransition = stateMachine.getComponentByName("LastTransition");
+            should.exist(lastTransition);
+
+            const lastTransitionEffectiveTransitionTime = lastTransition!.getPropertyByName(
+                "EffectiveTransitionTime"
+            )! as UAVariable;
+            should.exist(lastTransitionEffectiveTransitionTime);
+
+            stateMachine.setState("Maintenance");
+
+            const maintenanceMode = stateMachine.getComponentByName("MaintenanceMode")! as UAStateMachineEx;
+            should.exist(maintenanceMode);
+
+            {
+                const now = advanceClockOneHour();
+                maintenanceMode.setState("Service");
+                lastTransitionEffectiveTransitionTime.readValue().value.value.should.eql(now);
+            }
+            {
+                const now = advanceClockOneHour();
+                maintenanceMode.setState("Repair");
+                lastTransitionEffectiveTransitionTime.readValue().value.value.should.eql(now);
+            }
+            {
+                const now = advanceClockOneHour();
+
+                maintenanceMode.setState("Upgrade");
+                lastTransitionEffectiveTransitionTime.readValue().value.value.should.eql(now);
+            }
+        });
     });
 });

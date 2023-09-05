@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-data-model",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module data-model",
     "scripts": {
         "build": "tsc -b",
@@ -14,15 +14,15 @@
     "types": "./dist/index.d.ts",
     "dependencies": {
         "node-opcua-assert": "2.105.0",
-        "node-opcua-basic-types": "2.105.0",
-        "node-opcua-binary-stream": "2.105.0",
-        "node-opcua-enum": "2.105.0",
-        "node-opcua-factory": "2.105.0",
-        "node-opcua-nodeid": "2.105.0",
-        "node-opcua-status-code": "2.105.0"
+        "node-opcua-basic-types": "2.111.0",
+        "node-opcua-binary-stream": "2.110.0",
+        "node-opcua-enum": "2.110.0",
+        "node-opcua-factory": "2.111.0",
+        "node-opcua-nodeid": "2.110.0",
+        "node-opcua-status-code": "2.110.0"
     },
     "devDependencies": {
-        "node-opcua-packet-analyzer": "2.105.0",
+        "node-opcua-packet-analyzer": "2.111.0",
         "should": "^13.2.3"
     },
     "author": "Etienne Rossignon",
@@ -40,7 +40,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist",
         "source"

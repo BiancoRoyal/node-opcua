@@ -54,7 +54,7 @@ import { sameVariant, Variant, VariantArrayType } from "node-opcua-variant";
 
 import { appendToTimer, removeFromTimer } from "./node_sampler";
 import { validateFilter } from "./validate_filter";
-import { checkWhereClauseOnAdressSpace } from "./filter/check_where_clause_on_address_space";
+import { checkWhereClauseOnAdressSpace as checkWhereClauseOnAddressSpace } from "./filter/check_where_clause_on_address_space";
 import { SamplingFunc } from "./sampling_func";
 
 export type QueueItem = MonitoredItemNotification | EventFieldList;
@@ -398,7 +398,7 @@ export class MonitoredItem extends EventEmitter {
     public queueSize = 0;
     public clientHandle: UInt32;
     public $subscription?: ISubscription;
-    public _samplingId?: TimerKey | string;
+    public _samplingId?: NodeJS.Timeout | string;
     public samplingFunc: SamplingFunc | null = null;
 
     private _node: BaseNode | null;
@@ -991,7 +991,7 @@ export class MonitoredItem extends EventEmitter {
 
         const addressSpace: AddressSpace = eventData.$eventDataSource?.addressSpace as AddressSpace;
 
-        if (!checkWhereClauseOnAdressSpace(addressSpace, SessionContext.defaultContext, this.filter.whereClause, eventData)) {
+        if (!checkWhereClauseOnAddressSpace(addressSpace, SessionContext.defaultContext, this.filter.whereClause, eventData)) {
             return;
         }
 
@@ -1331,7 +1331,7 @@ export class MonitoredItem extends EventEmitter {
             if (useCommonTimer) {
                 removeFromTimer(this);
             } else {
-                clearInterval(this._samplingId as NodeJS.Timer);
+                clearInterval(this._samplingId);
             }
             this._samplingId = undefined;
         }

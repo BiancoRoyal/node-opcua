@@ -12,7 +12,7 @@ describe("Testing automatic reconnection to a server when credential have change
     const users = [
         {
             username: "user1",
-            password: "password1-Old",
+            password: (()=>"password1-Old")(),
             roles: makeRoles([WellKnownRoles.AuthenticatedUser, WellKnownRoles.ConfigureAdmin])
         }
     ];
@@ -66,7 +66,7 @@ describe("Testing automatic reconnection to a server when credential have change
             console.log("server connection refused");
         });
         server.on("session_closed", () => {
-            console.log("server sesion closed");
+            console.log("server session closed");
         });
         server.on("create_session", () => {
             console.log("server create session");
@@ -124,7 +124,7 @@ describe("Testing automatic reconnection to a server when credential have change
         const session = await client.createSession({
             type: UserTokenType.UserName,
             userName: "user1",
-            password: "password1-Old"
+            password: (()=>"password1-Old")()
         });
         console.log(client.clientName, "session timeout = ", session.timeout);
 
@@ -141,19 +141,23 @@ describe("Testing automatic reconnection to a server when credential have change
     }
 
     async function shutDownServerChangePasswordAndRestart(waitingTIme: number, newPassword = "password1-New") {
-        console.log("============================ shuting down server");
+        console.log("============================ shutting down server");
         await server.shutdown();
         await wait(waitingTIme);
         console.log("============================ changing user password");
         users[0].password = newPassword;
         console.log("============================ restarting server again");
         server = await startServer();
-        console.log("============================ server restarteds");
+        console.log("============================ server restarted");
     }
 
     it("should try to reconnected automatically - but fail to do so", async () => {
         const client = await createAndConnectClient();
 
+        let reconnectingCount = 0;
+        client.on("reconnecting", () => {
+            reconnectingCount++;
+        });
         try {
             await shutDownServerChangePasswordAndRestart(1, "password1-New");
 
@@ -161,9 +165,19 @@ describe("Testing automatic reconnection to a server when credential have change
             await wait_until_condition(() => {
                 return client.isReconnecting;
             }, 10000);
-            await wait(10*1000);
+
+            console.log("client.isReconnecting = ", client.isReconnecting);
+            client.isReconnecting.should.eql(true, "client should be trying to reconnect constantly without success");
+            await wait(10 * 1000);       
+            console.log("client.isReconnecting = ", client.isReconnecting);
+            await wait(10 * 1000);
+            console.log("client.isReconnecting = ", client.isReconnecting);
+            await wait(10 * 1000);
+            console.log("client.isReconnecting = ", client.isReconnecting);
             client.isReconnecting.should.eql(true, "client should be trying to reconnect constantly without success");
         } finally {
+            console.log("now disconnecting");
+
             await client.disconnect();
         }
         console.log("done!");

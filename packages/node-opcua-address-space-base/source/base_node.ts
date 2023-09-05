@@ -7,6 +7,7 @@ import {
     AttributeIds,
     BrowseDirection,
     LocalizedText,
+    LocalizedTextLike,
     NodeClass,
     QualifiedName,
     QualifiedNameLike,
@@ -254,4 +255,7 @@ export declare class BaseNode extends EventEmitter {
      *
      */
     getAggregates(): BaseNode[];
+
+    public setDisplayName(value: LocalizedTextLike[] | LocalizedTextLike): void;
+    public setDescription(value: LocalizedTextLike| null): void;
 }

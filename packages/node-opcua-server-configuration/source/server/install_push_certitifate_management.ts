@@ -4,7 +4,6 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { createPrivateKey } from "crypto";
 
 import { types } from "util";
 import chalk from "chalk";
@@ -12,7 +11,14 @@ import chalk from "chalk";
 import { UAServerConfiguration, AddressSpace } from "node-opcua-address-space";
 import { assert } from "node-opcua-assert";
 import { OPCUACertificateManager } from "node-opcua-certificate-manager";
-import { Certificate, convertPEMtoDER, makeSHA1Thumbprint, PrivateKey, readPrivateKey, split_der } from "node-opcua-crypto";
+import {
+    Certificate,
+    convertPEMtoDER,
+    makeSHA1Thumbprint,
+    PrivateKey,
+    readPrivateKey,
+    split_der
+} from "node-opcua-crypto";
 import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
 import { getFullyQualifiedDomainName } from "node-opcua-hostname";
 import { ICertificateKeyPairProviderPriv } from "node-opcua-common";
@@ -93,7 +99,7 @@ async function install(this: OPCUAServerPartial): Promise<void> {
     );
 
     if (!this.$$privateKey) {
-        this.$$privateKey = createPrivateKey(await readFile(this.serverCertificateManager.privateKey, "utf8"));
+        this.$$privateKey = readPrivateKey(this.serverCertificateManager.privateKey);
     }
 
     if (!this.$$certificateChain) {

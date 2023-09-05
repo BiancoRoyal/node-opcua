@@ -1,4 +1,4 @@
-import * as fs from "fs";
+import fs from "fs";
 import "should";
 import { AddressSpace } from "node-opcua-address-space";
 import { construct_demo_alarm_in_address_space, IAlarmTestData } from "node-opcua-address-space/testHelpers";
@@ -7,7 +7,15 @@ import { PseudoSession } from "node-opcua-address-space";
 import { nodesets } from "node-opcua-nodesets";
 import { checkDebugFlag, make_debugLog } from "node-opcua-debug";
 
-import { AttributeIds, constructEventFilter, DataType, extractConditionFields, fieldsToJson, resolveNodeId, Variant } from "..";
+import {
+    AttributeIds,
+    constructEventFilter,
+    DataType,
+    extractConditionFields,
+    fieldsToJson,
+    resolveNodeId,
+    Variant
+} from "..";
 
 const debugLog = make_debugLog("TEST");
 const doDebug = checkDebugFlag("TEST");
@@ -16,14 +24,14 @@ describe("extractConditionFields", () => {
     let addressSpace: AddressSpace;
     const test = {} as IAlarmTestData;
     before(async () => {
-        const xmlFiles = [nodesets.standard];
+        const xmlFiles = [nodesets.standard, nodesets.di, nodesets.autoId];
         addressSpace = AddressSpace.create();
         fs.existsSync(xmlFiles[0]).should.eql(true);
         await generateAddressSpace(addressSpace, xmlFiles);
 
         addressSpace.registerNamespace("urn:OwnNamespace");
         construct_demo_alarm_in_address_space(test, addressSpace);
-        // create an alarm
+        // create an alarmextractEventFieldsSimplePath
     });
     after(() => {
         addressSpace.dispose();

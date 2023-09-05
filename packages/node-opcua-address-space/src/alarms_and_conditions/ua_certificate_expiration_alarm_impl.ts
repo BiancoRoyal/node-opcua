@@ -49,7 +49,7 @@ export const TwoWeeksDuration = OneDayDuration * 2 * 7;
  * of expiration. This alarm automatically returns to normal when the certificate is updated.
  */
 class UACertificateExpirationAlarmImpl extends UASystemOffNormalAlarmImpl implements UACertificateExpirationAlarmEx {
-    private timer: any;
+    private timer: NodeJS.Timeout | null = null;
 
     public static instantiate(
         namespace: INamespace,
@@ -193,7 +193,7 @@ class UACertificateExpirationAlarmImpl extends UASystemOffNormalAlarmImpl implem
             this.expirationLimit.accessLevel = makeAccessLevelExFlag("CurrentRead | CurrentWrite");
             this.expirationLimit.userAccessLevel = makeAccessLevelExFlag("CurrentRead | CurrentWrite");
             this.expirationLimit.on("value_changed", (dataValue) => {
-                // make sure we re-evaluate the certificfate
+                // make sure we re-evaluate the certificate
                 const certificate = this.getCertificate();
                 this.setCertificate(certificate);
             });

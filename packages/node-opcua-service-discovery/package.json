@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-service-discovery",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module service-discovery",
     "scripts": {
         "build": "tsc -b",
@@ -13,9 +13,9 @@
     "dependencies": {
         "chalk": "4.1.2",
         "node-opcua-assert": "2.105.0",
-        "node-opcua-debug": "2.105.0",
-        "node-opcua-object-registry": "2.105.0",
-        "node-opcua-types": "2.105.0",
+        "node-opcua-debug": "2.110.0",
+        "node-opcua-object-registry": "2.110.0",
+        "node-opcua-types": "2.111.0",
         "sterfive-bonjour-service": "1.1.4"
     },
     "author": "Etienne Rossignon",
@@ -33,7 +33,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist",
         "source"

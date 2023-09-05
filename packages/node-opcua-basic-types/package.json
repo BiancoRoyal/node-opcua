@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-basic-types",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module basic-types",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -12,17 +12,17 @@
     },
     "dependencies": {
         "node-opcua-assert": "2.105.0",
-        "node-opcua-binary-stream": "2.105.0",
-        "node-opcua-buffer-utils": "2.105.0",
-        "node-opcua-date-time": "2.105.0",
+        "node-opcua-binary-stream": "2.110.0",
+        "node-opcua-buffer-utils": "2.110.0",
+        "node-opcua-date-time": "2.111.0",
         "node-opcua-guid": "2.98.1",
-        "node-opcua-nodeid": "2.105.0",
-        "node-opcua-status-code": "2.105.0"
+        "node-opcua-nodeid": "2.110.0",
+        "node-opcua-status-code": "2.110.0"
     },
     "devDependencies": {
-        "@types/node": "20.2.6",
-        "node-opcua-benchmarker": "2.105.0",
-        "node-opcua-debug": "2.105.0",
+        "@types/node": "20.5.9",
+        "node-opcua-benchmarker": "2.110.0",
+        "node-opcua-debug": "2.110.0",
         "should": "^13.2.3"
     },
     "author": "Etienne Rossignon",
@@ -40,7 +40,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "e4d73afdfcccb3491423149d9b9785888f4ebb3c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist",
         "source"

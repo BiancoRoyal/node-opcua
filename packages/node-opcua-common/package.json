@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-common",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module common",
     "scripts": {
         "test": "mocha",
@@ -12,11 +12,11 @@
     "types": "./dist/index.d.ts",
     "dependencies": {
         "node-opcua-assert": "2.105.0",
-        "node-opcua-crypto": "3.0.6",
-        "node-opcua-types": "2.105.0"
+        "node-opcua-crypto": "4.3.1",
+        "node-opcua-types": "2.111.0"
     },
     "devDependencies": {
-        "@types/node": "20.2.6",
+        "@types/node": "20.5.9",
         "should": "^13.2.3"
     },
     "author": "Etienne Rossignon",
@@ -34,7 +34,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist",
         "source"

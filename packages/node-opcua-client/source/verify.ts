@@ -1,15 +1,14 @@
-import { createPrivateKey } from "crypto";
 import { OPCUACertificateManager } from "node-opcua-certificate-manager";
 import { OPCUASecureObject } from "node-opcua-common";
 
 import {
     Certificate,
-    convertPEMtoDER,
     exploreCertificate,
     explorePrivateKey,
     publicKeyAndPrivateKeyMatches
 } from "node-opcua-crypto";
 import { checkDebugFlag, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
+import { VerifyCertificateOptions } from "node-opcua-pki";
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
@@ -152,7 +151,14 @@ export async function performCertificateSanityCheck(
     }
     // verify that the certificate has a valid date and has expected extensions fields such as DNS and IP.
     const status1 = await certificateManager.trustCertificate(certificate);
-    const status = await certificateManager.verifyCertificateAsync(certificate);
+
+    const options: VerifyCertificateOptions = {
+        acceptOutdatedCertificate: false,
+        acceptOutDatedIssuerCertificate: false,
+        acceptPendingCertificate: false,
+    };
+
+    const status = await certificateManager.verifyCertificate(certificate, options);
 
     if (status !== "Good") {
         warningLog("[NODE-OPCUA-W04] Warning: the certificate status is = ", status, " file = ", secureObject.certificateFile);

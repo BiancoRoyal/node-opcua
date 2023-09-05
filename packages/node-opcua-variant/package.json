@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-variant",
-    "version": "2.105.0",
+    "version": "2.111.0",
     "description": "pure nodejs OPCUA SDK - module variant",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -13,24 +13,24 @@
     },
     "dependencies": {
         "node-opcua-assert": "2.105.0",
-        "node-opcua-basic-types": "2.105.0",
-        "node-opcua-binary-stream": "2.105.0",
-        "node-opcua-data-model": "2.105.0",
-        "node-opcua-enum": "2.105.0",
-        "node-opcua-factory": "2.105.0",
-        "node-opcua-nodeid": "2.105.0",
-        "node-opcua-utils": "2.105.0"
+        "node-opcua-basic-types": "2.111.0",
+        "node-opcua-binary-stream": "2.110.0",
+        "node-opcua-data-model": "2.111.0",
+        "node-opcua-enum": "2.110.0",
+        "node-opcua-factory": "2.111.0",
+        "node-opcua-nodeid": "2.110.0",
+        "node-opcua-utils": "2.110.0"
     },
     "devDependencies": {
-        "@types/lodash": "4.14.195",
-        "@types/underscore": "^1.11.5",
+        "@types/lodash": "4.14.197",
+        "@types/underscore": "^1.11.9",
         "lodash": "4.17.21",
-        "node-opcua-benchmarker": "2.105.0",
-        "node-opcua-debug": "2.105.0",
-        "node-opcua-extension-object": "2.105.0",
-        "node-opcua-numeric-range": "2.105.0",
-        "node-opcua-packet-analyzer": "2.105.0",
-        "node-opcua-status-code": "2.105.0",
+        "node-opcua-benchmarker": "2.110.0",
+        "node-opcua-debug": "2.110.0",
+        "node-opcua-extension-object": "2.111.0",
+        "node-opcua-numeric-range": "2.111.0",
+        "node-opcua-packet-analyzer": "2.111.0",
+        "node-opcua-status-code": "2.110.0",
         "should": "^13.2.3",
         "underscore": "^1.13.6"
     },
@@ -49,7 +49,7 @@
         "internet of things"
     ],
     "homepage": "http://node-opcua.github.io/",
-    "gitHead": "07dcdd8e8c7f2b55544c6e23023093e35674829c",
+    "gitHead": "50cfa07779d4c07b299176ac9c27527fcd97d079",
     "files": [
         "dist",
         "source"
