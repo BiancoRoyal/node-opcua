@@ -174,12 +174,14 @@ function repair_client_session_by_recreating_a_new_session(
     // and may be upgraded in between, we have to invalidate the extra data type manager
     invalidateExtraDataTypeManager(session);
 
+    // istanbul ignore next
     if (doDebug) {
-        doDebug && debugLog(" repairing client session by_recreating a new session for old session ", session.sessionId.toString());
+        debugLog(" repairing client session by_recreating a new session for old session ", session.sessionId.toString());
     }
 
     //  TO DO : it is possible that session is already closed while we get there
     if (session.hasBeenClosed()) {
+        // istanbul ignore next
         doDebug && debugLog(chalk.bgWhite.red("Aborting reactivation of old session because user requested session to be closed"));
         return callback(new Error("reconnection cancelled due to session termination"));
     }
@@ -194,6 +196,7 @@ function repair_client_session_by_recreating_a_new_session(
                 if (session.hasBeenClosed()) {
                     return innerCallback(new Error("Cannot complete subscription republish due to session termination"));
                 }
+                // istanbul ignore next
                 doDebug && debugLog(chalk.bgWhite.red("    => suspend old session publish engine...."));
                 session.getPublishEngine().suspend(true);
                 innerCallback();
@@ -218,6 +221,7 @@ function repair_client_session_by_recreating_a_new_session(
                     newSession,
                     newSession.userIdentityInfo!,
                     (err: Error | null, session1?: ClientSessionImpl) => {
+                        // istanbul ignore next
                         doDebug && debugLog("    =>  activating a new session .... Done err=", err ? err.message : "null");
                         if (err) {
                             doDebug &&
@@ -235,7 +239,9 @@ function repair_client_session_by_recreating_a_new_session(
                                 if (err2) {
                                     warningLog("closing session", err2.message);
                                 }
+                                // istanbul ignore next
                                 doDebug && debugLog("the temporary replacement session is now closed");
+                                // istanbul ignore next
                                 doDebug && debugLog(" err ", err.message, "propagated upwards");
                                 innerCallback(err);
                             });
@@ -459,7 +465,6 @@ export function repair_client_session(client: IClientBase, session: ClientSessio
                     " => Let's retry"
                 );
                 if (!session.hasBeenClosed()) {
-
                     const delay = 2000;
                     errorLog(chalk.red(`... will retry session repair... in ${delay} ms`));
                     setTimeout(() => {
@@ -468,24 +473,27 @@ export function repair_client_session(client: IClientBase, session: ClientSessio
                     }, delay);
                     return;
                 } else {
-                    console.log(chalk.red("session restoration should be interrupted because session has been closed forcefully"));
+                    errorLog(chalk.red("session restoration should be interrupted because session has been closed forcefully"));
                     // session does not need to be repaired anymore
                     callback();
-                } 
+                }
                 return;
             }
 
             privateSession._reconnecting.reconnecting = false;
 
-            // warningLog("Session has been restored");
+            // istanbul ignore next
             doDebug && debugLog(chalk.yellow("session has been restored"), session.sessionId.toString());
-           
+
             session.emit("session_restored");
             const otherCallbacks = privateSession._reconnecting.pendingCallbacks;
             privateSession._reconnecting.pendingCallbacks = [];
 
             // re-inject element in queue
+            
+            // istanbul ignore next
             doDebug && debugLog(chalk.yellow("re-injecting transaction queue"), transactionQueue.length);
+            
             transactionQueue.forEach((e: any) => privateSession.pendingTransactions.push(e));
             otherCallbacks.forEach((c: EmptyCallback) => c(err));
             callback(err);

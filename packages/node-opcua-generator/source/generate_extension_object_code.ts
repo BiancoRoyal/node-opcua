@@ -123,7 +123,7 @@ function writeStructuredTypeWithSchema(structuredType: IStructuredTypeSchema) {
     write(`    fields: [`);
     for (const field of structuredType.fields) {
         write(`        {`);
-        write(`            name: "${field.name}",`);
+        write(`            name: "${field.originalName}",`);
         write(``);
         write(`            fieldType: "${field.fieldType}",`);
         if (field.isArray) {
@@ -160,6 +160,7 @@ export async function generate(filename: string, generatedTypescriptFilename: st
                 jsonEncodingNodeId,
                 xmlEncodingNodeId
             };
+            // istanbul ignore next
             if (doDebug) {
                 debugLog(
                     " data=",

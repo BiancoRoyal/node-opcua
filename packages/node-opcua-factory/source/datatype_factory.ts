@@ -183,12 +183,12 @@ export class DataTypeFactory {
 
     // istanbul ignore next
     public dump(): void {
-        console.log(" dumping registered factories");
-        console.log(
+        warningLog(" dumping registered factories");
+        warningLog(
             " Factory ",
             [...this.structuredTypesNames()].sort().forEach((e) => e)
         );
-        console.log(" done");
+        warningLog(" done");
     }
 
     public registerAbstractStructure(dataTypeNodeId: NodeId, className: string, schema: IStructuredTypeSchema) {
@@ -261,9 +261,9 @@ export class DataTypeFactory {
 
     public associateWithBinaryEncoding(className: string, expandedNodeId: ExpandedNodeId): void {
         const structureInfo = this.getStructureInfoByTypeName(className);
-        if (doDebug) {
-            debugLog(" associateWithBinaryEncoding ", className, expandedNodeId.toString());
-        }
+        // if (doDebug) {
+        //     debugLog(" associateWithBinaryEncoding ", className, expandedNodeId.toString());
+        // }
 
         verifyExpandedNodeId(expandedNodeId);
 
