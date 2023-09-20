@@ -9,7 +9,7 @@
 import chalk from "chalk";
 
 const semver = require("semver");
-const minimumNodeVersionRequired = ">=8.0.0"; // minimum
+const minimumNodeVersionRequired = ">=16.7.0"; // minimum
 
 // istanbul ignore next
 if (typeof process === "object" && !semver.satisfies(process.version, minimumNodeVersionRequired)) {
@@ -102,7 +102,7 @@ export { get_empty_nodeset_filename, get_mini_nodeset_filename } from "node-opcu
 export * from "node-opcua-address-space/nodeJS";
 
 module.exports.utils = require("node-opcua-utils");
-export { hexDump } from "node-opcua-debug";
+export { LogLevel, hexDump, setLogLevel, setDebugLogger, setWarningLogger, setErrorLogger } from "node-opcua-debug";
 
 // ----------------------------------------------------------------------------------------------------------
 // client services
