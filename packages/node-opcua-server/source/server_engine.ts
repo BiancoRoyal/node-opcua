@@ -25,7 +25,8 @@ import {
     BindVariableOptions,
     ISessionContext,
     DTServerStatus,
-    IServerBase} from "node-opcua-address-space";
+    IServerBase
+} from "node-opcua-address-space";
 import { generateAddressSpace } from "node-opcua-address-space/nodeJS";
 import { DataValue } from "node-opcua-data-value";
 import {
@@ -34,12 +35,7 @@ import {
     ServerStatusDataType,
     SubscriptionDiagnosticsDataType
 } from "node-opcua-common";
-import {
-    AttributeIds,
-    coerceLocalizedText,
-    LocalizedTextLike,
-    makeAccessLevelFlag,
-    NodeClass} from "node-opcua-data-model";
+import { AttributeIds, coerceLocalizedText, LocalizedTextLike, makeAccessLevelFlag, NodeClass } from "node-opcua-data-model";
 import { coerceNodeId, makeNodeId, NodeId, NodeIdLike, NodeIdType, resolveNodeId } from "node-opcua-nodeid";
 import { BrowseResult } from "node-opcua-service-browse";
 import { UInt32 } from "node-opcua-basic-types";
@@ -75,7 +71,7 @@ import { DataType, isValidVariant, Variant, VariantArrayType } from "node-opcua-
 
 import { HistoryServerCapabilities, HistoryServerCapabilitiesOptions } from "./history_server_capabilities";
 import { MonitoredItem } from "./monitored_item";
-import { OperationLimits, ServerCapabilities, ServerCapabilitiesOptions } from "./server_capabilities";
+import { ServerCapabilities, ServerCapabilitiesOptions, ServerOperationLimits } from "./server_capabilities";
 import { ServerSidePublishEngine } from "./server_publish_engine";
 import { ServerSidePublishEngineForOrphanSubscription } from "./server_publish_engine_for_orphan_subscriptions";
 import { ServerSession } from "./server_session";
@@ -314,10 +310,6 @@ export interface CreateSessionOption {
 export type ClosingReason = "Timeout" | "Terminated" | "CloseSession" | "Forcing";
 
 export type ServerEngineShutdownTask = (this: ServerEngine) => void | Promise<void>;
-
-
-
-
 
 /**
  *
@@ -732,10 +724,11 @@ export class ServerEngine extends EventEmitter implements IAddressSpaceAccessor 
 
         this.addressSpaceAccessor = new AddressSpaceAccessor(this.addressSpace);
 
-        // register namespace 1 (our namespace);
-        const serverNamespace = this.addressSpace.registerNamespace(this.serverNamespaceUrn);
-        assert(serverNamespace.index === 1);
-
+        if (!options.skipOwnNamespace) {
+            // register namespace 1 (our namespace);
+            const serverNamespace = this.addressSpace.registerNamespace(this.serverNamespaceUrn);
+            assert(serverNamespace.index === 1);
+        }
         // eslint-disable-next-line max-statements
         generateAddressSpace(this.addressSpace, options.nodeset_filename, () => {
             /* istanbul ignore next */
@@ -748,7 +741,6 @@ export class ServerEngine extends EventEmitter implements IAddressSpaceAccessor 
             debugLog("Loading ", options.nodeset_filename, " done : ", endTime.getTime() - startTime.getTime(), " ms");
 
             const bindVariableIfPresent = (nodeId: NodeId, opts: any) => {
-                assert(nodeId instanceof NodeId);
                 assert(!nodeId.isEmpty());
                 const obj = addressSpace.findNode(nodeId);
                 if (obj) {
@@ -1053,7 +1045,7 @@ export class ServerEngine extends EventEmitter implements IAddressSpaceAccessor 
                     return Math.min(this.serverCapabilities.maxByteStringLength, BinaryStream.maxByteStringLength);
                 });
 
-                const bindOperationLimits = (operationLimits: OperationLimits) => {
+                const bindOperationLimits = (operationLimits: ServerOperationLimits) => {
                     assert(operationLimits !== null && typeof operationLimits === "object");
 
                     const keys = Object.keys(operationLimits);
