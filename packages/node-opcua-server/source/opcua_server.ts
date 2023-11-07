@@ -636,18 +636,19 @@ function validate_security_endpoint(
     //             The Server uses this information for diagnostics and to determine the set of
     //             EndpointDescriptions to return in the response.
     // ToDo: check endpointUrl validity and emit an AuditUrlMismatchEventType event if not
-    
+
     // sometime endpoints have a extra leading "/" that can be ignored
     // don't be too harsh.
     if (endpoints.length === 0 && request.endpointUrl?.endsWith("/")) {
-         endpoints = server._get_endpoints(request.endpointUrl.slice(0, -1));   
+        endpoints = server._get_endpoints(request.endpointUrl.slice(0, -1));
     }
 
     if (endpoints.length === 0) {
         // we have a UrlMismatch here
         const ua_server = server.engine.addressSpace!.rootFolder.objects.server;
-        warningLog("Cannot find suitable endpoints in available endpoints. endpointUri =", request.endpointUrl);
-        // e
+        if (!request.endpointUrl?.match(/localhost/i) || OPCUAServer.requestExactEndpointUrl) {
+            warningLog("Cannot find suitable endpoints in available endpoints. endpointUri =", request.endpointUrl);
+        }
         ua_server.raiseEvent("AuditUrlMismatchEventType", {
             endpointUrl: { dataType: DataType.String, value: request.endpointUrl }
         });
@@ -905,6 +906,15 @@ export interface OPCUAServerOptions extends OPCUABaseServerOptions, OPCUAServerE
      */
     onCreateMonitoredItem?: CreateMonitoredItemHook;
     onDeleteMonitoredItem?: DeleteMonitoredItemHook;
+
+    /**
+     * skipOwnNamespace to true, if you don't want the server to create
+     * a dedicated namespace for its own (namespace=1).
+     * Use this flag if you intend to load the server own namespace
+     * from an external source.
+     * @default false
+     */
+    skipOwnNamespace?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging

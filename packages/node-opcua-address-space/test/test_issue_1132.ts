@@ -2,11 +2,8 @@ import * as path from "path";
 import "should";
 
 import { nodesets } from "node-opcua-nodesets";
-import { DataType, Variant, VariantArrayType } from "node-opcua-variant";
-import { AttributeIds } from "node-opcua-data-model";
-import { EndpointConfiguration, ServerDiagnosticsSummaryDataType, ServiceCounterDataType } from "node-opcua-types";
 
-import { AddressSpace, UAObject, SessionContext } from "..";
+import { AddressSpace } from "..";
 import { generateAddressSpace } from "../nodeJS";
 import { UAVariable } from "..";
 
@@ -28,6 +25,10 @@ describe("#1132 Variable  ExtensionObject containing NodeId in nodeset2.xml", ()
     });
     it("should load a extension object containing a NodeId field", ()=>{
         const ns = addressSpace.getNamespaceIndex("http://mynamespace");
+        if (ns === -1) {
+            throw new Error("Cannot find namespace");
+        }
+
         const v = addressSpace.findNode(`ns=${ns};i=1272`) as UAVariable;
         console.log(v.readValue().value.value.toJSON() );
         v.readValue().value.value.toJSON().should.eql({

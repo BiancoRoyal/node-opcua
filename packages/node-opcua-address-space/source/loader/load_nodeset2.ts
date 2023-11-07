@@ -5,7 +5,7 @@
 import { promisify, types } from "util";
 import chalk from "chalk";
 
-import { coerceByte , coerceBoolean, coerceInt32} from "node-opcua-basic-types";
+import { coerceByte, coerceBoolean, coerceInt32 } from "node-opcua-basic-types";
 import {
     AddReferenceTypeOptions,
     BaseNode,
@@ -231,8 +231,8 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
         if (!namespace) {
             throw new Error(
                 "cannot find namespace for " +
-                namespaceUri +
-                "\nplease make sure to initialize your address space with the corresponding nodeset files"
+                    namespaceUri +
+                    "\nplease make sure to initialize your address space with the corresponding nodeset files"
             );
         }
         found_namespace_in_uri[namespaceUri] = namespace;
@@ -306,16 +306,10 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
         // Model must not be already registered
         const existingNamespace = addressSpace1.getNamespace(model.modelUri);
         if (existingNamespace) {
-            // special treatment for namespace 0
-            // istanbul ignore else
-            if (model.modelUri === "http://opcfoundation.org/UA/") {
-                namespace = existingNamespace;
-            } else {
-                throw new Error(" namespace already registered " + model.modelUri);
-            }
+            namespace = existingNamespace;
         } else {
             namespace = addressSpace1.registerNamespace(model.modelUri);
-            namespace.setRequiredModels(model.requiredModels)
+            namespace.setRequiredModels(model.requiredModels);
         }
 
         namespace.version = model.version;
@@ -470,7 +464,7 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
 
             this.obj = {};
             this.obj.nodeClass = NodeClass.ReferenceType;
-            this.obj.isAbstract =coerceBoolean(attrs.IsAbstract);
+            this.obj.isAbstract = coerceBoolean(attrs.IsAbstract);
             this.obj.nodeId = convertToNodeId(attrs.NodeId) || null;
             this.obj.browseName = convertQualifiedName(attrs.BrowseName);
         },
@@ -641,11 +635,12 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
                 this.enumValueType = new EnumValueType({
                     description: undefined,
                     displayName: undefined,
-                    value: [0, 0] // Int64
+                    value: coerceInt64(-1)
                 });
             },
             parser: {
                 Value: {
+                    // note: Value may be missing, in this case value shall be set to -1(64)
                     finish(this: any) {
                         // Low part
                         this.parent.enumValueType.value = coerceInt64(parseInt(this.text, 10));
@@ -1328,7 +1323,6 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
                 const v = node as UAVariable;
                 assert(v.getBasicDataType() === DataType.ExtensionObject, "expecting an extension object");
                 v.bindExtensionObject(variant.value, { createMissingProp: false });
-
             } else if (node.nodeClass === NodeClass.VariableType) {
                 const v = node as UAVariableType;
                 (v as any) /*fix me*/.value.value = variant.value;
@@ -1535,7 +1529,6 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
         }
     };
 
-
     interface Model {
         modelUri: string;
         version: string;
@@ -1690,7 +1683,7 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
         doDebug &&
             debugLog(
                 chalk.bgGreenBright("Performing post loading tasks -------------------------------------------") +
-                chalk.green("DONE")
+                    chalk.green("DONE")
             );
 
         async function performPostLoadingTasks(tasks: Task[]): Promise<void> {
@@ -1767,7 +1760,10 @@ function makeNodeSetParserEngine(addressSpace: IAddressSpace, options: NodeSetLo
 
 export class NodeSetLoader {
     _s: NodeSet2ParserEngine;
-    constructor(addressSpace: IAddressSpace, private options?: NodeSetLoaderOptions) {
+    constructor(
+        addressSpace: IAddressSpace,
+        private options?: NodeSetLoaderOptions
+    ) {
         this._s = makeNodeSetParserEngine(addressSpace, options || {});
     }
 
