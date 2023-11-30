@@ -10,13 +10,13 @@ import { randomBytes } from "crypto";
 import { EventEmitter } from "events";
 import { callbackify, types } from "util";
 
-import * as async from "async";
+import async from "async";
 import chalk from "chalk";
 
 import { extractFullyQualifiedDomainName, getFullyQualifiedDomainName } from "node-opcua-hostname";
 
 import { assert } from "node-opcua-assert";
-import * as utils from "node-opcua-utils";
+import { isNullOrUndefined } from "node-opcua-utils";
 
 import {
     AddressSpace,
@@ -752,7 +752,11 @@ export interface OPCUAServerEndpointOptions {
 }
 
 export interface OPCUAServerOptions extends OPCUABaseServerOptions, OPCUAServerEndpointOptions {
+    /**
+     * @deprecated
+     */
     alternateEndpoints?: OPCUAServerEndpointOptions[];
+    endpoints?: OPCUAServerEndpointOptions[];
 
     /**
      * the server certificate full path filename
@@ -1139,7 +1143,9 @@ export class OPCUAServer extends OPCUABaseServer {
         this.discoveryServerEndpointUrl = options.discoveryServerEndpointUrl || "opc.tcp://%FQDN%:4840";
         assert(typeof this.discoveryServerEndpointUrl === "string");
 
-        this.serverInfo.applicationType = ApplicationType.Server;
+        this.serverInfo.applicationType =
+            options.serverInfo?.applicationType === undefined ? ApplicationType.Server : options.serverInfo.applicationType;
+
         this.capabilitiesForMDNS = options.capabilitiesForMDNS || ["NA"];
         this.registerServerMethod = options.registerServerMethod || RegisterServerMethod.HIDDEN;
         _installRegisterServerManager(this);
@@ -1164,23 +1170,46 @@ export class OPCUAServer extends OPCUABaseServer {
                 applicationUri: () => this.serverInfo.applicationUri!,
                 buildInfo,
                 isAuditing: options.isAuditing,
-                serverCapabilities: options.serverCapabilities
+                serverCapabilities: options.serverCapabilities,
+
+                serverConfiguration: {
+                    serverCapabilities: () => {
+                        return this.capabilitiesForMDNS || ["NA"];
+                    },
+                    supportedPrivateKeyFormat: ["PEM"],
+                    applicationType: () => this.serverInfo.applicationType,
+                    applicationUri: () => this.serverInfo.applicationUri || "",
+                    productUri: () => this.serverInfo.productUri || "",
+                    // hasSecureElement: () => false,
+                    multicastDnsEnabled: () => this.registerServerMethod === RegisterServerMethod.MDNS
+                }
             });
+
             this.objectFactory = new Factory(this.engine);
 
-            const endpointDefinitions: OPCUAServerEndpointOptions[] = options.alternateEndpoints || [];
+            const endpointDefinitions: OPCUAServerEndpointOptions[] = [
+                ...(options.endpoints || []),
+                ...(options.alternateEndpoints || [])
+            ];
+
             const hostname = getFullyQualifiedDomainName();
-
-            endpointDefinitions.push({
-                port: options.port === undefined ? 26543 : options.port,
-
-                allowAnonymous: options.allowAnonymous,
-                alternateHostname: options.alternateHostname,
-                disableDiscovery: options.disableDiscovery,
-                hostname: options.hostname || hostname,
-                securityModes: options.securityModes,
-                securityPolicies: options.securityPolicies
+            endpointDefinitions.forEach((endpointDefinition) => {
+                endpointDefinition.port = endpointDefinition.port === undefined ? 26543 : endpointDefinition.port;
+                endpointDefinition.hostname = endpointDefinition.hostname || hostname;
             });
+
+            if (!options.endpoints) {
+                endpointDefinitions.push({
+                    port: options.port === undefined ? 26543 : options.port,
+                    hostname: options.hostname || hostname,
+
+                    allowAnonymous: options.allowAnonymous,
+                    alternateHostname: options.alternateHostname,
+                    disableDiscovery: options.disableDiscovery,
+                    securityModes: options.securityModes,
+                    securityPolicies: options.securityPolicies
+                });
+            }
             // todo  should self.serverInfo.productUri  match self.engine.buildInfo.productUri ?
             for (const endpointOptions of endpointDefinitions) {
                 const endPoint = this.createEndpointDescriptions(options!, endpointOptions);
@@ -1807,7 +1836,7 @@ export class OPCUAServer extends OPCUABaseServer {
         // unique for the instance of the Client.
         // If this parameter is not specified the Server shall assign a value.
 
-        if (utils.isNullOrUndefined(request.sessionName)) {
+        if (isNullOrUndefined(request.sessionName)) {
             // see also #198
             // let's the server assign a sessionName for this lazy client.
 
@@ -3547,7 +3576,9 @@ export class OPCUAServer extends OPCUABaseServer {
             !isFinite(endpointOptions.port!) ||
             typeof endpointOptions.port !== "number"
         ) {
-            throw new Error("expecting a valid port (number)");
+            throw new Error(
+                "expecting a valid port (number) when specified. alternatively you can specify port:0 and node-opcua will choose the first available port"
+            );
         }
 
         const port = Number(endpointOptions.port || 0);
@@ -3573,6 +3604,10 @@ export class OPCUAServer extends OPCUABaseServer {
             disableDiscovery: !!endpointOptions.disableDiscovery,
             // xx                hostname,
             resourcePath: serverOption.resourcePath || ""
+
+            // TODO  userTokenTypes: endpointOptions.userTokenTypes || undefined,
+
+            // TODO allowUnsecurePassword: endpointOptions.allowUnsecurePassword || false
         });
         return endPoint;
     }

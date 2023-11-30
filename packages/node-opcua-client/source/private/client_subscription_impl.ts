@@ -3,7 +3,7 @@
  */
 // tslint:disable:unified-signatures
 import { EventEmitter } from "events";
-import * as async from "async";
+import async from "async";
 import chalk from "chalk";
 
 import { assert } from "node-opcua-assert";
@@ -35,9 +35,9 @@ import {
 
 import { StatusCode, StatusCodes } from "node-opcua-status-code";
 import { Callback, ErrorCallback } from "node-opcua-status-code";
-import * as utils from "node-opcua-utils";
+import { isNullOrUndefined } from "node-opcua-utils";
 import { promoteOpaqueStructureInNotificationData } from "node-opcua-client-dynamic-extension-object";
-import { createMonitoredItemsLimit, IBasicSession, readOperationLimits } from "node-opcua-pseudo-session";
+import { createMonitoredItemsLimit, IBasicSessionReadAsync, readOperationLimits } from "node-opcua-pseudo-session";
 
 import { IBasicSessionWithSubscription } from "node-opcua-pseudo-session";
 import { ClientMonitoredItemBase } from "../client_monitored_item_base";
@@ -123,7 +123,7 @@ function displayKeepAliveWarning(sessionTimeout: number, maxKeepAliveCount: numb
 }
 
 function createMonitoredItemsAndRespectOperationalLimits(
-    session: IBasicSession & IBasicSessionWithSubscription,
+    session: IBasicSessionReadAsync & IBasicSessionWithSubscription,
     createMonitorItemsRequest: CreateMonitoredItemsRequest,
     callback: (err: Error | null, response?: CreateMonitoredItemsResponse) => void
 ) {
@@ -208,7 +208,7 @@ export class ClientSubscriptionImpl extends EventEmitter implements ClientSubscr
             );
         }
 
-        options.maxNotificationsPerPublish = utils.isNullOrUndefined(options.maxNotificationsPerPublish)
+        options.maxNotificationsPerPublish = isNullOrUndefined(options.maxNotificationsPerPublish)
             ? 0
             : options.maxNotificationsPerPublish;
 
