@@ -1,6 +1,9 @@
 import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
 import { DataTypeFactory, getStandardDataTypeFactory } from "node-opcua-factory";
-import { IBasicSession, readNamespaceArray } from "node-opcua-pseudo-session";
+import {
+    IBasicSessionAsync2,
+    readNamespaceArray
+} from "node-opcua-pseudo-session";
 //
 import { ExtraDataTypeManager } from "./extra_data_type_manager";
 import { populateDataTypeManager } from "./populate_data_type_manager";
@@ -10,19 +13,19 @@ const debugLog = make_debugLog(__filename);
 const errorLog = make_errorLog(__filename);
 const warningLog = errorLog;
 
-interface IBasicSessionEx extends IBasicSession {
+interface IBasicSession_ extends IBasicSessionAsync2 {
     $$extraDataTypeManager?: ExtraDataTypeManager;
     $$extraDataTypeManagerToResolve?: [(a: ExtraDataTypeManager) => void, (err: Error) => void][];
 }
-export async function invalidateExtraDataTypeManager(session: IBasicSession): Promise<void> {
-    const sessionPriv: IBasicSessionEx = session as IBasicSessionEx;
+export async function invalidateExtraDataTypeManager(session: IBasicSessionAsync2): Promise<void> {
+    const sessionPriv = session as IBasicSession_;
     sessionPriv.$$extraDataTypeManager = undefined;
     if (sessionPriv.$$extraDataTypeManagerToResolve) {
         warningLog("Warning: invalidateExtraDataTypeManager is called while getExtraDataTypeManager is in progress");
     }
 }
 
-async function extractDataTypeManager(session: IBasicSession): Promise<ExtraDataTypeManager> {
+async function extractDataTypeManager(session: IBasicSessionAsync2): Promise<ExtraDataTypeManager> {
     const namespaceArray = await readNamespaceArray(session);
     // istanbul ignore next
     if (namespaceArray.length === 0) {
@@ -46,8 +49,8 @@ async function extractDataTypeManager(session: IBasicSession): Promise<ExtraData
     return dataTypeManager;
 }
 
-export async function getExtraDataTypeManager(session: IBasicSession): Promise<ExtraDataTypeManager> {
-    const sessionPriv: IBasicSessionEx = session as IBasicSessionEx;
+export async function getExtraDataTypeManager(session: IBasicSessionAsync2): Promise<ExtraDataTypeManager> {
+    const sessionPriv: IBasicSession_ = session as IBasicSession_;
     if (sessionPriv.$$extraDataTypeManager) {
         return sessionPriv.$$extraDataTypeManager;
     }

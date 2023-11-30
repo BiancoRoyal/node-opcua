@@ -1,17 +1,15 @@
-import * as path from "path";
-import * as fs from "fs";
-import * as util from "util";
-import * as os from "os";
+import path from "path";
+import fs from "fs";
+import util from "util";
+import os from "os";
 import {
     AttributeIds,
-    ClientSession,
-    IBasicSession,
+    IBasicSessionAsync,
     makeApplicationUrn,
     MessageSecurityMode,
     OPCUAClient,
     resolveNodeId,
     SecurityPolicy,
-    StatusCodes,
     UserTokenType
 } from "node-opcua-client";
 import {
@@ -19,7 +17,6 @@ import {
     exploreCertificate,
     exploreCertificateSigningRequest,
     makeSHA1Thumbprint,
-    publicKeyAndPrivateKeyMatches,
     readCertificate,
     readCertificateRevocationList,
     split_der,
@@ -65,7 +62,7 @@ async function dumpTrustedList(trustList: TrustListDataType) {
         }
     }
 }
-async function dumpApplicationTrustedCertificates(session: IBasicSession) {
+async function dumpApplicationTrustedCertificates(session: IBasicSessionAsync) {
     const s = new ClientPushCertificateManagement(session);
     const applicationGroup = await s.getCertificateGroup("DefaultApplicationGroup");
 
@@ -74,7 +71,7 @@ async function dumpApplicationTrustedCertificates(session: IBasicSession) {
     dumpTrustedList(tl);
 }
 
-async function dumpUserTokenTrustedCertificates(session: IBasicSession) {
+async function dumpUserTokenTrustedCertificates(session: IBasicSessionAsync) {
     const s = new ClientPushCertificateManagement(session);
     const applicationGroup = await s.getCertificateGroup("DefaultUserTokenGroup");
 
@@ -83,7 +80,7 @@ async function dumpUserTokenTrustedCertificates(session: IBasicSession) {
     dumpTrustedList(tl);
 }
 
-async function getRejectedList(session: IBasicSession) {
+async function getRejectedList(session: IBasicSessionAsync) {
     const s = new ClientPushCertificateManagement(session);
     const rejectedList = await s.getRejectedList();
     if (rejectedList.statusCode.isNotGood()) {
@@ -96,7 +93,7 @@ async function getRejectedList(session: IBasicSession) {
     }
 }
 
-async function dumpServerConfiguration(session: IBasicSession) {
+async function dumpServerConfiguration(session: IBasicSessionAsync) {
     const capabilitiesDataValue = await session.read({
         nodeId: resolveNodeId("ServerConfiguration_ServerCapabilities"),
         attributeId: AttributeIds.Value
@@ -132,7 +129,7 @@ async function dumpServerConfiguration(session: IBasicSession) {
     await getRejectedList(session);
 }
 
-async function addApplicationCertificate(session: IBasicSession) {
+async function addApplicationCertificate(session: IBasicSessionAsync) {
     const s = new ClientPushCertificateManagement(session);
     const ag = await s.getApplicationGroup();
     const trustList = await ag.getTrustList();
@@ -143,11 +140,11 @@ async function addApplicationCertificate(session: IBasicSession) {
     await trustList.addCertificate(certificate, true);
 }
 
-async function addApplicationIssuerCertificateAndCRL(session: IBasicSession) {
+async function addApplicationIssuerCertificateAndCRL(session: IBasicSessionAsync) {
     /**
      */
 }
-async function replaceServerCertificate(session: IBasicSession, caAuthority: CertificateAuthority) {
+async function replaceServerCertificate(session: IBasicSessionAsync, caAuthority: CertificateAuthority) {
     const certificateAuthorityPath = path.join(caAuthority.location);
     const caCertificate = await readCertificate(caAuthority.caCertificate);
     // also get crl

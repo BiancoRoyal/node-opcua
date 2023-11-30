@@ -5,11 +5,12 @@
         "outDir": "dist",
         "composite": true
     },
-    "include": ["source/**/*.ts"],
+    "include": ["source/*.ts", "source/**/*.ts"],
     "references": [
         {
             "path": "../node-opcua-assert"
-        },{
+        },
+        {
             "path": "../node-opcua-constants"
         },
         {

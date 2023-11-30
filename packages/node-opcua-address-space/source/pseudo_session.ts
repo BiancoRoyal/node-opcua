@@ -2,7 +2,7 @@
  * @module node-opcua-address-space
  */
 import { promisify } from "util";
-import * as async from "async";
+import async from "async";
 
 import { assert } from "node-opcua-assert";
 import { DataValue } from "node-opcua-data-value";
@@ -317,7 +317,13 @@ export class PseudoSession implements IBasicSession {
     public getArgumentDefinition(methodId: MethodId): Promise<ArgumentDefinition>;
     public getArgumentDefinition(methodId: MethodId, callback: ResponseCallback<ArgumentDefinition>): void;
     public getArgumentDefinition(methodId: MethodId, callback?: ResponseCallback<ArgumentDefinition>): any {
-        return getArgumentDefinitionHelper(this, methodId, callback!);
+        getArgumentDefinitionHelper(this, methodId)
+            .then((result) => {
+                callback!(null, result);
+            })
+            .catch((err: Error) => {
+                callback!(err);
+            });
     }
 
     public translateBrowsePath(browsePaths: BrowsePath[], callback: ResponseCallback<BrowsePathResult[]>): void;
