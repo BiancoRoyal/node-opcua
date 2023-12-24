@@ -41,6 +41,7 @@ import { ConditionInfoOptions } from "../../source/interfaces/alarms_and_conditi
 import { UAConditionEx } from "../../source/interfaces/alarms_and_conditions/ua_condition_ex";
 import { ConditionSnapshot } from "../../source/interfaces/alarms_and_conditions/condition_snapshot";
 import { InstantiateConditionOptions } from "../../source/interfaces/alarms_and_conditions/instantiate_condition_options";
+import { ISetStateOptions } from "../../source/interfaces/i_set_state_options";
 
 import { AddressSpacePrivate } from "../address_space_private";
 import { _install_TwoStateVariable_machinery } from "../state_machine/ua_two_state_variable";
@@ -214,9 +215,8 @@ export class UAConditionImpl extends UABaseEventImpl implements UAConditionEx {
         // the implication of this convention is that interacting with the condition variable
         // shall be made by using branch0, any value change made
         // using the standard setValueFromSource mechanism will not be work properly.
-        this._branch0.on("value_changed", (node: UAVariable, variant: Variant) => {
-            assert(node.nodeClass === NodeClass.Variable);
-            node.setValueFromSource(variant);
+        this._branch0.on("valueChanged", (node: UAVariable, variant: Variant, options: { sourceTimestamp: Date }) => {
+            node.setValueFromSource(variant, StatusCodes.Good, options.sourceTimestamp);
         });
     }
 
@@ -277,7 +277,7 @@ export class UAConditionImpl extends UABaseEventImpl implements UAConditionEx {
      * returns {StatusCode} StatusCodes.Good if successful or BadConditionAlreadyEnabled/BadConditionAlreadyDisabled
      * @private
      */
-    public _setEnabledState(requestedEnabledState: boolean): StatusCode {
+    public _setEnabledState(requestedEnabledState: boolean, options?: ISetStateOptions): StatusCode {
         assert(typeof requestedEnabledState === "boolean");
 
         const enabledState = this.getEnabledState();
@@ -288,7 +288,7 @@ export class UAConditionImpl extends UABaseEventImpl implements UAConditionEx {
             return StatusCodes.BadConditionAlreadyDisabled;
         }
 
-        this._branch0.setEnabledState(requestedEnabledState);
+        this._branch0.setEnabledState(requestedEnabledState, options);
         // conditionNode.enabledState.setValue(requestedEnabledState);
 
         // xx assert(conditionNode.enabledState.id.readValue().value.value === requestedEnabledState,"sanity check 1");
@@ -346,8 +346,8 @@ export class UAConditionImpl extends UABaseEventImpl implements UAConditionEx {
      * @param requestedEnabledState {Boolean}
      * @private
      */
-    public setEnabledState(requestedEnabledState: boolean): StatusCode {
-        return this._setEnabledState(requestedEnabledState);
+    public setEnabledState(requestedEnabledState: boolean, options?: ISetStateOptions): StatusCode {
+        return this._setEnabledState(requestedEnabledState, options);
     }
 
     /**
@@ -491,11 +491,13 @@ export class UAConditionImpl extends UABaseEventImpl implements UAConditionEx {
 
         const branch = this.currentBranch();
 
-        const now = new Date();
+        const currentDefaultDate = new Date();
+        const time = conditionInfo.time || currentDefaultDate;
+        const receiveTime = conditionInfo.receiveTime || currentDefaultDate;
         // install the eventTimestamp
         // set the received Time
-        branch.setTime(now);
-        branch.setReceiveTime(now);
+        branch.setTime(time);
+        branch.setReceiveTime(receiveTime);
 
         // note : in 1.04 LocalTime property is optional
         if (Object.prototype.hasOwnProperty.call(this, "localTime")) {
@@ -515,11 +517,11 @@ export class UAConditionImpl extends UABaseEventImpl implements UAConditionEx {
 
         if (Object.prototype.hasOwnProperty.call(conditionInfo, "severity") && conditionInfo.severity !== null) {
             assert(isFinite(conditionInfo.severity!));
-            branch.setSeverity(conditionInfo.severity!);
+            branch.setSeverity(conditionInfo.severity!, { sourceTimestamp: time });
         }
         if (Object.prototype.hasOwnProperty.call(conditionInfo, "quality") && conditionInfo.quality !== null) {
             assert(conditionInfo.quality instanceof StatusCode);
-            branch.setQuality(conditionInfo.quality!);
+            branch.setQuality(conditionInfo.quality!, { sourceTimestamp: time });
         }
         if (Object.prototype.hasOwnProperty.call(conditionInfo, "retain") && conditionInfo.retain !== null) {
             assert(typeof conditionInfo.retain === "boolean");
@@ -1206,12 +1208,6 @@ function _create_new_branch_id() {
     return makeNodeId(randomGuid(), 1);
 }
 
-function _update_sourceTimestamp<T, DT extends DataType>(this: UAConditionVariable<T, DT>, dataValue: DataValue /*, indexRange*/) {
-    this.sourceTimestamp.setValueFromSource({
-        dataType: DataType.DateTime,
-        value: dataValue.sourceTimestamp
-    });
-}
 
 // tslint:disable:no-console
 function _install_condition_variable_type<T, DT extends DataType>(node: UAConditionVariable<T, DT>) {
@@ -1225,15 +1221,6 @@ function _install_condition_variable_type<T, DT extends DataType>(node: UACondit
     }
     node.accessLevel = makeAccessLevelFlag("CurrentRead");
 
-    // from spec 1.03 : 5.3 condition variables
-    // a condition VariableType has a sourceTimeStamp exposed property
-    // SourceTimestamp indicates the time of the last change of the Value of this ConditionVariable.
-    // It shall be the same time that would be returned from the Read Service inside the DataValue
-    // structure for the ConditionVariable Value Attribute.
-
-    assert(node.typeDefinitionObj.browseName.toString() === "ConditionVariableType");
-    assert(node.sourceTimestamp.browseName.toString() === "SourceTimestamp");
-    node.on("value_changed", _update_sourceTimestamp);
 }
 
 /**
