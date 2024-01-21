@@ -9,7 +9,7 @@ node-opcua is a full OPC UA stack for NodeJS and the Browser written in Typescri
 [![Coverage Status](https://img.shields.io/coverallsCoverage/github/node-opcua/node-opcua)](https://coveralls.io/r/node-opcua/node-opcua)
 [![Gitter chat](https://img.shields.io/gitter/room/node-opcua/node-opcua
 )](https://gitter.im/node-opcua/node-opcua)
-[![The Book](https://img.shields.io/static/v1?label=the%20book&message=NodeOPCUA%20by%20example&color=blueviolet&logo=leanpub)](https://leanpub.com/node-opcuabyexample-edition2022)
+[![The Book](https://img.shields.io/static/v1?label=the%20book&message=NodeOPCUA%20by%20example&color=blueviolet&logo=leanpub)](https://leanpub.com/node-opcuabyexample-edition2024)
 
 [![NPM download - server](https://img.shields.io/npm/dm/node-opcua.svg?logo=npm&label=node-opcua-server)](https://www.npmtrends.com/node-opcua-server)
 [![NPM download - server -total](https://img.shields.io/npm/dt/node-opcua.svg?label=total)](https://www.npmtrends.com/node-opcua-server)
@@ -18,11 +18,17 @@ node-opcua is a full OPC UA stack for NodeJS and the Browser written in Typescri
 [![NPM download - client -total](https://img.shields.io/npm/dt/node-opcua-client.svg?label=total)](https://www.npmtrends.com/node-opcua-client)
 
 
+<!-- [![open collective badge](https://opencollective.com/node-opcua/tiers/sponsor/badge.svg?label=sponsor<!--&color=brightgreen")](https://opencollective.com/node-opcua#support)
+-->
+[![Financial contributors](https://opencollective.com/node-opcua/tiers/badge.svg)](https://opencollective.com/node-opcua#support) 
+
+[![Become a sponsor](https://opencollective.com/node-opcua/tiers/sponsor.svg?avatarHeight=36&width=600")](https://opencollective.com/node-opcua/contribute/sponsor-23291/checkout?interval=month&amount=500&contributeAs=me)
+
 [Node-opcua](https://node-opcua.github.io/) is the OPC-UA stack running on NodeJS.
 
 Why NodeJS ?
 
-Because NodeJs is a great framework to design high-performing asynchronous applications.
+Because NodeJs is a great framework for designing high-performing asynchronous applications.
 
 
 ## Getting started
@@ -33,7 +39,7 @@ Because NodeJs is a great framework to design high-performing asynchronous appli
     $ cd mytest
     $ npm init 
     $ npm install node-opcua --unsafe-perms
-    $ # create your first app.js file!
+    $ # Create your first app.js file!
 
 
 ### installing node-opcua samples as a node package
@@ -58,19 +64,19 @@ $ ./node_modules/.bin/simple_client  -e "opc.tcp://opcuademo.sterfive.com:26543"
 ```
 
 
-## Minimum nodejs requirement 
+## Minimum Nodejs requirement
 
-  * nodejs version 14 or above
+  * Nodejs version 18 or above
 
                 
 ## tutorials and guided examples
 
 
-[![The Book](https://img.shields.io/static/v1?label=the%20book&message=NodeOPCUA%20by%20example&color=blueviolet&logo=leanpub)](https://leanpub.com/node-opcuabyexample-edition2022).  This book provides a large number of practical and ready-to-use and fully documented examples. It's the best starting point to learn about node-opcua.
+[![The Book](https://img.shields.io/static/v1?label=the%20book&message=NodeOPCUA%20by%20example&color=blueviolet&logo=leanpub)](https://leanpub.com/node-opcuabyexample-edition2024).  This book provides a large number of practical and ready-to-use and fully documented examples. It's the best starting point to learn about node-opcua.
 
 ## Sponsors & Backers 
 
-The funding of node-opcua enterily relies on its users.  
+The funding of node-opcua entirely relies on its users.  
 We appreciate that, once you have evaluated the software and you have decided to use it in one of your applications, you consider supporting our effort by either financially contributing to one of our sponsor programs:
 
   - https://github.com/sponsors/node-opcua
@@ -80,7 +86,7 @@ Grants ensure the following:
 
 - 🔨 Long-term maintenance of the project
 - ⚙️ maintain the website and continuous integration platform
-- 🛣  Progress on the road-map
+- 🛣  Progress on the road map
 - 🐛 Quick responses to bug reports
 - 🚀 New features & enhancements
 - ⚖️ representing the node-opcua user community at the OPC Foundation
@@ -177,7 +183,7 @@ Those are the items we would like to achieve in the next version of the API.
  * [create a server](https://github.com/node-opcua/node-opcua/blob/master/documentation/creating_a_server.md)
  * [create a client in typescript](https://github.com/node-opcua/node-opcua/blob/master/documentation/creating_a_client_typescript.md)
    
-  *  more tutorials are available in the book (https://leanpub.com/node-opcuabyexample-edition2022)
+  *  more tutorials are available in the book (https://leanpub.com/node-opcuabyexample-edition2024)
   *  more advanced examples and training material are available for the NodeOPCUA Subscription members at (https://support.sterfive.com)
 
 ### API reference
@@ -318,18 +324,19 @@ Those are the items we would like to achieve in the next version of the API.
 
 ## About licensing 
 
-The node-opcua core module is [copyrighted and licenced under the term of the "The MIT License"](./LICENSE). 
+The node-opcua core module is [copyrighted and licencsd under the term of the "The MIT License"](./LICENSE). 
 
 This means that :
-- node-opcua comes without any warranty of any kind.
-- you can freely reuse in an open-source application or a commercial application 
-- you have to clearly include the software copyright notice in all copies or substantial portions of the software.
 
-You are strongly encourage to apply to our [NodeOPCUA Membership](https://support.sterfive.com) to get additional benefits and support.
+- node-opcua comes without any warranty of any kind.
+- you can freely re-use in an open-source application or a commercial application 
+- you have to include the software copyright notice in all copies or substantial portions of the software.
+
+You are strongly encouraged to apply to our [NodeOPCUA Membership](https://support.sterfive.com) to get additional benefits and support.
 
 
 ## Copyright
 
-Copyright (c) 2022-2023 Sterfive SAS - 833264583 RCS ORLEANS - France (https://www.sterfive.com)
 
+Copyright (c) 2022-2024 Sterfive SAS - 833264583 RCS ORLEANS - France (https://www.sterfive.com)
 Copyright (c) 2014-2022 Etienne Rossignon
