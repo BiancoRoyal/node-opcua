@@ -32,7 +32,7 @@ const users = [
     }
 ];
 
-const port = 2237;
+const port = 2243;
 const endpointUrl = `opc.tcp://${os.hostname()}:${port}`;
 const nodeId = "ns=1;s=SecretValue";
 
@@ -53,7 +53,6 @@ async function startServer() {
                     return false;
                 }
                 return compareSync(password, users[uIndex].password);
-
             },
             getUserRoles: (username: string): NodeId[] => {
                 const uIndex = users.findIndex(function (x) {
@@ -474,7 +473,7 @@ describe("Testing subscription and  security", function (this: any) {
             dataValues.forEach((d) => console.log(d.toString()));
         }
         if (dataValues.length > 1) {
-            dataValues[1].statusCode.should.eql(StatusCodes.BadUserAccessDenied);
+            dataValues[dataValues.length - 1].statusCode.should.eql(StatusCodes.BadUserAccessDenied);
         } else {
             dataValues[0].statusCode.should.eql(StatusCodes.BadUserAccessDenied);
         }

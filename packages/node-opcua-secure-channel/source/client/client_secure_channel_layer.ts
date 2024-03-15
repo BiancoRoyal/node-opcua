@@ -81,6 +81,8 @@ import {
     traceClientRequestContent,
     traceClientResponseContent
 } from "../utils";
+import { durationToString } from "./duration_to_string";
+
 // tslint:disable-next-line: no-var-requires
 const backoff = require("backoff");
 
@@ -311,6 +313,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
     private _counter = ClientSecureChannelLayer.g_counter++;
     private _bytesRead = 0;
     private _bytesWritten = 0;
+    private _timeDrift = 0;
 
     public static minTransactionTimeout = 5 * 1000; // 10 sec
     public static defaultTransactionTimeout = 15 * 1000; // 15 minute
@@ -515,24 +518,24 @@ export class ClientSecureChannelLayer extends EventEmitter {
                     return;
                 }
 
-                let requestData = this._requests[requestId];
+                const requestData = this._requests[requestId];
 
                 // istanbul ignore next
-                if (doDebug) {
-                    debugLog("request id = ", requestId, err, "message was ", requestData);
+                doDebug && debugLog("request id = ", requestId, err, "message was ", requestData);
+
+                if (doTraceClientRequestContent) {
+                    errorLog(" message was 2:", requestData?.request?.toString() || "<null>");
                 }
 
                 if (!requestData) {
-                    warningLog("requestData not found for requestId = ", requestId, "try with ", requestId + 1);
-                    requestId = requestId + 1;
-                    requestData = this._requests[requestId];
-                }
-                if (doTraceClientRequestContent) {
-                    errorLog(" message was 2:", requestData ? requestData.request.toString() : "<null>");
+                    warningLog("requestData not found for requestId = ", requestId);
+                    warningLog("err = ", err);
+                    return;
                 }
 
                 const callback = requestData.callback;
                 delete this._requests[requestId];
+
                 callback && callback(err, undefined);
 
                 this._closeWithError(err, statusCode);
@@ -572,6 +575,7 @@ export class ClientSecureChannelLayer extends EventEmitter {
         str += "\n   maxChunkCount  (to send) : " + (this._transport?.parameters?.maxChunkCount || "<not set>");
         str += "\n   receiveBufferSize(server): " + (this._transport?.parameters?.receiveBufferSize || "<not set>");
         str += "\n   sendBufferSize (to send) : " + (this._transport?.parameters?.sendBufferSize || "<not set>");
+        str += "\ntime drift with server      : " + durationToString(this._timeDrift);
         str += "\n";
         return str;
     }
@@ -1141,11 +1145,13 @@ export class ClientSecureChannelLayer extends EventEmitter {
             securityMode: this.securityMode
         });
 
+        const startDate = new Date();
+
         this._performMessageTransaction(msgType, msg, (err?: Error | null, response?: Response) => {
             // istanbul ignore next
             if (response && response.responseHeader && response.responseHeader.serviceResult !== StatusCodes.Good) {
                 warningLog(
-                    "xxxxx => response.responseHeader.serviceResult ",
+                    "OpenSecureChannelRequest Error: response.responseHeader.serviceResult ",
                     response.constructor.name,
                     response.responseHeader.serviceResult.toString()
                 );
@@ -1166,7 +1172,30 @@ export class ClientSecureChannelLayer extends EventEmitter {
                     "_sendSecureOpcUARequest: invalid token Id "
                 );
                 assert(Object.prototype.hasOwnProperty.call(openSecureChannelResponse, "serverNonce"));
+
                 this.securityToken = openSecureChannelResponse.securityToken;
+                // Check time
+                const endDate = new Date();
+                const midDate = new Date((startDate.getTime() + endDate.getTime()) / 2);
+                if (this.securityToken.createdAt) {
+                    const delta = this.securityToken.createdAt.getTime() - midDate.getTime();
+                    this._timeDrift = delta;
+                    if (Math.abs(delta) > 1000 * 5) {
+                        warningLog(
+                            `[NODE-OPCUA-W33]  client : server token creation date exposes a time discrepancy ${durationToString(delta)}\n` +
+                                "remote server clock doesn't match this computer date !\n" +
+                                " please check both server and client clocks are properly set !\n" +
+                                ` server time :${chalk.cyan(this.securityToken.createdAt?.toISOString())}\n` +
+                                ` client time :${chalk.cyan(midDate.toISOString())}\n` +
+                                ` transaction duration = ${durationToString(endDate.getTime() - startDate.getTime())}\n` +
+                                ` server URL = ${this.endpointUrl} \n` +
+                                ` token.createdAt  has been updated to reflect client time`
+                        );
+                    }
+                }
+
+                this.securityToken.createdAt = midDate;
+
                 this.serverNonce = openSecureChannelResponse.serverNonce;
 
                 if (this.securityMode !== MessageSecurityMode.None) {
@@ -1248,6 +1277,21 @@ export class ClientSecureChannelLayer extends EventEmitter {
         transport: ClientTCP_transport,
         callback: ErrorCallback
     ) {
+        // Node 20.11.1 on windows now reports a AggregateError when a connection is refused
+        // this is a workaround to fix the error message, that is empty when the error is
+        // an AggregateError
+        const fixError = (err: Error | undefined) => {
+            if (!err) return err;
+            interface IAggregateError extends Error {
+                errors: Error[];
+            }
+            if ((err as IAggregateError).errors) {
+                const _err = err as IAggregateError;
+                err.message = _err.errors.map((e) => e.message).join("\n");
+            }
+            return err;
+        };
+
         if (this.__call) {
             // console log =
             transport.numberOfRetry = transport.numberOfRetry || 0;
@@ -1256,7 +1300,8 @@ export class ClientSecureChannelLayer extends EventEmitter {
             this.__call = null;
 
             if (err) {
-                callback(lastError || err);
+                const err_ = fixError(lastError || err);
+                callback(err_);
             } else {
                 callback();
             }

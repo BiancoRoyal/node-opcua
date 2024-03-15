@@ -853,8 +853,9 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
         } else {
             debugLog("OPCUAServerEndPoint#_registerChannel called when end point is shutdown !");
             debugLog("  -> channel will be forcefully terminated");
-            channel.close();
-            channel.dispose();
+            channel.close(() => {
+                channel.dispose();
+            });
         }
     }
 
@@ -927,17 +928,22 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
             errorLog(chalk.bgRed.white("PREVENTING DDOS ATTACK => maxConnection =" + this.maxConnections));
 
             const unused_channels: ServerSecureChannelLayer[] = this.getChannels().filter((channel1: ServerSecureChannelLayer) => {
-                return !channel1.isOpened && !channel1.hasSession;
+                return !channel1.hasSession;
             });
             if (unused_channels.length === 0) {
+                doDebug && console.log(
+                    this.getChannels()
+                        .map(({ status, isOpened, hasSession }) => `${status} ${isOpened} ${hasSession}\n`)
+                        .join(" ")
+                );
                 // all channels are in used , we cannot get any
-                errorLog("All channels are in used ! let cancel some");
+                errorLog(`All channels are in used ! we cannot cancel any ${this.getChannels().length}`);
                 // istanbul ignore next
                 if (doDebug) {
                     console.log("  - all channels are used !!!!");
-                    dumpChannelInfo(this.getChannels());
+                    false && dumpChannelInfo(this.getChannels());
                 }
-                setTimeout(deny_connection, 10);
+                setTimeout(deny_connection, 1000);
                 return;
             }
             // istanbul ignore next
@@ -948,7 +954,7 @@ export class OPCUAServerEndPoint extends EventEmitter implements ServerSecureCha
                 );
             }
             const channel = unused_channels[0];
-            errorLog("Closing channel ", channel.hashKey);
+            errorLog(`${unused_channels.length} : Forcefully closing oldest channel that have no session: ${channel.hashKey}`);
             channel.close(() => {
                 // istanbul ignore next
                 if (doDebug) {
@@ -1238,13 +1244,24 @@ function matching_endpoint(
 }
 
 const defaultSecurityModes = [MessageSecurityMode.None, MessageSecurityMode.Sign, MessageSecurityMode.SignAndEncrypt];
+
+
 const defaultSecurityPolicies = [
-    SecurityPolicy.Basic128Rsa15,
-    SecurityPolicy.Basic256,
-    // xx UNUSED!!    SecurityPolicy.Basic256Rsa15,
+
+    // now deprecated  Basic128Rs15 shall be disabled by default
+    // see https://profiles.opcfoundation.org/profile/1532
+    // SecurityPolicy.Basic128Rsa15,
+
+    // now deprecated Basic256 shall be disabled by default
+    // see https://profiles.opcfoundation.org/profile/2062
+    // SecurityPolicy.Basic256,
+    
+    // xx UNUSED!!  SecurityPolicy.Basic192Rsa15,
+    // xx UNUSED!!  SecurityPolicy.Basic256Rsa15,
+    
     SecurityPolicy.Basic256Sha256,
-    SecurityPolicy.Aes128_Sha256_RsaOaep
-    // NO USED YET SecurityPolicy.Aes256_Sha256_RsaPss
+    SecurityPolicy.Aes128_Sha256_RsaOaep,
+    SecurityPolicy.Aes256_Sha256_RsaPss
 ];
 
 const defaultUserTokenTypes = [

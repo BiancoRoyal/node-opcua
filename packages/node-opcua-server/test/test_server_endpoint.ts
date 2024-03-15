@@ -7,7 +7,7 @@ import { MessageSecurityMode } from "node-opcua-secure-channel";
 import { ApplicationDescription, EndpointDescription, UserTokenType } from "node-opcua-service-endpoints";
 import { extractFullyQualifiedDomainName, getFullyQualifiedDomainName } from "node-opcua-hostname";
 import { OPCUACertificateManager } from "node-opcua-certificate-manager";
-import { OPCUAServerEndPoint } from "..";
+import { OPCUAServerEndPoint } from "../source";
 
 const it_with_crypto = it;
 
@@ -106,16 +106,16 @@ describe("OPCUAServerEndpoint#addStandardEndpointDescriptions", function () {
         should(endpoint_desc).be.instanceOf(EndpointDescription);
     });
 
-    it_with_crypto("should find a endpoint matching SIGNANDENCRYPT / Basic256", function () {
+    it_with_crypto("should find a endpoint matching SignAndEncrypt / Basic256Sha256", function () {
         const endpoint_desc = server_endpoint.getEndpointDescription(
             MessageSecurityMode.SignAndEncrypt,
-            SecurityPolicy.Basic256,
+            SecurityPolicy.Basic256Sha256,
             null
         );
         should(endpoint_desc).be.instanceof(EndpointDescription);
     });
-    it_with_crypto("should find a endpoint matching SIGN / Basic256", function () {
-        const endpoint_desc = server_endpoint.getEndpointDescription(MessageSecurityMode.Sign, SecurityPolicy.Basic256, null);
+    it_with_crypto("should find a endpoint matching SIGN / Basic256Sha256", function () {
+        const endpoint_desc = server_endpoint.getEndpointDescription(MessageSecurityMode.Sign, SecurityPolicy.Basic256Sha256, null);
         should(endpoint_desc).be.instanceof(EndpointDescription);
     });
 });
@@ -149,15 +149,15 @@ describe("OPCUAServerEndpoint#addStandardEndpointDescriptions extra secure", fun
         should(endpoint_desc).be.eql(null);
     });
 
-    it_with_crypto("should not find a endpoint matching Sign / Basic256", function () {
-        const endpoint_desc = server_endpoint.getEndpointDescription(MessageSecurityMode.Sign, SecurityPolicy.Basic256, null);
+    it_with_crypto("should not find a endpoint matching Sign / Basic256Sha256", function () {
+        const endpoint_desc = server_endpoint.getEndpointDescription(MessageSecurityMode.Sign, SecurityPolicy.Basic256Sha256, null);
         should(endpoint_desc).be.eql(null);
     });
 
-    it_with_crypto("should find a endpoint matching SignAndEncrypt / Basic256", function () {
+    it_with_crypto("should find a endpoint matching SignAndEncrypt / Basic256Sha256", function () {
         const endpoint_desc = server_endpoint.getEndpointDescription(
             MessageSecurityMode.SignAndEncrypt,
-            SecurityPolicy.Basic256,
+            SecurityPolicy.Basic256Sha256,
             null
         );
         should(endpoint_desc).be.instanceof(EndpointDescription);
@@ -190,10 +190,10 @@ describe("OPCUAServerEndpoint#addStandardEndpointDescriptions extra secure", fun
         });
     });
 
-    it_with_crypto("should find a endpoint matching SignAndEncrypt / Basic256", function () {
+    it_with_crypto("should find a endpoint matching SignAndEncrypt / Basic256Sha256", function () {
         const endpoint_desc = server_endpoint.getEndpointDescription(
             MessageSecurityMode.SignAndEncrypt,
-            SecurityPolicy.Basic256,
+            SecurityPolicy.Basic256Sha256,
             null
         );
         should(endpoint_desc).be.instanceof(EndpointDescription);

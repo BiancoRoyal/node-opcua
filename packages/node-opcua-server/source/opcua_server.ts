@@ -39,7 +39,8 @@ import {
     UAObjectType,
     PseudoVariantStringPredefined,
     innerBrowse,
-    innerBrowseNext
+    innerBrowseNext,
+    UAEventType
 } from "node-opcua-address-space";
 import { getDefaultCertificateManager, OPCUACertificateManager } from "node-opcua-certificate-manager";
 import { ServerState } from "node-opcua-common";
@@ -57,6 +58,7 @@ import { NodeId } from "node-opcua-nodeid";
 import { ObjectRegistry } from "node-opcua-object-registry";
 import {
     AsymmetricAlgorithmSecurityHeader,
+    coerceSecurityPolicy,
     computeSignature,
     fromURI,
     getCryptoFactory,
@@ -1129,6 +1131,10 @@ export class OPCUAServer extends OPCUABaseServer {
             options.serverCapabilities = options.serverCapabilities || {};
             options.serverCapabilities.maxSessions = options.maxAllowedSessionNumber;
         }
+        // adjust securityPolicies if any
+        if (options.securityPolicies) {
+            options.securityPolicies = options.securityPolicies.map(coerceSecurityPolicy);
+        }
 
         /**
          * @property maxConnectionsPerEndpoint
@@ -1479,8 +1485,9 @@ export class OPCUAServer extends OPCUABaseServer {
     /**
      * retrieve a session by authentication token
      * @internal
+     * @private
      */
-    protected getSession(authenticationToken: NodeId, activeOnly?: boolean): ServerSession | null {
+    public getSession(authenticationToken: NodeId, activeOnly?: boolean): ServerSession | null {
         return this.engine ? this.engine.getSession(authenticationToken, activeOnly) : null;
     }
 
@@ -1621,8 +1628,7 @@ export class OPCUAServer extends OPCUABaseServer {
                     case StatusCodes.BadCertificateIssuerTimeInvalid:
                         this.raiseEvent("AuditCertificateExpiredEventType", {
                             certificate: { dataType: DataType.ByteString, value: certificate },
-                            sourceName: { dataType: DataType.String, value: "Security/Certificate" },
-                            comment: { dataType: DataType.String, value: certificateStatus.toString() }
+                            sourceName: { dataType: DataType.String, value: "Security/Certificate" }
                         });
                         break;
                     case StatusCodes.BadCertificateRevoked:
@@ -1630,8 +1636,7 @@ export class OPCUAServer extends OPCUABaseServer {
                     case StatusCodes.BadCertificateIssuerRevocationUnknown:
                         this.raiseEvent("AuditCertificateRevokedEventType", {
                             certificate: { dataType: DataType.ByteString, value: certificate },
-                            sourceName: { dataType: DataType.String, value: "Security/Certificate" },
-                            comment: { dataType: DataType.String, value: certificateStatus.toString() }
+                            sourceName: { dataType: DataType.String, value: "Security/Certificate" }
                         });
                         break;
                     case StatusCodes.BadCertificateIssuerUseNotAllowed:
@@ -1639,8 +1644,7 @@ export class OPCUAServer extends OPCUABaseServer {
                     case StatusCodes.BadSecurityChecksFailed:
                         this.raiseEvent("AuditCertificateMismatchEventType", {
                             certificate: { dataType: DataType.ByteString, value: certificate },
-                            sourceName: { dataType: DataType.String, value: "Security/Certificate" },
-                            comment: { dataType: DataType.String, value: certificateStatus.toString() }
+                            sourceName: { dataType: DataType.String, value: "Security/Certificate" }
                         });
                         break;
                 }
@@ -2347,8 +2351,8 @@ export class OPCUAServer extends OPCUABaseServer {
         let response: any;
         /* istanbul ignore next */
         if (!message.session || message.session_statusCode !== StatusCodes.Good) {
-            const errMessage = "INVALID SESSION  !! ";
-            response = new ResponseClass({ responseHeader: { serviceResult: message.session_statusCode } });
+            const errMessage = "=>" + message.session_statusCode?.toString();
+            response = new ServiceFault({ responseHeader: { serviceResult: message.session_statusCode } });
             debugLog(chalk.red.bold(errMessage), chalk.yellow(message.session_statusCode!.toString()), response.constructor.name);
             return sendResponse(response);
         }
@@ -2451,23 +2455,28 @@ export class OPCUAServer extends OPCUABaseServer {
                     return sendError(StatusCodes.BadNothingToDo);
                 }
 
-                const results: any[] = subscriptionIds.map((subscriptionId: number) => actionToPerform(session, subscriptionId));
-
-                // resolve potential pending promises ....
-                for (let i = 0; i < results.length; i++) {
-                    if (results[i].then) {
-                        results[i] = await results[i];
-                    }
+                // check minimal
+                if (
+                    request.subscriptionIds.length >
+                    Math.min(
+                        this.engine.serverCapabilities.maxSubscriptionsPerSession,
+                        this.engine.serverCapabilities.maxSubscriptions
+                    )
+                ) {
+                    return sendError(StatusCodes.BadTooManyOperations);
                 }
 
+                const promises: Promise<T>[] = subscriptionIds.map((subscriptionId: number) =>
+                    actionToPerform(session, subscriptionId)
+                );
+                const results: T[] = await Promise.all(promises);
+
+                const serviceResult: StatusCode = StatusCodes.Good;
                 const response = new ResponseClass({
                     responseHeader: {
-                        serviceResult:
-                            request.subscriptionIds.length > this.engine.serverCapabilities.maxSubscriptionsPerSession
-                                ? StatusCodes.BadTooManyOperations
-                                : StatusCodes.Good
+                        serviceResult
                     },
-                    results
+                    results: results as any
                 });
                 sendResponse(response);
             }
@@ -3867,6 +3876,7 @@ export interface OPCUAServer {
     raiseEvent(eventType: "AuditCertificateUntrustedEventType", options: RaiseAuditCertificateUntrustedEventData): void;
     raiseEvent(eventType: "AuditCertificateRevokedEventType", options: RaiseAuditCertificateRevokedEventData): void;
     raiseEvent(eventType: "AuditCertificateMismatchEventType", options: RaiseAuditCertificateMismatchEventData): void;
+    raiseEvent(eventType: UAEventType, options: RaiseEventData): void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
