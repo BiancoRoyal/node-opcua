@@ -124,11 +124,11 @@ import {
     HistoryReadValueIdOptions2,
     ExtraReadHistoryValueParameters
 } from "../client_session";
+import { UserIdentityInfo } from "../user_identity_info";
 import { ClientSessionKeepAliveManager } from "../client_session_keepalive_manager";
 import { ClientSubscription } from "../client_subscription";
 import { Request, Response } from "../common";
-import { repair_client_session } from "../reconnection";
-import { UserIdentityInfo } from "../user_identity_info";
+import { repair_client_session } from "./reconnection/reconnection";
 
 import { ClientSidePublishEngine } from "./client_publish_engine";
 import { ClientSubscriptionImpl } from "./client_subscription_impl";
@@ -1012,7 +1012,25 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
      * @param value   {Variant} - the value to write
      * @return {Promise<StatusCode>} - the status code of the write
      *
-     * @deprecated
+     * @deprecated use session.write instead
+     *
+     * @example
+     *     // please use session.write instead of session.writeSingleNode
+     *     // as follow
+     *     const statusCode = await session.write({
+     *          nodeId,
+     *          attributeId: AttributeIds.Value,
+     *          value: {
+     *             statusCode: Good,
+     *             sourceTimestamp: new Date(), // optional, some server may not accept this
+     *             value: {
+     *               dataType: opcua.DataType.Double,
+     *               value: 100.0
+     *             }
+     *          }
+     *     });
+     *
+     *
      */
     public writeSingleNode(nodeId: NodeIdLike, value: VariantLike, callback: ResponseCallback<StatusCode>): void;
 
@@ -1474,27 +1492,11 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
         return this._client !== null && this._client._secureChannel !== null && this._client._secureChannel.isOpened();
     }
 
-    private requestReconnection() {
-        if (this._client) {
-            this._client.requestReconnection();
-            assert(this._client.isReconnecting === true, "expecting client to be reconnecting now");
-        }
-    }
-
     public performMessageTransaction(request: Request, callback: (err: Error | null, response?: Response) => void): void {
         if (!this._client) {
             // session may have been closed by user ... but is still in used !!
             return callback(new Error("Session has been closed and should not be used to perform a transaction anymore"));
         }
-
-        // if (!this.isChannelValid()) {
-        //     // the secure channel is broken, may be the server has crashed or the network cable has been disconnected
-        //     // for a long time
-        //     // we may need to queue this transaction, as a secure token may be being reprocessed
-        //     errorLog(chalk.bgWhite.red("!!! Performing transaction on invalid channel !!! ", request.schema.name));
-        //     // this.requestReconnection();
-        //     return callback(new Error("!!! Performing transaction on invalid channel with " + request.schema.name + ": starting reconnection process"));
-        // }
 
         this._reconnecting.pendingTransactions = this._reconnecting.pendingTransactions || [];
         this._reconnecting.pendingTransactionsCount = this._reconnecting.pendingTransactionsCount || 0;
@@ -2014,13 +2016,6 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
             .catch(callback);
     }
 
-    public resumePublishEngine(): void {
-        assert(this._publishEngine);
-        if (this._publishEngine && this._publishEngine.subscriptionCount > 0) {
-            this._publishEngine.replenish_publish_request_queue();
-        }
-    }
-
     public async readNamespaceArray(): Promise<string[]>;
     public readNamespaceArray(callback: (err: Error | null, namespaceArray?: string[]) => void): void;
     public readNamespaceArray(...args: any[]): any {
@@ -2205,6 +2200,7 @@ export class ClientSessionImpl extends EventEmitter implements ClientSession {
         request: Request,
         callback: (err: Error | null, response?: Response) => void
     ) {
+        warningLog("attempt to recreate session to reperform a transation ", request.constructor.name);
         if (this.recursive_repair_detector >= 1) {
             // tslint:disable-next-line: no-console
             warningLog("recreate_session_and_reperform_transaction => Already in Progress");
@@ -2230,10 +2226,7 @@ type promoteOpaqueStructure3WithCallbackFunc = (
     callback: ErrorCallback
 ) => void;
 
-async function promoteOpaqueStructure2(
-    session: IBasicSessionAsync2,
-    callMethodResult: CallMethodResult
-): Promise<void> {
+async function promoteOpaqueStructure2(session: IBasicSessionAsync2, callMethodResult: CallMethodResult): Promise<void> {
     if (!callMethodResult || !callMethodResult.outputArguments || callMethodResult.outputArguments.length === 0) {
         return;
     }
