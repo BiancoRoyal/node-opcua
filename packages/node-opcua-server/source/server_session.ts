@@ -25,7 +25,7 @@ import {
     IUserManager
 } from "node-opcua-address-space";
 import { ISessionContext } from "node-opcua-address-space-base";
-import { minOPCUADate, randomGuid } from "node-opcua-basic-types";
+import { getMinOPCUADate, randomGuid } from "node-opcua-basic-types";
 import { SessionDiagnosticsDataType, SessionSecurityDiagnosticsDataType, SubscriptionDiagnosticsDataType } from "node-opcua-common";
 import { QualifiedName, NodeClass } from "node-opcua-data-model";
 import { checkDebugFlag, make_debugLog, make_errorLog } from "node-opcua-debug";
@@ -228,7 +228,7 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
      * the first transaction is the creation of the session
      */
     public get clientLastContactTime(): number {
-        const lastSeen = this._watchDogData ? this._watchDogData.lastSeen : minOPCUADate.getTime();
+        const lastSeen = this._watchDogData ? this._watchDogData.lastSeen : getMinOPCUADate().getTime();
         return WatchDog.lastSeenToDuration(lastSeen);
     }
 
@@ -268,7 +268,6 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
     }
 
     /**
-     * @method onClientSeen
      * required for watch dog
      * @param currentTime {DateTime}
      * @private
@@ -369,9 +368,7 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
 
     /**
      * retrieve an existing subscription by subscriptionId
-     * @method getSubscription
      * @param subscriptionId {Number}
-     * @return {Subscription}
      */
     public getSubscription(subscriptionId: number): Subscription | null {
         if (!this.publishEngine) return null;
@@ -389,7 +386,6 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
     }
 
     /**
-     * @method deleteSubscription
      * @param subscriptionId {Number}
      * @return {StatusCode}
      */
@@ -420,7 +416,6 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
      * against data loss in the case of a Session termination. In these cases, the Subscription can be reassigned to
      * another Client before its lifetime expires.
      *
-     * @method close
      * @param deleteSubscriptions : should we delete subscription ?
      * @param [reason = "CloseSession"] the reason for closing the session
      *         (shall be "Timeout", "Terminated" or "CloseSession")
@@ -608,7 +603,6 @@ export class ServerSession extends EventEmitter implements ISubscriber, ISession
         debugLog("ServerSession#_unexposeSubscriptionDiagnostics");
     }
     /**
-     * @method watchdogReset
      * used as a callback for the Watchdog
      * @private
      */

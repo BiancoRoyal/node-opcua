@@ -26,6 +26,34 @@ function _load_private_key(privateKeyFilename: string): PrivateKey {
     return readPrivateKey(privateKeyFilename);
 }
 
+export function getPartialCertificateChain1(certificateChain?: Buffer| null, maxSize?: number ): Buffer| undefined {
+
+    return certificateChain  || undefined;
+}
+export function getPartialCertificateChain(certificateChain?: Buffer | null, maxSize?: number): Buffer | undefined {
+    
+    if (!certificateChain || certificateChain.length === 0) {
+         return undefined;
+    }
+    if (maxSize === undefined) {
+        return certificateChain;
+    }
+    const certificates = split_der(certificateChain);
+    // at least include first certificate
+    let buffer = certificates.length == 1 ? certificateChain : Buffer.from(certificates[0]);
+    // Throw if first certificate already exceed maxSize
+    if (buffer.length> maxSize) {
+        throw new Error(`getPartialCertificateChain not enough space for leaf certificate ${maxSize} < ${buffer.length}`);
+    }
+    let index = 1;
+    while (index < certificates.length && buffer.length + certificates[index].length < maxSize) {
+        buffer = Buffer.concat([buffer, certificates[index]]);
+        index++;
+    }
+    return buffer;
+
+}
+
 export interface IOPCUASecureObjectOptions {
     certificateFile?: string;
     privateKeyFile?: string;
@@ -33,11 +61,6 @@ export interface IOPCUASecureObjectOptions {
 
 /**
  * an object that provides a certificate and a privateKey
- * @class OPCUASecureObject
- * @param options
- * @param options.certificateFile {string}
- * @param options.privateKeyFile {string}
- * @constructor
  */
 export class OPCUASecureObject extends EventEmitter implements ICertificateKeyPairProvider {
     public readonly certificateFile: string;
@@ -67,6 +90,7 @@ export class OPCUASecureObject extends EventEmitter implements ICertificateKeyPa
             assert(fs.existsSync(this.certificateFile), "Certificate file must exist :" + this.certificateFile);
             priv.$$certificateChain = _load_certificate(this.certificateFile);
             if (priv.$$certificateChain && priv.$$certificateChain.length === 0) {
+                // do it again for debug purposes
                 priv.$$certificateChain = _load_certificate(this.certificateFile);
                 throw new Error("Invalid certificate length = 0 " + this.certificateFile);
             }

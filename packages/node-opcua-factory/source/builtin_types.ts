@@ -52,7 +52,7 @@ import {
     encodeUInt16,
     encodeUInt32,
     encodeUInt64,
-    minDate
+    getMinOPCUADate
 } from "node-opcua-basic-types";
 import { BinaryStream, OutputBinaryStream } from "node-opcua-binary-stream";
 import { DataTypeIds } from "node-opcua-constants";
@@ -65,10 +65,7 @@ import { BasicTypeDefinition, BasicTypeDefinitionOptions, BasicTypeDefinitionOpt
 
 
 /**
- * @class TypeSchemaBase
- * @param options {Object}
- * @constructor
- * create a new type Schema
+ * a type Schema for a OPCUA object
  */
  export class TypeSchemaBase implements CommonInterface {
     public name: string;
@@ -98,7 +95,7 @@ import { BasicTypeDefinition, BasicTypeDefinitionOptions, BasicTypeDefinitionOpt
     }
 
     /**
-     * @method  computer_default_value
+
      * @param defaultValue {*} the default value
      * @return {*}
      */
@@ -255,7 +252,7 @@ const _defaultType: BasicTypeDefinitionOptionsBase[] = [
         encode: encodeDateTime,
 
         coerce: coerceDateTime,
-        defaultValue: ()=> minDate
+        defaultValue: () => getMinOPCUADate()
     },
     {
         name: "Guid",
@@ -349,7 +346,7 @@ const _defaultTypeMap: Map<string, BasicTypeSchema> = new Map<string, BasicTypeS
 _defaultType.forEach(registerType);
 
 /**
- * @method registerType
+
  * @param schema {TypeSchemaBase}
  */
 export function registerType(schema: BasicTypeDefinitionOptionsBase): void {

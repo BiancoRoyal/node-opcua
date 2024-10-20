@@ -14,14 +14,10 @@ export interface UABaseEventEx extends UABaseEvent_Base, UABaseEventHelper {}
 export declare interface UABaseEventImpl extends UABaseEventEx {}
 
 /**
- * @class BaseEventType
- * @class UAObject
- * @constructor
+ * @internal
  */
 export class UABaseEventImpl extends UAObjectImpl implements UABaseEventEx {
     /**
-     * @method setSourceName
-     * @param name
      */
     public setSourceName(name: string): void {
         assert(typeof name === "string");
@@ -34,8 +30,6 @@ export class UABaseEventImpl extends UAObjectImpl implements UABaseEventEx {
     }
 
     /**
-     * @method setSourceNode
-     * @param node {NodeId|UAObject}
      */
     public setSourceNode(node: NodeId | BaseNode): void {
         this.sourceNode.setValueFromSource(

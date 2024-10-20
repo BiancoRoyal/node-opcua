@@ -9,7 +9,7 @@ import { chooseSecurityHeader } from "./secure_message_chunk_manager";
 
 /**
  * convert the messageChunk header to a string
- * @method messageHeaderToString
+
  * @param messageChunk {BinaryStream}
  * @return {string}
  */
@@ -22,12 +22,12 @@ export function messageHeaderToString(messageChunk: Buffer): string {
         return messageHeader.msgType + " " + messageHeader.isFinal + " length   = " + messageHeader.length;
     }
 
-    const securityHeader = chooseSecurityHeader(messageHeader.msgType);
-
+  
     const sequenceHeader = new SequenceHeader();
     assert(stream.length === 8);
 
     const channelId = stream.readUInt32();
+    const securityHeader = chooseSecurityHeader(messageHeader.msgType);
     securityHeader.decode(stream);
     sequenceHeader.decode(stream);
 

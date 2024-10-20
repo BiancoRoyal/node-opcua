@@ -443,7 +443,7 @@ function constructHook(options: VariantOptions | Variant): VariantOptions2 {
                 throw new Error("Matrix Variant : missing dimensions");
             }
             /* istanbul ignore next */
-            if (options.value.length !== calculate_product(options.dimensions)) {
+            if (options.value.length != 0 && options.value.length !== calculate_product(options.dimensions)) {
                 throw new Error(
                     "Matrix Variant : invalid value size = options.value.length " +
                         options.value.length +
@@ -793,7 +793,7 @@ export function coerceVariantType(dataType: DataType, value: undefined | any): a
         case DataType.ExtensionObject:
             break;
         case DataType.DateTime:
-            assert(value === null || value instanceof Date);
+            assert(value === null || !!value.getTime);
             break;
         case DataType.String:
             assert(typeof value === "string" || value === null);

@@ -3,7 +3,7 @@
  */
 import { assert } from "node-opcua-assert";
 import { BinaryStream, OutputBinaryStream } from "node-opcua-binary-stream";
-import { coerceDateTime, DateWithPicoseconds, getCurrentClock, minOPCUADate, PreciseClock } from "node-opcua-date-time";
+import { coerceDateTime, DateWithPicoseconds, getCurrentClock, PreciseClock } from "node-opcua-date-time";
 import {
     BaseUAObject,
     buildStructuredType,
@@ -65,6 +65,11 @@ function getDataValue_EncodingByte(dataValue: DataValue): DataValueEncodingByte 
     return encodingMask;
 }
 
+/**
+ * @internal
+ * @param dataValue 
+ * @param stream 
+ */
 export function encodeDataValue(dataValue: DataValue, stream: OutputBinaryStream): void {
     const encodingMask = getDataValue_EncodingByte(dataValue);
     assert(isFinite(encodingMask) && encodingMask >= 0 && encodingMask <= 0x3f);
@@ -245,9 +250,11 @@ function d(timestamp: Date | null, picoseconds: number): string {
     return timestamp ? timestamp.toISOString() + " $ " + toMicroNanoPico(picoseconds) : "null"; // + "  " + (this.serverTimestamp ? this.serverTimestamp.getTime() :"-");
 }
 const emptyObject = {};
-const defaultDate = minOPCUADate;
 
 export class DataValue extends BaseUAObject {
+    /**
+     * @internal
+     */
     public static possibleFields: string[] = [
         "value",
         "statusCode",
@@ -256,6 +263,9 @@ export class DataValue extends BaseUAObject {
         "serverTimestamp",
         "serverPicoseconds"
     ];
+    /**
+     * @internal
+     */
     public static schema = schemaDataValue;
     public value: Variant;
     public statusCode: StatusCode;
@@ -266,10 +276,6 @@ export class DataValue extends BaseUAObject {
 
     /**
      *
-     * @class DataValue
-     * @constructor
-     * @extends BaseUAObject
-     * @param  options {Object}
      */
     constructor(options?: DataValueOptions | null) {
         super();
@@ -358,6 +364,14 @@ function _partial_clone(dataValue: DataValue): DataValue {
     return cloneDataValue;
 }
 
+/**
+ * apply the provided timestampsToReturn flag to the dataValue and return a cloned dataValue
+ * with the specified timestamps.
+ * @param dataValue 
+ * @param timestampsToReturn 
+ * @param attributeId 
+ * @returns 
+ */
 export function apply_timestamps(
     dataValue: DataValue,
     timestampsToReturn: TimestampsToReturn,
@@ -408,6 +422,14 @@ export function apply_timestamps(
     return cloneDataValue;
 }
 
+/**
+ * 
+ * @param dataValue a DataValue
+ * @param timestampsToReturn  a TimestampsToReturn flag to determine which timestamp should be kept
+ * @param attributeId if attributeId is not Value, sourceTimestamp will forcefully be set to null
+ * @param now an optional current clock to be used to set the serverTimestamp
+ * @returns 
+ */
 export function apply_timestamps_no_copy(
     dataValue: DataValue,
     timestampsToReturn: TimestampsToReturn,
@@ -422,20 +444,24 @@ export function apply_timestamps_no_copy(
             dataValue.serverPicoseconds = 0;
             break;
         case TimestampsToReturn.Server:
-            now = now || getCurrentClock();
-            dataValue.serverTimestamp = now.timestamp as DateTime;
-            dataValue.serverPicoseconds = now.picoseconds;
             dataValue.sourceTimestamp = null;
             dataValue.sourcePicoseconds = 0;
+            if (!dataValue.serverTimestamp) {
+                now = now || getCurrentClock();
+                dataValue.serverTimestamp = now.timestamp as DateTime;
+                dataValue.serverPicoseconds = now.picoseconds;
+            }
             break;
         case TimestampsToReturn.Source:
             break;
         case TimestampsToReturn.Both:
         default:
             assert(timestampsToReturn === TimestampsToReturn.Both);
-            now = now || getCurrentClock();
-            dataValue.serverTimestamp = now.timestamp as DateTime;
-            dataValue.serverPicoseconds = now.picoseconds;
+            if (!dataValue.serverTimestamp) {
+                now = now || getCurrentClock();
+                dataValue.serverTimestamp = now.timestamp as DateTime;
+                dataValue.serverPicoseconds = now.picoseconds;
+            }
             break;
     }
     // unset sourceTimestamp unless AttributeId is Value
@@ -445,6 +471,9 @@ export function apply_timestamps_no_copy(
     return dataValue;
 }
 
+/**
+ * @deprecated
+ */
 function apply_timestamps2(dataValue: DataValue, timestampsToReturn: TimestampsToReturn, attributeId: AttributeIds): DataValue {
     assert(attributeId > 0);
     assert(Object.prototype.hasOwnProperty.call(dataValue, "serverTimestamp"));
@@ -484,7 +513,7 @@ function apply_timestamps2(dataValue: DataValue, timestampsToReturn: TimestampsT
 }
 
 /*
- * @method _clone_with_array_replacement
+
  * @param dataValue
  * @param result
  * @return {DataValue}
@@ -568,6 +597,12 @@ function sameDate(date1: DateTime, date2: DateTime): boolean {
     return date1.getTime() === date2.getTime();
 }
 
+/**
+ * returns true if the sourceTimestamp and sourcePicoseconds of the two dataValue are different
+ * @param dataValue1 
+ * @param dataValue2 
+ * @returns 
+ */
 export function sourceTimestampHasChanged(dataValue1: DataValue, dataValue2: DataValue): boolean {
     return (
         !sameDate(dataValue1.sourceTimestamp, dataValue2.sourceTimestamp) ||
@@ -575,12 +610,34 @@ export function sourceTimestampHasChanged(dataValue1: DataValue, dataValue2: Dat
     );
 }
 
+/**
+ * returns true if the serverTimestamp and serverPicoseconds of the two dataValue are different
+ * @param dataValue1 
+ * @param dataValue2 
+ * @returns 
+ */
 export function serverTimestampHasChanged(dataValue1: DataValue, dataValue2: DataValue): boolean {
     return (
         !sameDate(dataValue1.serverTimestamp, dataValue2.serverTimestamp) ||
         dataValue1.serverPicoseconds !== dataValue2.serverPicoseconds
     );
 }
+
+
+/**
+ * return if the timestamps of the two dataValue are different
+ * 
+ * - if timestampsToReturn is not specified, both sourceTimestamp are compared
+ * - if timestampsToReturn is **Neither**, the function returns false
+ * - if timestampsToReturn is **Both**, both sourceTimestamp and serverTimestamp are compared
+ * - if timestampsToReturn is **Source**, only sourceTimestamp are compared
+ * - if timestampsToReturn is **Server**, only serverTimestamp are compared
+ * 
+ * @param dataValue1 
+ * @param dataValue2 
+ * @param timestampsToReturn 
+ * @returns 
+ */
 
 export function timestampHasChanged(
     dataValue1: DataValue,
@@ -604,15 +661,16 @@ export function timestampHasChanged(
     }
 }
 
+/**
+ * @param statusCode1 
+ * @param statusCode2 
+ * @returns true if the two statusCodes are identical, i.e have the same value
+ */
 export function sameStatusCode(statusCode1: StatusCode, statusCode2: StatusCode): boolean {
     return statusCode1.value === statusCode2.value;
 }
 
 /**
- * @method sameDataValue
- * @param v1 {DataValue}
- * @param v2 {DataValue}
- * @param [timestampsToReturn {TimestampsToReturn}]
  * @return {boolean} true if data values are identical
  */
 export function sameDataValue(v1: DataValue, v2: DataValue, timestampsToReturn?: TimestampsToReturn): boolean {
@@ -647,11 +705,16 @@ export function sameDataValue(v1: DataValue, v2: DataValue, timestampsToReturn?:
     }
     return sameVariant(v1.value, v2.value);
 }
-
+/**
+ * a DataValueOptions specialized for a specific DataType
+ */
 export interface DataValueOptionsT<T, DT extends DataType> extends DataValueOptions {
     value: VariantOptionsT<T, DT>;
 }
 
+/**
+ * a DataValue specialized for a specific DataType
+ */
 export declare interface DataValueT<T, DT extends DataType> extends DataValue {
     value: VariantT<T, DT>;
 }

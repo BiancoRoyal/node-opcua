@@ -18,8 +18,6 @@ import { IndexIterator } from "./idx_iterator";
 
 const doDebug = checkDebugFlag(__filename);
 const debugLog = make_debugLog(__filename);
-// const doDebug = true; // checkDebugFlag(__filename);
-// const debugLog = make_warningLog(__filename);
 const warningLog = make_warningLog(__filename);
 const errorLog = make_errorLog(__filename);
 
@@ -639,14 +637,14 @@ export function _bindExtensionObjectArrayOrMatrix(
 
     /** */
     const addressSpace = uaVariable.addressSpace;
-    if (optionalExtensionObjectArray) {
+    if (optionalExtensionObjectArray && optionalExtensionObjectArray.length != 0) {
         if (optionalExtensionObjectArray.length !== totalLength) {
             throw new Error(
                 `optionalExtensionObjectArray must have the expected number of element matching ${arrayDimensions} but was ${optionalExtensionObjectArray.length}`
             );
         }
     }
-    if (!optionalExtensionObjectArray) {
+    if (!optionalExtensionObjectArray || optionalExtensionObjectArray.length==0) {
         optionalExtensionObjectArray = [];
         for (let i = 0; i < totalLength; i++) {
             optionalExtensionObjectArray[i] = addressSpace.constructExtensionObject(uaVariable.dataType, {});

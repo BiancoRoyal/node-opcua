@@ -124,9 +124,6 @@ function _extract_namespace_and_browse_name_as_string(
 
 /**
  * returns true if str matches a nodeID, e.g i=123 or ns=...
- * @method isNodeIdString
- * @param str
- * @type {boolean}
  */
 function isNodeIdString(str: unknown): boolean {
     if (typeof str !== "string") {
@@ -200,9 +197,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /***
-     * @method getNamespace
-     * @param {string|number} namespace index or namespace uri.
-     * @return {NameSpace} the namespace
      */
     public getNamespace(namespaceIndexOrName: string | number): NamespacePrivate {
         if (typeof namespaceIndexOrName === "number") {
@@ -218,7 +212,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /***
-     * @method getDefaultNamespace
      * @return  the  default namespace (standard OPCUA namespace)
      */
     public getDefaultNamespace(): NamespacePrivate {
@@ -226,7 +219,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /***
-     * @method getOwnNamespace
      *
      * objects instances managed by the server will be created in this namespace.
      *
@@ -241,8 +233,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /**
-     * @method getNamespaceIndex
-     * @param namespaceUri
      * @return the namespace index of a namespace given by its namespace uri
      *
      */
@@ -252,7 +242,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /**
-     * @method registerNamespace
      *
      * register a new namespace,
      * it is OK to call registerNamespace even if namespace has already been registered; 
@@ -281,7 +270,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /***
-     * @method getNamespaceArray
      * @return {Namespace[]} the namespace array
      */
     public getNamespaceArray(): NamespacePrivate[] {
@@ -290,7 +278,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      *
-     * @method addAlias
      * @param alias {String} the alias name
      * @param nodeId {NodeId}
      * @internal
@@ -303,7 +290,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      * find an node by node Id
-     * @method findNode
      * @param nodeId   a nodeId or a string coerce-able to nodeID, representing the object to find.
      * @return {BaseNode|null}
      */
@@ -344,12 +330,13 @@ export class AddressSpace implements AddressSpacePrivate {
                 }
             }
         }
-        return resolveNodeId(nodeId);
+        const namespaceArray: string[] = this.getNamespaceArray().map((a)=>a.namespaceUri);
+
+        return resolveNodeId(nodeId, { namespaceArray });
     }
 
     /**
      *
-     * @method findObjectType
      * @param objectType  {String|NodeId|QualifiedName}
      * @param [namespaceIndex=0 {Number}] an optional namespace index
      * @return {UAObjectType|null}
@@ -384,7 +371,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /**
-     * @method findVariableType
      * @param variableType  {String|NodeId}
      * @param [namespaceIndex=0 {Number}] an optional namespace index
      * @return {UAObjectType|null}
@@ -412,7 +398,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      * Find the DataType node from a NodeId or a browseName
-     * @method findDataType
      * @param dataType {String|NodeId}
      * @param [namespaceIndex=0 {Number}] an optional namespace index
      * @return {DataType|null}
@@ -455,7 +440,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /**
-     * @method findCorrespondingBasicDataType
      *
      * @example
      *
@@ -488,9 +472,9 @@ export class AddressSpace implements AddressSpacePrivate {
         if (!(dataTypeNode instanceof UADataTypeImpl)) {
             throw new Error(
                 "we are expecting an UADataType here :  " +
-                    _orig_dataTypeNode.toString() +
-                    " should not refer to a  " +
-                    (dataTypeNode as BaseNode).browseName.name
+                _orig_dataTypeNode.toString() +
+                " should not refer to a  " +
+                (dataTypeNode as BaseNode).browseName.name
             );
         }
 
@@ -519,7 +503,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      * find a ReferenceType by its inverse name.
-     * @method findReferenceTypeFromInverseName
      * @param inverseName  the inverse name of the ReferenceType to find
      * @deprecated
      */
@@ -528,7 +511,6 @@ export class AddressSpace implements AddressSpacePrivate {
     }
 
     /**
-     * @method findReferenceType
      * @param refType {String|NodeId}
      * @param [namespaceIndex=0 {Number}] an optional namespace index
      * @return {ReferenceType|null}
@@ -575,7 +557,6 @@ export class AddressSpace implements AddressSpacePrivate {
     /**
      * returns the inverse name of the referenceType.
      *
-     * @method inverseReferenceType
      * @param referenceType {String} : the reference type name
      * @return {String} the name of the inverse reference type.
      *
@@ -602,7 +583,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      * find an EventType node in the address space
-     * @method findEventType
      * @param eventTypeId {String|NodeId|UAObjectType} the eventType to find
      * @param namespaceIndex the namespace index of the event to find
      * @return {UAObjectType|null} the EventType found or null.
@@ -648,7 +628,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      * EventId is generated by the Server to uniquely identify a particular Event Notification.
-     * @method generateEventId
      * @return {Variant}  dataType: "ByteString"
      */
     public generateEventId(): VariantT<Buffer, DataType.ByteString> {
@@ -677,7 +656,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /*=
      * construct a simple javascript object with all the default properties of the event
-     * @method constructEventData
      *
      * @return result.$eventDataSource {BaseNode} the event type node
      * @return result.eventId {NodeId} the
@@ -783,18 +761,18 @@ export class AddressSpace implements AddressSpacePrivate {
                         // tslint:disable:no-console
                         errorLog(
                             chalk.red("ERROR : AddressSpace#constructEventData(eventType,options) " + "cannot find property ") +
-                                self.browseName.toString() +
-                                " => " +
-                                chalk.cyan(lowerName)
+                            self.browseName.toString() +
+                            " => " +
+                            chalk.cyan(lowerName)
                         );
                     } else {
                         errorLog(
                             chalk.yellow(
                                 "Warning : AddressSpace#constructEventData(eventType,options)" + " cannot find property "
                             ) +
-                                self.browseName.toString() +
-                                " => " +
-                                chalk.cyan(lowerName)
+                            self.browseName.toString() +
+                            " => " +
+                            chalk.cyan(lowerName)
                         );
                     }
                 }
@@ -811,11 +789,11 @@ export class AddressSpace implements AddressSpacePrivate {
                 if (!alreadyVisited(k)) {
                     warningLog(
                         "constructEventData:  cannot find property '" +
-                            k +
-                            "' in [ " +
-                            Object.keys(visitedProperties).join(", ") +
-                            "] when filling " +
-                            eventTypeNode.browseName.toString()
+                        k +
+                        "' in [ " +
+                        Object.keys(visitedProperties).join(", ") +
+                        "] when filling " +
+                        eventTypeNode.browseName.toString()
                     );
                 }
             });
@@ -890,7 +868,6 @@ export class AddressSpace implements AddressSpacePrivate {
     /**
      * browse some path.
      *
-     * @method browsePath
      * @param  {BrowsePath} browsePath
      * @return {BrowsePathResult}
      *
@@ -1066,7 +1043,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      * cleanup all resources maintained by this addressSpace.
-     * @method dispose
      */
     public dispose(): void {
         this._namespaceArray.map((namespace: NamespacePrivate) => namespace.dispose());
@@ -1079,7 +1055,6 @@ export class AddressSpace implements AddressSpacePrivate {
 
     /**
      * register a function that will be called when the server will perform its shut down.
-     * @method registerShutdownTask
      */
     public registerShutdownTask(task: ShutdownTask): void {
         this._shutdownTask = this._shutdownTask || [];
@@ -1180,7 +1155,6 @@ export class AddressSpace implements AddressSpacePrivate {
      * walk up the hierarchy of objects until a view is found
      * objects may belong to multiples views.
      * Note: this method doesn't return the main view => Server object.
-     * @method extractRootViews
      * @param node {BaseNode}
      * @return {BaseNode[]}
      */
@@ -1546,7 +1520,6 @@ function _find_by_node_id<T extends BaseNode>(addressSpace: AddressSpace, nodeId
 
 /**
  * return true if nodeId is a UAFolder
- * @method _isFolder
  * @param addressSpace
  * @param folder
  * @return {Boolean}

@@ -31,12 +31,7 @@ const performCheck = false;
  *    var stream = new BinaryStream(32)
  *    ```
  *
- * @class BinaryStream
- * @param {null|Buffer|Number} data
- * @constructor
- *
- *
- *
+ 
  */
 export class BinaryStream {
     public static maxByteStringLength = 16 * 1024 * 1024;
@@ -65,7 +60,7 @@ export class BinaryStream {
 
     /**
      * set the cursor to the begining of the stream
-     * @method BinaryStream.rewind
+
      */
     public rewind(): void {
         this.length = 0;
@@ -361,7 +356,7 @@ export class BinaryStream {
     //     return byteArr;
     // }
     /**
-     * @method readArrayBuffer
+
      * @param length
      */
     public readArrayBuffer(length: number): Uint8Array {

@@ -90,9 +90,7 @@ export class ClientMonitoredItemGroupImpl extends EventEmitter implements Client
     }
 
     /**
-     * @method terminate
      * remove the MonitoredItem from its subscription
-     * @async
      */
     public async terminate(): Promise<void>;
     public terminate(done: ErrorCallback): void;
@@ -111,7 +109,7 @@ export class ClientMonitoredItemGroupImpl extends EventEmitter implements Client
 
     // tslint:disable:unified-signatures
     /**
-     * @method modify
+
      */
     public async modify(parameters: MonitoringParametersOptions): Promise<StatusCode>;
     public async modify(parameters: MonitoringParametersOptions, timestampsToReturn: TimestampsToReturn): Promise<StatusCode>;
@@ -158,7 +156,7 @@ export class ClientMonitoredItemGroupImpl extends EventEmitter implements Client
 
     /**
      * @internal
-     * @method _monitor
+
      * Creates the monitor item (monitoring mode = Reporting)
      * @private
      */

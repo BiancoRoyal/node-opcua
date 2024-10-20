@@ -1,6 +1,6 @@
 import { AttributeIds, CallbackT, DataType, PreciseClock, StatusCode, StatusCodeCallback, UInt32 } from "node-opcua-basic-types";
 import { NodeClass, QualifiedNameLike } from "node-opcua-data-model";
-import { NodeId } from "node-opcua-nodeid";
+import { NodeId, NodeIdLike } from "node-opcua-nodeid";
 import { DataValue } from "node-opcua-data-value";
 import { ExtensionObject } from "node-opcua-extension-object";
 import { NumericRange } from "node-opcua-numeric-range";
@@ -14,7 +14,7 @@ import {
     ReadProcessedDetails,
     ReadAtTimeDetails
 } from "node-opcua-types";
-import { VariantLike } from "node-opcua-variant";
+import { Variant, VariantLike } from "node-opcua-variant";
 
 //
 import { CloneOptions, CloneFilter, CloneExtraInfo } from "./clone_options";
@@ -78,7 +78,10 @@ export interface BindExtensionObjectOptions {
     force?: boolean;
 }
 
-export interface UAVariable extends BaseNode, VariableAttributes, IPropertyAndComponentHolder {
+export interface IVariableDataTypeChange {
+    changeDataType(newDataType: NodeIdLike, newValue?: VariantLike): void;
+}
+export interface UAVariable extends BaseNode, VariableAttributes, IVariableDataTypeChange,  IPropertyAndComponentHolder {
     readonly nodeClass: NodeClass.Variable;
     readonly parent: BaseNode | null;
     readonly dataTypeObj: UADataType;
@@ -97,7 +100,7 @@ export interface UAVariable extends BaseNode, VariableAttributes, IPropertyAndCo
      * that will be used in the dataValue.value.dataType property.
      */
     getBasicDataType(): DataType;
-    
+
     /**
      * The **AccessLevel Attribute** is used to indicate how the Value of a Variable can be accessed
      * (read/write) and if it contains current and/or historic data.
@@ -257,7 +260,8 @@ export interface UAVariable extends BaseNode, VariableAttributes, IPropertyAndCo
 
     /**
      *
-     * @precondition UAVariable must have a dataType deriving from "Enumeration"
+     * **precondition**:
+     *    UAVariable must have a dataType deriving from "Enumeration"
      */
     writeEnumValue(value: string | number): void;
 

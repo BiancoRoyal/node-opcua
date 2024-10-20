@@ -11,6 +11,7 @@ import { ClientSession } from "./client_session";
 import { ClientSubscription, ClientSubscriptionOptions } from "./client_subscription";
 import { OPCUAClientImpl } from "./private/opcua_client_impl";
 import { UserIdentityInfo } from "./user_identity_info";
+import { DataTypeExtractStrategy } from "node-opcua-client-dynamic-extension-object";
 
 export interface OPCUAClientOptions extends OPCUAClientBaseOptions {
     /**
@@ -38,6 +39,13 @@ export interface OPCUAClientOptions extends OPCUAClientBaseOptions {
      * @default true
      */
     endpointMustExist?: boolean;
+
+    /**
+     * optional parameter to specify strategy used to extract DataTypeDefinition from server
+     * default value : "Auto" : the client will attempt to extract DataTypeDefinition using the most efficient strategy
+     */
+    dataTypeExtractStrategy?: DataTypeExtractStrategy;
+
 }
 
 export interface OPCUAClient extends OPCUAClientBase {
@@ -97,14 +105,20 @@ export type WithSubscriptionFunc = (session: ClientSession, subscription: Client
 export type WithSubscriptionFuncP<T> = (session: ClientSession, subscription: ClientSubscription) => Promise<T>;
 
 export interface OPCUAClient {
+    /**
+     *
+     * @param endpointUrl
+     * @param inner_func
+     */
     withSessionAsync<T>(endpointUrl: string | EndpointWithUserIdentity, inner_func: WithSessionFuncP<T>): Promise<T>;
 
-    withSession(
-        endpointUrl: string | EndpointWithUserIdentity,
-        inner_func: (session: ClientSession, done: (err?: Error) => void) => void,
-        callback: (err?: Error) => void
-    ): void;
 
+    /**
+     *
+     * @param endpointUrl
+     * @param parameters
+     * @param inner_func
+     */
     withSubscriptionAsync<T>(
         endpointUrl: string | EndpointWithUserIdentity,
         parameters: ClientSubscriptionOptions,

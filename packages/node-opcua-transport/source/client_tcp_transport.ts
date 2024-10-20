@@ -81,10 +81,7 @@ export interface TransportSettingsOptions {
  * a ClientTCP_transport connects to a remote server socket and
  * initiates a communication with a HEL/ACK transaction.
  * It negotiates the communication parameters with the other end.
- *
- * @class ClientTCP_transport
- * @extends TCP_transport
- * @constructor
+
  * @example
  *
  *    ```javascript
@@ -166,17 +163,12 @@ export class ClientTCP_transport extends TCP_transport {
     }
 
     public connect(endpointUrl: string, callback: ErrorCallback): void {
-        assert(arguments.length === 2);
-        assert(typeof callback === "function");
 
         const ep = parseEndpointUrl(endpointUrl);
-
         this.endpointUrl = endpointUrl;
-
         this.serverUri = "urn:" + gHostname + ":Sample";
         /* istanbul ignore next */
         doDebug && debugLog(chalk.cyan("ClientTCP_transport#connect(endpointUrl = " + endpointUrl + ")"));
-
         let socket: ISocketLike | null = null;
         try {
             socket = createClientSocket(endpointUrl, this.timeout);
@@ -210,6 +202,7 @@ export class ClientTCP_transport extends TCP_transport {
                  * @event connection_break
                  *
                  */
+                console.log("connection_break", endpointUrl);
                 this.emit("connection_break");
             }
         };
@@ -223,11 +216,10 @@ export class ClientTCP_transport extends TCP_transport {
                 if (!err) {
                     /* istanbul ignore next */
                     if (!this._socket) {
-                        throw new Error("internal error");
+                        return callback(new Error("Abandoned"));                        
                     }
                     // install error handler to detect connection break
                     this._socket.on("error", _on_socket_error_after_connection);
-
                     /**
                      * notify the observers that the transport is connected (the socket is connected and the the HEL/ACK
                      * transaction has been done)

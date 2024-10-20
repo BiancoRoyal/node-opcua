@@ -2,7 +2,7 @@
  * @module node-opcua-client-private
  */
 import chalk from "chalk";
-import { minDate } from "node-opcua-date-time";
+import { getMinOPCUADate } from "node-opcua-date-time";
 import { assert } from "node-opcua-assert";
 import { checkDebugFlag, make_debugLog, make_warningLog } from "node-opcua-debug";
 import { PublishRequest, PublishResponse } from "node-opcua-service-subscription";
@@ -25,10 +25,7 @@ const warningLog = make_warningLog(__filename);
  * Finally, ClientSidePublishEngine dispatch PublishResponse to the correct
  * Subscription id callback
  *
- * @param session {ClientSession} - the client session
- *
- *
- * @constructor
+ * @private
  */
 export class ClientSidePublishEngine {
     public static publishRequestCountInPipeline = 5;
@@ -46,7 +43,7 @@ export class ClientSidePublishEngine {
      */
     readonly subscriptionMap: { [key: number]: ClientSubscriptionImpl };
 
-    public lastRequestSentTime: Date = minDate;
+    public lastRequestSentTime: Date = getMinOPCUADate();
 
     constructor(session: ClientSession) {
         this.session = session;
@@ -98,7 +95,7 @@ export class ClientSidePublishEngine {
     }
 
     /**
-     * @method send_publish_request
+     * @private
      */
     public send_publish_request(): void {
         if (this.isSuspended) {
@@ -127,11 +124,17 @@ export class ClientSidePublishEngine {
         }
     }
 
+    /**
+     * @private
+     */
     public terminate(): void {
         debugLog("Terminated ClientPublishEngine ");
         this.session = null;
     }
 
+    /**
+     * @private
+     */
     public registerSubscription(subscription: ClientSubscription): void {
         debugLog("ClientSidePublishEngine#registerSubscription ", subscription.subscriptionId);
 
@@ -152,6 +155,9 @@ export class ClientSidePublishEngine {
         this.replenish_publish_request_queue();
     }
 
+    /**
+     * @private
+     */
     public replenish_publish_request_queue(): void {
         // Spec 1.03 part 4 5.13.5 Publish
         // [..] in high latency networks, the Client may wish to pipeline Publish requests
@@ -168,9 +174,9 @@ export class ClientSidePublishEngine {
     }
 
     /**
-     * @method unregisterSubscription
      *
      * @param subscriptionId
+     * @private
      */
     public unregisterSubscription(subscriptionId: SubscriptionId): void {
         debugLog("ClientSidePublishEngine#unregisterSubscription ", subscriptionId);
@@ -281,7 +287,7 @@ export class ClientSidePublishEngine {
                     // the server tells us that there is no subscription for this session
                     // but the client have some active subscription left.
                     // This could happen if the client has missed or not received the StatusChange Notification
-                    debugLog(chalk.bgWhite.red(" WARNING :   SERVER TELLS THAT IT HAS NO SUBSCRIPTION , " + "BUT CLIENT DISAGREE"));
+                    debugLog(chalk.bgWhite.red(" WARNING: server tells that there is no Subscription, but client disagree"));
                     debugLog("this.activeSubscriptionCount =", this.activeSubscriptionCount);
                     active = false;
                 }
@@ -292,7 +298,7 @@ export class ClientSidePublishEngine {
                     // may be the session timeout is shorted than the subscription life time
                     // and the client does not send intermediate keepAlive request to keep the connection working.
                     //
-                    debugLog(chalk.bgWhite.red(" WARNING : SERVER TELLS THAT THE SESSION HAS CLOSED ..."));
+                    debugLog(chalk.bgWhite.red(" WARNING : Server tells that the session has closed ..."));
                     debugLog(
                         "   the ClientSidePublishEngine shall now be disabled," + " as server will reject any further request"
                     );
@@ -313,10 +319,11 @@ export class ClientSidePublishEngine {
                         this.nbMaxPublishRequestsAcceptedByServer
                     );
                     active = false;
-
-                    warningLog(chalk.bgWhite.red(" WARNING : SERVER TELLS THAT TOO MANY" + " PUBLISH REQUEST HAS BEEN SEND ..."));
-                    warningLog(" On our side nbPendingPublishRequests = ", this.nbPendingPublishRequests);
-                    warningLog(" => nbMaxPublishRequestsAcceptedByServer =", this.nbMaxPublishRequestsAcceptedByServer);
+                    if (this.nbPendingPublishRequests < 10) {
+                        warningLog(chalk.bgWhite.red(" warning : server tells that too many publish request has been send ..."));
+                        warningLog(" On our side nbPendingPublishRequests = ", this.nbPendingPublishRequests);
+                        warningLog(" => nbMaxPublishRequestsAcceptedByServer =", this.nbMaxPublishRequestsAcceptedByServer);
+                    }
                 }
             } else {
                 // istanbul ignore next
