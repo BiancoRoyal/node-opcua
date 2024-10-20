@@ -16,13 +16,14 @@ import {
     makeSHA1Thumbprint,
     PublicKeyLength,
     rsaLengthPublicKey,
+    rsaLengthPrivateKey,
     exploreCertificate,
     hexDump,
     PublicKey,
-    PrivateKey
+    PrivateKey,
+    split_der
 } from "node-opcua-crypto";
-
-import { checkDebugFlag, make_debugLog, make_warningLog } from "node-opcua-debug";
+import { checkDebugFlag, make_debugLog, make_errorLog, make_warningLog } from "node-opcua-debug";
 import { BaseUAObject } from "node-opcua-factory";
 import { analyze_object_binary_encoding } from "node-opcua-packet-analyzer";
 import {
@@ -35,26 +36,25 @@ import { StatusCode, StatusCodes } from "node-opcua-status-code";
 import { IHelloAckLimits, ISocketLike, ServerTCP_transport, StatusCodes2 } from "node-opcua-transport";
 import { get_clock_tick, timestamp } from "node-opcua-utils";
 import { Callback2, ErrorCallback } from "node-opcua-status-code";
-
 import { EndpointDescription } from "node-opcua-service-endpoints";
 import { ICertificateManager } from "node-opcua-certificate-manager";
 import { ObjectRegistry } from "node-opcua-object-registry";
 import { doTraceIncomingChunk } from "node-opcua-transport";
-
-import { SecureMessageChunkManagerOptions, SecurityHeader } from "../secure_message_chunk_manager";
-
+import { getPartialCertificateChain } from "node-opcua-common";
+import { SecurityHeader } from "../secure_message_chunk_manager";
 import { getThumbprint, ICertificateKeyPairProvider, Request, Response } from "../common";
 import { invalidPrivateKey, MessageBuilder, ObjectFactory } from "../message_builder";
-import { ChunkMessageOptions, MessageChunker } from "../message_chunker";
+import { ChunkMessageParameters, MessageChunker } from "../message_chunker";
 import {
+    coerceSecurityPolicy,
     computeDerivedKeys,
     DerivedKeys1,
     fromURI,
+    getCryptoFactory,
     getOptionsForSymmetricSignAndEncrypt,
-    SecureMessageChunkManagerOptionsPartial,
+    SecureMessageData,
     SecurityPolicy
 } from "../security_policy";
-
 import {
     AsymmetricAlgorithmSecurityHeader,
     OpenSecureChannelRequest,
@@ -62,7 +62,6 @@ import {
     SecurityTokenRequestType,
     ServiceFault
 } from "../services";
-
 import {
     doPerfMonitoring,
     doTraceServerMessage,
@@ -71,10 +70,12 @@ import {
     traceResponseMessage,
     _dump_transaction_statistics
 } from "../utils";
+import { TokenStack } from "../token_stack";
 
-const debugLog = make_debugLog(__filename);
-const doDebug = checkDebugFlag(__filename);
-const warningLog = make_warningLog(__filename);
+const debugLog = make_debugLog("SecureChannel");
+const errorLog = make_errorLog("SecureChannel");
+const doDebug = checkDebugFlag("SecureChannel");
+const warningLog = make_warningLog("SecureChannel");
 
 const allowNullRequestId = true;
 let gLastChannelId = 0;
@@ -125,7 +126,7 @@ export interface IServerSession {
 export interface Message {
     request: Request;
     requestId: number;
-    securityHeader?: SecurityHeader;
+    securityHeader: SecurityHeader;
     channel?: ServerSecureChannelLayer;
     session?: IServerSession;
     session_statusCode?: StatusCode;
@@ -175,10 +176,6 @@ export interface IServerSessionBase {
 }
 
 /**
- * @class ServerSecureChannelLayer
- * @extends EventEmitter
- * @uses MessageBuilder
- * @uses MessageChunker
  */
 export class ServerSecureChannelLayer extends EventEmitter {
     public static throttleTime = 100;
@@ -187,17 +184,19 @@ export class ServerSecureChannelLayer extends EventEmitter {
     private static g_counter = 0;
     #counter: number = ServerSecureChannelLayer.g_counter++;
     #status: "new" | "connecting" | "open" | "closing" | "closed" = "new";
+
+    public beforeHandleOpenSecureChannelRequest = async (): Promise<void> => { };
     public get securityTokenCount(): number {
-        assert(typeof this.lastTokenId === "number");
-        return this.lastTokenId;
+        assert(typeof this.#lastTokenId === "number");
+        return this.#lastTokenId;
     }
 
     public get remoteAddress(): string {
-        return this._remoteAddress;
+        return this.#_remoteAddress;
     }
 
     public get remotePort(): number {
-        return this._remotePort;
+        return this.#_remotePort;
     }
 
     /**
@@ -211,18 +210,18 @@ export class ServerSecureChannelLayer extends EventEmitter {
      * the number of bytes read so far by this channel
      */
     public get bytesRead(): number {
-        return this.transport ? this.transport.bytesRead : 0;
+        return this.#transport ? this.#transport.bytesRead : 0;
     }
 
     /**
      * the number of bytes written so far by this channel
      */
     public get bytesWritten(): number {
-        return this.transport ? this.transport.bytesWritten : 0;
+        return this.#transport ? this.#transport.bytesWritten : 0;
     }
 
     public get transactionsCount(): number {
-        return this._transactionsCount;
+        return this.#transactionsCount;
     }
 
     /**
@@ -241,7 +240,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
     }
 
     public get certificateManager(): ICertificateManager {
-        return this.parent!.certificateManager!;
+        return this.#parent!.certificateManager!;
     }
 
     /**
@@ -249,20 +248,20 @@ export class ServerSecureChannelLayer extends EventEmitter {
      * @property hashKey
      */
     public get hashKey(): number {
-        return this.__hash;
+        return this.channelId;
     }
 
     public static registry = new ObjectRegistry();
     public _on_response: ((msgType: string, response: Response, message: Message) => void) | null;
     public sessionTokens: { [key: string]: IServerSessionBase };
-    public channelId: number | null;
+    public channelId: number;
     public timeout: number;
 
-    public messageBuilder?: MessageBuilder;
+    #messageBuilder?: MessageBuilder;
 
-    public receiverCertificate: Buffer | null;
-    public clientCertificate: Buffer | null;
-    public clientNonce: Buffer | null;
+    public get clientCertificate() {
+        return this.#clientCertificate;
+    }
     /**
      * the channel message security mode
      */
@@ -271,43 +270,35 @@ export class ServerSecureChannelLayer extends EventEmitter {
      * the channel message security policy
      */
     public securityPolicy: SecurityPolicy = SecurityPolicy.Invalid;
-    public securityHeader: AsymmetricAlgorithmSecurityHeader | null;
-    public clientSecurityHeader?: SecurityHeader;
 
-    private readonly __hash: number;
-    private parent: ServerSecureChannelParent | null;
-    private readonly protocolVersion: number;
-    private lastTokenId: number;
-    private readonly defaultSecureTokenLifetime: number;
-    private securityToken: ChannelSecurityToken;
-    private serverNonce: Buffer | null;
-    private receiverPublicKey: PublicKey | null;
-    private receiverPublicKeyLength: number;
-    private readonly messageChunker: MessageChunker;
+    #parent: ServerSecureChannelParent | null;
+    readonly #protocolVersion: number;
+    #lastTokenId: number;
+    readonly #defaultSecureTokenLifetime: number;
+    #clientCertificate: Buffer | null;
+    #clientPublicKey: PublicKey | null;
+    #clientPublicKeyLength: number;
+    readonly #messageChunker: MessageChunker;
 
-    private timeoutId: NodeJS.Timeout | null;
+    #timeoutId: NodeJS.Timeout | null;
     #open_secure_channel_onceClose: ErrorCallback | null = null;
-    private _securityTokenTimeout: NodeJS.Timeout | null;
-    private _transactionsCount: number;
-    private revisedLifetime: number;
-    private readonly transport: ServerTCP_transport;
-    private derivedKeys?: DerivedKeys1;
-
-    private objectFactory?: ObjectFactory;
-    private last_transaction_stats?: ServerTransactionStatistics;
-    private _tick0: number;
-    private _tick1: number;
-    private _tick2: number;
-    private _tick3: number;
-
-    private _bytesRead_before: number;
-    private _bytesWritten_before: number;
-
-    private _remoteAddress: string;
-    private _remotePort: number;
+    #securityTokenTimeout: NodeJS.Timeout | null;
+    #transactionsCount: number;
+    readonly #transport: ServerTCP_transport;
+    #objectFactory?: ObjectFactory;
+    #last_transaction_stats?: ServerTransactionStatistics;
+    #startReceiveTick: number;
+    #endReceiveTick: number;
+    #startSendResponseTick: number;
+    #endSendResponseTick: number;
+    #_bytesRead_before: number;
+    #_bytesWritten_before: number;
+    #_remoteAddress: string;
+    #_remotePort: number;
     #abort_has_been_called: boolean;
     #idVerification: any;
     #transport_socket_close_listener?: any;
+    #tokenStack: TokenStack;
 
     public get status() {
         return this.#status;
@@ -318,150 +309,102 @@ export class ServerSecureChannelLayer extends EventEmitter {
         this._on_response = null;
         this.#idVerification = {};
         this.#abort_has_been_called = false;
-        this._remoteAddress = "";
-        this._remotePort = 0;
-        this.receiverCertificate = null;
-        this.receiverPublicKey = null;
-        this.receiverPublicKeyLength = 0;
-        this.clientCertificate = null;
-        this.clientNonce = null;
+        this.#_remoteAddress = "";
+        this.#_remotePort = 0;
+        this.#clientPublicKey = null;
+        this.#clientPublicKeyLength = 0;
+        this.#clientCertificate = null;
+        this.#transport = new ServerTCP_transport({ adjustLimits: options.adjustTransportLimits });
 
-        this.transport = new ServerTCP_transport({ adjustLimits: options.adjustTransportLimits });
+        this.channelId = getNextChannelId();
+        this.#tokenStack = new TokenStack(this.channelId);
 
-        this.__hash = getNextChannelId();
-        assert(this.__hash > 0);
+        this.#parent = options.parent;
 
-        this.channelId = null;
+        this.#protocolVersion = 0;
 
-        this.revisedLifetime = 0;
-
-        this.parent = options.parent;
-
-        this.protocolVersion = 0;
-
-        this.lastTokenId = 0;
+        this.#lastTokenId = 0;
 
         this.timeout = options.timeout || 30000; // connection timeout
 
-        this.defaultSecureTokenLifetime = options.defaultSecureTokenLifetime || 600000;
-        debugLog(
-            "server secure channel layer timeout = ",
-            this.timeout,
-            "defaultSecureTokenLifetime = ",
-            this.defaultSecureTokenLifetime
-        );
-
-        // uninitialized securityToken
-        this.securityToken = new ChannelSecurityToken({
-            channelId: this.__hash,
-            revisedLifetime: 0,
-            tokenId: 0
-        });
-
-        assert(this.securityToken.channelId > 0);
-
-        this.serverNonce = null; // will be created when needed
+        this.#defaultSecureTokenLifetime = options.defaultSecureTokenLifetime || 600000;
+        // istanbul ignore next
+        doDebug &&
+            debugLog(
+                "server secure channel layer timeout = ",
+                this.timeout,
+                "defaultSecureTokenLifetime = ",
+                this.#defaultSecureTokenLifetime
+            );
 
         // at first use a anonymous connection
-        this.securityHeader = new AsymmetricAlgorithmSecurityHeader({
+        const securityHeader = new AsymmetricAlgorithmSecurityHeader({
             receiverCertificateThumbprint: null,
-            securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#None",
+            securityPolicyUri: SecurityPolicy.None,
             senderCertificate: null
         });
 
-        this.messageChunker = new MessageChunker({
-            securityHeader: this.securityHeader, // for OPN
-            maxMessageSize: this.transport.maxMessageSize,
-            maxChunkCount: this.transport.maxChunkCount
-        });
-
-        this._tick0 = 0;
-        this._tick1 = 0;
-        this._tick2 = 0;
-        this._tick3 = 0;
-        this._bytesRead_before = 0;
-        this._bytesWritten_before = 0;
+        this.#startReceiveTick = 0;
+        this.#endReceiveTick = 0;
+        this.#startSendResponseTick = 0;
+        this.#endSendResponseTick = 0;
+        this.#_bytesRead_before = 0;
+        this.#_bytesWritten_before = 0;
 
         this.securityMode = MessageSecurityMode.Invalid;
+        // use to send response
+        this.#messageChunker = new MessageChunker({
+            securityHeader, // for OPN
+            securityMode: MessageSecurityMode.Invalid,
+            maxMessageSize: this.#transport.maxMessageSize,
+            maxChunkCount: this.#transport.maxChunkCount
+        });
 
-        this.timeoutId = null;
-        this._securityTokenTimeout = null;
+        this.#timeoutId = null;
+        this.#securityTokenTimeout = null;
 
-        this._transactionsCount = 0;
+        this.#transactionsCount = 0;
 
         this.sessionTokens = {};
 
-        this.objectFactory = options.objectFactory;
+        this.#objectFactory = options.objectFactory;
 
         // xx #422 self.setMaxListeners(200); // increase the number of max listener
     }
 
     public getTransportSettings() {
-        return { maxMessageSize: this.transport.maxMessageSize };
-    }
-
-    private _build_message_builder() {
-        this.messageBuilder = new MessageBuilder({
-            name: "server",
-            objectFactory: this.objectFactory,
-            privateKey: this.getPrivateKey(),
-            maxChunkSize: this.transport.receiveBufferSize,
-            maxChunkCount: this.transport.maxChunkCount,
-            maxMessageSize: this.transport.maxMessageSize
-        });
-        debugLog(" this.transport.maxChunkCount", this.transport.maxChunkCount);
-        debugLog(" this.transport.maxMessageSize", this.transport.maxMessageSize);
-
-        this.messageBuilder.on("error", (err, statusCode) => {
-            warningLog("ServerSecureChannel:MessageBuilder: ", err.message, statusCode.toString());
-
-            // istanbul ignore next
-            if (doDebug) {
-                debugLog(chalk.red("Error "), err.message, err.stack);
-                debugLog(chalk.red("Server is now closing socket, without further notice"));
-            }
-
-            this.transport.sendErrorMessage(statusCode, err.message);
-
-            // close socket immediately
-            this.close(() => {
-                /* */
-            });
-        });
+        return { maxMessageSize: this.#transport.maxMessageSize };
     }
 
     public dispose(): void {
         debugLog("ServerSecureChannelLayer#dispose");
-        this._stop_open_channel_watch_dog();
-        assert(!this.timeoutId, "timeout must have been cleared");
-        assert(!this._securityTokenTimeout, "_securityTokenTimeout must have been cleared");
+        this.#_stop_open_channel_watch_dog();
+        assert(!this.#timeoutId, "timeout must have been cleared");
+        assert(!this.#securityTokenTimeout, "_securityTokenTimeout must have been cleared");
 
-        this.parent = null;
-        this.serverNonce = null;
-        this.objectFactory = undefined;
+        this.#parent = null;
+        this.#objectFactory = undefined;
 
-        if (this.messageBuilder) {
-            this.messageBuilder.dispose();
-            this.messageBuilder = undefined;
+        if (this.#messageBuilder) {
+            this.#messageBuilder.dispose();
+            this.#messageBuilder = undefined;
         }
-        this.securityHeader = null;
 
-        if (this.messageChunker) {
-            this.messageChunker.dispose();
-            // xx this.messageChunker = null;
+        if (this.#messageChunker) {
+            this.#messageChunker.dispose();
         }
-        if (this.transport) {
-            this.transport.dispose();
+        if (this.#transport) {
+            this.#transport.dispose();
             (this as any).transport = undefined;
         }
         this.channelId = 0xdeadbeef;
-        this.timeoutId = null;
+        this.#timeoutId = null;
         this.sessionTokens = {};
         this.removeAllListeners();
     }
 
     public abruptlyInterrupt(): void {
-        const clientSocket = this.transport._socket;
+        const clientSocket = this.#transport._socket;
         if (clientSocket) {
             clientSocket.end();
             clientSocket.destroy();
@@ -477,41 +420,41 @@ export class ServerSecureChannelLayer extends EventEmitter {
         securityPolicy: SecurityPolicy,
         endpointUri: string | null
     ): EndpointDescription | null {
-        if (!this.parent) {
+        if (!this.#parent) {
             return null; // throw new Error("getEndpointDescription - no parent");
         }
-        return this.parent.getEndpointDescription(this.securityMode, securityPolicy, endpointUri);
+        return this.#parent.getEndpointDescription(this.securityMode, securityPolicy, endpointUri);
     }
 
     public setSecurity(securityMode: MessageSecurityMode, securityPolicy: SecurityPolicy): void {
-        if (!this.messageBuilder) {
-            this._build_message_builder();
+        if (!this.#messageBuilder) {
+            this.#_build_message_builder();
         }
-        assert(this.messageBuilder);
+        assert(this.#messageBuilder);
         // TODO verify that the endpoint really supports this mode
-        this.messageBuilder!.setSecurity(securityMode, securityPolicy);
+        this.#messageBuilder!.setSecurity(securityMode, securityPolicy);
     }
 
     /**
-     * @method getCertificateChain
+
      * @return the X509 DER form certificate
      */
     public getCertificateChain(): Certificate {
-        if (!this.parent) {
+        if (!this.#parent) {
             throw new Error("expecting a valid parent");
         }
-        return this.parent.getCertificateChain();
+        return this.#parent.getCertificateChain();
     }
 
     /**
-     * @method getCertificate
+
      * @return  the X509 DER form certificate
      */
     public getCertificate(): Certificate {
-        if (!this.parent) {
+        if (!this.#parent) {
             throw new Error("expecting a valid parent");
         }
-        return this.parent.getCertificate();
+        return this.#parent.getCertificate();
     }
 
     public getSignatureLength(): PublicKeyLength {
@@ -521,70 +464,63 @@ export class ServerSecureChannelLayer extends EventEmitter {
     }
 
     /**
-     * @method getPrivateKey
+
      * @return the privateKey
      */
     public getPrivateKey(): PrivateKey {
-        if (!this.parent) {
+        if (!this.#parent) {
             return invalidPrivateKey;
         }
-        return this.parent.getPrivateKey();
+        return this.#parent.getPrivateKey();
     }
 
     /**
-     * @method init
-     * @async
-     * @param socket
-     * @param callback
+     * 
      */
     public init(socket: ISocketLike, callback: ErrorCallback): void {
-        this.transport.timeout = this.timeout;
-        debugLog("Setting socket timeout to ", this.transport.timeout);
+        this.#transport.timeout = this.timeout;
+        debugLog("Setting socket timeout to ", this.#transport.timeout);
 
-        this.transport.init(socket, (err?: Error | null) => {
+        this.#transport.init(socket, (err?: Error | null) => {
             if (err) {
                 callback(err);
             } else {
-                this._build_message_builder();
+                this.#_build_message_builder();
 
-                this._rememberClientAddressAndPort();
+                this.#_rememberClientAddressAndPort();
 
                 // adjust sizes;
-                this.messageChunker.maxMessageSize = this.transport.maxMessageSize;
-                this.messageChunker.maxChunkCount = this.transport.maxChunkCount;
+                this.#messageChunker.maxMessageSize = this.#transport.maxMessageSize;
+                this.#messageChunker.maxChunkCount = this.#transport.maxChunkCount;
 
                 // bind low level TCP transport to messageBuilder
-                this.transport.on("chunk", (messageChunk: Buffer) => {
+                this.#transport.on("chunk", (messageChunk: Buffer) => {
                     // istanbul ignore next
                     if (doTraceIncomingChunk) {
                         console.log(hexDump(messageChunk));
                     }
-                    this.messageBuilder!.feed(messageChunk);
+                    this.#messageBuilder!.feed(messageChunk);
                 });
                 debugLog("ServerSecureChannelLayer : Transport layer has been initialized");
                 debugLog("... now waiting for OpenSecureChannelRequest...");
 
                 ServerSecureChannelLayer.registry.register(this);
 
-                this._wait_for_open_secure_channel_request(callback, this.timeout);
+                this.#_wait_for_open_secure_channel_request(this.timeout);
+                callback();
             }
         });
 
         // detect transport closure
         this.#transport_socket_close_listener = (err?: Error) => {
             debugLog("transport has send 'close' event " + (err ? err.message : "null"));
-            this._abort();
+            this.#_abort();
         };
-        this.transport.on("close", this.#transport_socket_close_listener);
+        this.#transport.on("close", this.#transport_socket_close_listener);
     }
 
     /**
-     * @method send_response
-     * @async
-     * @param msgType
-     * @param response
-     * @param message
-     * @param callback
+     * @internal
      */
     public send_response(msgType: string, response: Response, message: Message, callback?: ErrorCallback): void {
         const request = message.request;
@@ -610,33 +546,31 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         if (doPerfMonitoring) {
             // record tick : send response received.
-            this._tick2 = get_clock_tick();
+            this.#startSendResponseTick = get_clock_tick();
         }
 
-        // istanbul ignore next
-        if (!this.securityToken) {
-            throw new Error("Internal error");
-        }
+        const tokenId = message.securityHeader instanceof SymmetricAlgorithmSecurityHeader ? message.securityHeader.tokenId : 0;
+        const channelId = this.channelId;
+        const securityHeader = message.securityHeader!;
 
-        let options: ChunkMessageOptions = {
-            channelId: this.securityToken.channelId,
-            chunkSize: this.transport.receiveBufferSize,
-            requestId,
-            tokenId: this.securityToken.tokenId,
-            // to be adjusted
-            signatureLength: 0,
-            plainBlockSize: 0,
-            cipherBlockSize: 0,
-            sequenceHeaderSize: 0
-        };
+        const securityOptions =
+            msgType === "OPN" ? this.#_get_security_options_for_OPN() : this.#_get_security_options_for_MSG(tokenId);
 
-        const securityOptions = msgType === "OPN" ? this._get_security_options_for_OPN() : this._get_security_options_for_MSG();
-        if (securityOptions) {
-            options = {
-                ...options,
+        const chunkSize = this.#transport.receiveBufferSize;
+        let options: ChunkMessageParameters = {
+            channelId,
+            securityOptions: {
+                chunkSize,
+                requestId,
+                // to be adjusted
+                signatureLength: 0,
+                plainBlockSize: 0,
+                cipherBlockSize: 0,
+                sequenceHeaderSize: 0,
                 ...securityOptions
-            };
-        }
+            },
+            securityHeader
+        };
 
         response.responseHeader.requestHandle = request.requestHeader.requestHandle;
 
@@ -653,80 +587,63 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         /* istanbul ignore next */
         if (doTraceServerMessage) {
-            traceResponseMessage(response, this.securityToken.channelId, this.#counter);
+            traceResponseMessage(response, tokenId, channelId, this.#counter);
         }
 
         if (this._on_response) {
             this._on_response(msgType, response, message);
         }
 
-        this._transactionsCount += 1;
+        this.#transactionsCount += 1;
 
-        this.messageChunker.chunkSecureMessage(
-            msgType,
-            options,
-            response as any as BaseUAObject,
-            (err: Error | null, messageChunk: Buffer | null) => {
-                if (err) {
-                    // the response would be too large !!!!
-                    warningLog("Error while chunking response message : ", err.message);
-                    this._send_chunk(callback, messageChunk);
-                    /* this.send_response(
-                        "MSG",
-                        new ServiceFault({
-                            responseHeader: {
-                                requestHandle: request.requestHeader.requestHandle,
-                                serviceResult: StatusCodes.BadTcpMessageTooLarge
-                            }
-                        }),
-                        message,
-                        callback
-                    );
-                    */
-                } else {
-                    this._send_chunk(callback, messageChunk);
+        this.#messageChunker.securityMode = this.securityMode;
+
+        const statusCode = this.#messageChunker.chunkSecureMessage(msgType, options, response as BaseUAObject, (chunk) => {
+            if (chunk) {
+                this.#_send_chunk(chunk);
+            } else {
+                /* istanbul ignore next */
+                if (doPerfMonitoring) {
+                    // record tick 3 : transaction completed.
+                    this.#endSendResponseTick = get_clock_tick();
+                    this.#_record_transaction_statistics();
+                    // dump some statistics about transaction ( time and sizes )
+                    _dump_transaction_statistics(this.#last_transaction_stats);
                 }
+                callback && callback();
+                this.emit("transaction_done");
             }
-        );
-    }
-
-    private _sendFatalErrorAndAbort(statusCode: StatusCode, description: string, message: Message, callback: ErrorCallback): void {
-        this.transport.sendErrorMessage(statusCode, description);
-        if (!this.transport) {
-            return callback(new Error("Transport has been closed"));
-        }
-        this.#status = "closing";
-        this.transport.disconnect(() => {
-            this.close(() => {
-                this.#status = "closed";
-                callback(new Error(description + " statusCode = " + statusCode.toString()));
-            });
         });
+        if (statusCode.isNotGood()) {
+            // the message has not been sent, we need to raise an exception
+            return this.send_response(
+                msgType,
+                new ServiceFault({ responseHeader: { serviceResult: statusCode } }),
+                message,
+                callback
+            );
+        }
     }
 
     public getRemoteIPAddress(): string {
-        return (this.transport?._socket as Socket)?.remoteAddress || "";
+        return (this.#transport?._socket as Socket)?.remoteAddress || "";
     }
 
     public getRemotePort(): number {
-        return (this.transport?._socket as Socket)?.remotePort || 0;
+        return (this.#transport?._socket as Socket)?.remotePort || 0;
     }
 
     public getRemoteFamily(): string {
-        return (this.transport?._socket as Socket)?.remoteFamily || "";
+        return (this.#transport?._socket as Socket)?.remoteFamily || "";
     }
 
     /**
      * Abruptly close a Server SecureChannel ,by terminating the underlying transport.
      *
-     *
-     * @method close
-     * @async
-     * @param callback
      */
     public close(callback?: ErrorCallback): void {
-        callback = callback || (() => {});
-        if (!this.transport) {
+        callback = callback || (() => { });
+        if (!this.#transport) {
             if (typeof callback === "function") {
                 callback();
             }
@@ -735,514 +652,13 @@ export class ServerSecureChannelLayer extends EventEmitter {
         debugLog("ServerSecureChannelLayer#close");
         this.#status = "closing";
         // close socket
-        this.transport.disconnect(() => {
+        this.#transport.disconnect(() => {
             this.#status = "closed";
-            this._abort();
+            this.#_abort();
             if (typeof callback === "function") {
                 callback();
             }
         });
-    }
-
-    public has_endpoint_for_security_mode_and_policy(securityMode: MessageSecurityMode, securityPolicy: SecurityPolicy): boolean {
-        if (!this.parent) {
-            return true;
-        }
-        const endpoint_desc = this.getEndpointDescription(securityMode, securityPolicy, null);
-        return endpoint_desc !== null;
-    }
-
-    public _rememberClientAddressAndPort(): void {
-        if (this.transport && this.transport._socket) {
-            this._remoteAddress = this.transport._socket.remoteAddress || "";
-            this._remotePort = this.transport._socket.remotePort || 0;
-        }
-    }
-
-    private _stop_security_token_watch_dog() {
-        if (this._securityTokenTimeout) {
-            clearTimeout(this._securityTokenTimeout);
-            this._securityTokenTimeout = null;
-        }
-    }
-
-    private _start_security_token_watch_dog() {
-        // install securityToken timeout watchdog
-        this._securityTokenTimeout = setTimeout(
-            () => {
-                warningLog(
-                    " Security token has really expired and shall be discarded !!!! (lifetime is = ",
-                    this.securityToken.revisedLifetime,
-                    ")"
-                );
-                warningLog(" Server will now refuse message with token ", this.securityToken.tokenId);
-                this._securityTokenTimeout = null;
-            },
-            (this.securityToken.revisedLifetime * 120) / 100
-        );
-    }
-
-    private _add_new_security_token() {
-        this._stop_security_token_watch_dog();
-        this.lastTokenId += 1;
-
-        this.channelId = this.__hash;
-        assert(this.channelId > 0);
-
-        const securityToken = new ChannelSecurityToken({
-            channelId: this.channelId,
-            createdAt: new Date(), // now
-            revisedLifetime: this.revisedLifetime,
-            tokenId: this.lastTokenId // todo ?
-        });
-
-        assert(!hasTokenExpired(securityToken));
-        assert(isFinite(securityToken.revisedLifetime));
-
-        this.securityToken = securityToken;
-
-        debugLog("SecurityToken", securityToken.tokenId);
-
-        this._start_security_token_watch_dog();
-    }
-
-    private _prepare_security_token(openSecureChannelRequest: OpenSecureChannelRequest) {
-        this.securityToken = null as any as ChannelSecurityToken;
-        if (openSecureChannelRequest.requestType === SecurityTokenRequestType.Renew) {
-            this._stop_security_token_watch_dog();
-        } else if (openSecureChannelRequest.requestType === SecurityTokenRequestType.Issue) {
-            // TODO
-        } else {
-            // Invalid requestType
-        }
-        this._add_new_security_token();
-    }
-
-    private _set_lifetime(requestedLifetime: number) {
-        assert(isFinite(requestedLifetime));
-
-        // revised lifetime
-        this.revisedLifetime = requestedLifetime;
-        if (this.revisedLifetime === 0) {
-            this.revisedLifetime = this.defaultSecureTokenLifetime;
-        } else {
-            this.revisedLifetime = Math.min(this.defaultSecureTokenLifetime, this.revisedLifetime);
-            this.revisedLifetime = Math.max(ServerSecureChannelLayer.g_MinimumSecureTokenLifetime, this.revisedLifetime);
-        }
-
-        // xx console.log('requestedLifetime,self.defaultSecureTokenLifetime, self.revisedLifetime',requestedLifetime,self.defaultSecureTokenLifetime, self.revisedLifetime);
-    }
-
-    private _stop_open_channel_watch_dog() {
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId);
-            this.timeoutId = null;
-        }
-        if (this.#open_secure_channel_onceClose) {
-            this.transport.removeListener("close", this.#open_secure_channel_onceClose!);
-            this.#open_secure_channel_onceClose = null;
-        }
-    }
-
-    private _cleanup_pending_timers() {
-        // there is no need for the security token expiration event to trigger anymore
-        this._stop_security_token_watch_dog();
-        this._stop_open_channel_watch_dog();
-    }
-
-    private _cancel_wait_for_open_secure_channel_request_timeout() {
-        this._stop_open_channel_watch_dog();
-    }
-
-    private _install_wait_for_open_secure_channel_request_timeout(callback: ErrorCallback, timeout: number) {
-        assert(isFinite(timeout));
-        assert(typeof callback === "function");
-
-        this.#open_secure_channel_onceClose = (err?: Error) => {
-            this.#open_secure_channel_onceClose = null;
-            this._stop_open_channel_watch_dog();
-            this.close(() => {
-                const err = new Error("Timeout waiting for OpenChannelRequest (A) (timeout was " + timeout + " ms)");
-                callback(err);
-            });
-        };
-        this.transport.prependOnceListener("close", this.#open_secure_channel_onceClose);
-        this.timeoutId = setTimeout(() => {
-            this.timeoutId = null;
-            this._stop_open_channel_watch_dog();
-            const err = new Error("Timeout waiting for OpenChannelRequest (B) (timeout was " + timeout + " ms)");
-            debugLog(err.message);
-            this.close(() => {
-                callback(err);
-            });
-        }, timeout);
-    }
-
-    private _on_initial_open_secure_channel_request(
-        callback: ErrorCallback,
-        request: Request,
-        msgType: string,
-        requestId: number,
-        channelId: number
-    ) {
-        this.#status = "connecting";
-
-        /* istanbul ignore next */
-        if (doTraceServerMessage) {
-            traceRequestMessage(request, channelId, this.#counter);
-        }
-
-        /* istanbul ignore next */
-        if (!(this.messageBuilder && this.messageBuilder.sequenceHeader && this.messageBuilder.securityHeader)) {
-            return this._on_OpenSecureChannelRequestError(
-                StatusCodes.BadCommunicationError,
-                "internal error",
-                { request, requestId },
-                callback
-            );
-        }
-
-        const message = {
-            request,
-            requestId,
-            securityHeader: this.messageBuilder.securityHeader
-        };
-
-        requestId = this.messageBuilder.sequenceHeader.requestId;
-        if (requestId < 0) {
-            return this._on_OpenSecureChannelRequestError(
-                StatusCodes.BadCommunicationError,
-                "Invalid requestId",
-                message,
-                callback
-            );
-        }
-        this.clientSecurityHeader = message.securityHeader;
-
-        let description;
-
-        // expecting a OpenChannelRequest as first communication message
-        if (!(request instanceof OpenSecureChannelRequest)) {
-            description = "Expecting OpenSecureChannelRequest";
-            warningLog(chalk.red("ERROR"), "BadCommunicationError: expecting a OpenChannelRequest as first communication message");
-            return this._on_OpenSecureChannelRequestError(StatusCodes.BadCommunicationError, description, message, callback);
-        }
-
-        // check that the request is a OpenSecureChannelRequest
-        /* istanbul ignore next */
-        if (doDebug) {
-            debugLog(this.messageBuilder.sequenceHeader.toString());
-            debugLog(this.messageBuilder.securityHeader.toString());
-        }
-
-        const asymmetricSecurityHeader = this.messageBuilder.securityHeader as AsymmetricAlgorithmSecurityHeader;
-
-        const securityPolicy = message.securityHeader
-            ? fromURI(asymmetricSecurityHeader.securityPolicyUri)
-            : SecurityPolicy.Invalid;
-
-        // check security header
-        const securityPolicyStatus: StatusCode = isValidSecurityPolicy(securityPolicy);
-        if (securityPolicyStatus !== StatusCodes.Good) {
-            description = " Unsupported securityPolicyUri " + asymmetricSecurityHeader.securityPolicyUri;
-            warningLog("BadSecurityPolicyRejected: Unsupported securityPolicyUri", securityPolicy);
-            return this._on_OpenSecureChannelRequestError(securityPolicyStatus, description, message, callback);
-        }
-        // check certificate
-
-        this.securityMode = request.securityMode;
-        this.securityPolicy = securityPolicy;
-
-        this.messageBuilder.securityMode = this.securityMode;
-
-        const hasEndpoint = this.has_endpoint_for_security_mode_and_policy(this.securityMode, securityPolicy);
-
-        if (!hasEndpoint) {
-            // there is no
-            description = " This server doesn't not support  " + securityPolicy.toString() + " " + this.securityMode.toString();
-            return this._on_OpenSecureChannelRequestError(StatusCodes.BadSecurityPolicyRejected, description, message, callback);
-        }
-
-        this.messageBuilder
-            .on("message", (request, msgType, requestId, channelId) => {
-                this._on_common_message(request as Request, msgType, requestId, channelId);
-            })
-            .on("error", (err: Error, statusCode: StatusCode, requestId: number | null) => {
-                /** */
-                this.transport.sendErrorMessage(statusCode, err.message);
-                this.close(() => {
-                    /** */
-                });
-            })
-            .on("startChunk", () => {
-                if (doPerfMonitoring) {
-                    // record tick 0: when the first chunk is received
-                    this._tick0 = get_clock_tick();
-                }
-            });
-
-        // handle initial OpenSecureChannelRequest
-        this._process_certificates(message, (err: Error | null, statusCode?: StatusCode) => {
-            // istanbul ignore next
-            if (err || !statusCode) {
-                description = "Internal Error " + err?.message;
-                return this._on_OpenSecureChannelRequestError(StatusCodes.BadInternalError, description, message, callback);
-            }
-
-            if (statusCode.isNotGood()) {
-                const description = "Sender Certificate Error " + statusCode.toString();
-                debugLog(chalk.cyan(description), chalk.bgCyan.yellow(statusCode!.toString()));
-
-                // OPCUA specification v1.02 part 6 page 42 $6.7.4
-                // If an error occurs after the  Server  has verified  Message  security  it  shall  return a  ServiceFault  instead
-                // of a OpenSecureChannel  response. The  ServiceFault  Message  is described in  Part  4,   7.28.
-                if (
-                    statusCode.isNot(StatusCodes.BadCertificateIssuerRevocationUnknown) &&
-                    statusCode.isNot(StatusCodes.BadCertificateRevocationUnknown) &&
-                    statusCode.isNot(StatusCodes.BadCertificateTimeInvalid) &&
-                    statusCode.isNot(StatusCodes.BadCertificateUseNotAllowed)
-                ) {
-                    statusCode = StatusCodes.BadSecurityChecksFailed;
-                    //    return this._on_OpenSecureChannelRequestError(statusCode!, description, message, callback);
-                }
-                // Those are not considered as error but as a warning
-                //    BadCertificateIssuerRevocationUnknown,
-                //    BadCertificateRevocationUnknown,
-                //    BadCertificateTimeInvalid,
-                //    BadCertificateUseNotAllowed
-                //
-                // the client will decided what to do next
-                return this._handle_OpenSecureChannelRequest(statusCode!, message, callback);
-            }
-            this._handle_OpenSecureChannelRequest(statusCode!, message, callback);
-        });
-    }
-
-    private _wait_for_open_secure_channel_request(callback: ErrorCallback, timeout: number) {
-        this._install_wait_for_open_secure_channel_request_timeout(callback, timeout);
-
-        const errorHandler = (err: Error) => {
-            this._cancel_wait_for_open_secure_channel_request_timeout();
-
-            if (this.messageBuilder) {
-                this.messageBuilder.removeListener("message", messageHandler);
-                this.close(() => {
-                    callback(new Error("/Expecting OpenSecureChannelRequest to be valid " + err.message));
-                });
-            }
-        };
-        const messageHandler = (request: Request, msgType: string, requestId: number, channelId: number) => {
-            this._cancel_wait_for_open_secure_channel_request_timeout();
-            this.messageBuilder!.removeListener("error", errorHandler);
-            this._on_initial_open_secure_channel_request(callback, request, msgType, requestId, channelId);
-        };
-        this.messageBuilder!.prependOnceListener("error", errorHandler);
-        this.messageBuilder!.once("message", messageHandler);
-    }
-
-    private _send_chunk(callback: ErrorCallback | undefined, messageChunk: Buffer | null) {
-        if (messageChunk) {
-            this.transport.write(messageChunk);
-        } else {
-            if (doPerfMonitoring) {
-                // record tick 3 : transaction completed.
-                this._tick3 = get_clock_tick();
-            }
-
-            if (callback) {
-                callback();
-            }
-
-            /* istanbul ignore next */
-            if (doPerfMonitoring) {
-                this._record_transaction_statistics();
-                // dump some statistics about transaction ( time and sizes )
-                _dump_transaction_statistics(this.last_transaction_stats);
-            }
-            this.emit("transaction_done");
-        }
-    }
-
-    private _get_security_options_for_OPN(): SecureMessageChunkManagerOptions | null {
-        // install sign & sign-encrypt behavior
-        if (this.securityMode === MessageSecurityMode.Sign || this.securityMode === MessageSecurityMode.SignAndEncrypt) {
-            const cryptoFactory = this.messageBuilder!.cryptoFactory;
-            /* istanbul ignore next */
-            if (!cryptoFactory) {
-                throw new Error("Internal Error");
-            }
-            assert(cryptoFactory, "ServerSecureChannelLayer must have a crypto strategy");
-            assert(this.receiverPublicKeyLength >= 0);
-
-            const receiverPublicKey = this.receiverPublicKey;
-            if (!receiverPublicKey) {
-                // this could happen if certificate was wrong
-                // throw new Error("Invalid receiverPublicKey");
-                return null;
-            }
-            const options = {
-                cipherBlockSize: this.receiverPublicKeyLength,
-                plainBlockSize: this.receiverPublicKeyLength - cryptoFactory.blockPaddingSize,
-                signatureLength: this.getSignatureLength(),
-
-                encryptBufferFunc: (chunk: Buffer) => {
-                    return cryptoFactory.asymmetricEncrypt(chunk, receiverPublicKey);
-                },
-
-                signBufferFunc: (chunk: Buffer) => {
-                    const signed = cryptoFactory.asymmetricSign(chunk, this.getPrivateKey());
-                    assert(signed.length === options.signatureLength);
-                    return signed;
-                }
-            };
-            return options as SecureMessageChunkManagerOptions; // partial
-        }
-        return null;
-    }
-    private _get_security_options_for_MSG(): SecureMessageChunkManagerOptionsPartial | null {
-        if (this.securityMode === MessageSecurityMode.None) {
-            return null;
-        }
-        const cryptoFactory = this.messageBuilder!.cryptoFactory;
-
-        /* istanbul ignore next */
-        if (!cryptoFactory || !this.derivedKeys) {
-            return null;
-        }
-
-        assert(cryptoFactory, "ServerSecureChannelLayer must have a crypto strategy");
-        assert(this.derivedKeys.derivedServerKeys);
-        const derivedServerKeys = this.derivedKeys.derivedServerKeys;
-        if (!derivedServerKeys) {
-            return null;
-        }
-        return getOptionsForSymmetricSignAndEncrypt(this.securityMode, derivedServerKeys);
-    }
-
-    /**
-     * _process_certificates extracts client public keys from client certificate
-     *  and store them in self.receiverPublicKey and self.receiverCertificate
-     *  it also caches self.receiverPublicKeyLength.
-     *
-     *  so they can be used by security channel.
-     *
-     * @method _process_certificates
-     * @param message the message coming from the client
-     * @param callback
-     * @private
-     * @async
-     */
-
-    private _process_certificates(message: Message, callback: Callback2<StatusCode>): void {
-        const asymmSecurityHeader = message.securityHeader as AsymmetricAlgorithmSecurityHeader;
-
-        // verify certificate
-        const certificate = asymmSecurityHeader ? asymmSecurityHeader.senderCertificate : null;
-        this.checkCertificateCallback(certificate!, (err: Error | null, statusCode?: StatusCode) => {
-            if (err) {
-                return callback(err);
-            }
-            //
-            this.receiverPublicKey = null;
-            this.receiverPublicKeyLength = 0;
-            this.receiverCertificate = asymmSecurityHeader ? asymmSecurityHeader.senderCertificate : null;
-            // get the clientCertificate for convenience
-            this.clientCertificate = this.receiverCertificate;
-
-            // ignore receiverCertificate that have a zero length
-            /* istanbul ignore next */
-            if (this.receiverCertificate && this.receiverCertificate.length === 0) {
-                this.receiverCertificate = null;
-            }
-
-            if (this.receiverCertificate) {
-                // extract public key
-                extractPublicKeyFromCertificate(this.receiverCertificate, (err, keyPem) => {
-                    if (!err) {
-                        if (keyPem) {
-                            this.receiverPublicKey = createPublicKey(keyPem);
-                            this.receiverPublicKeyLength = rsaLengthPublicKey(keyPem);
-                        }
-                        callback(null, statusCode);
-                    } else {
-                        callback(err);
-                    }
-                });
-            } else {
-                this.receiverPublicKey = null;
-                callback(null, statusCode);
-            }
-        });
-    }
-
-    private _prepare_security_header(
-        request: OpenSecureChannelRequest,
-        message: Message
-    ): AsymmetricAlgorithmSecurityHeader | null {
-        let securityHeader: AsymmetricAlgorithmSecurityHeader;
-        // senderCertificate:
-        //    The X509v3 certificate assigned to the sending application instance.
-        //    This is a DER encoded blob.
-        //    This indicates what private key was used to sign the MessageChunk.
-        //    This field shall be null if the message is not signed.
-        // receiverCertificateThumbprint:
-        //    The thumbprint of the X509v3 certificate assigned to the receiving application
-        //    The thumbprint is the SHA1 digest of the DER encoded form of the certificate.
-        //    This indicates what public key was used to encrypt the MessageChunk
-        //   This field shall be null if the message is not encrypted.
-        switch (request.securityMode) {
-            case MessageSecurityMode.None:
-                securityHeader = new AsymmetricAlgorithmSecurityHeader({
-                    receiverCertificateThumbprint: null, // message not encrypted
-                    securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#None",
-                    senderCertificate: null // message not signed
-                });
-
-                break;
-            case MessageSecurityMode.Sign:
-            case MessageSecurityMode.SignAndEncrypt:
-            default: {
-                if (!this.parent) {
-                    warningLog("Cannot find parent of SecureChannel !!!!!!!! ");
-                    return null;
-                }
-                const receiverCertificateThumbprint = getThumbprint(this.receiverCertificate);
-
-                const asymmClientSecurityHeader = this.clientSecurityHeader as AsymmetricAlgorithmSecurityHeader;
-
-                // istanbul ignore next
-                securityHeader = new AsymmetricAlgorithmSecurityHeader({
-                    receiverCertificateThumbprint, // message not encrypted (????)
-                    securityPolicyUri: asymmClientSecurityHeader.securityPolicyUri,
-                    /**
-                     * The X.509 v3 Certificate assigned to the sending application Instance.
-                     *  This is a DER encoded blob.
-                     * The structure of an X.509 v3 Certificate is defined in X.509 v3.
-                     * The DER format for a Certificate is defined in X690
-                     * This indicates what Private Key was used to sign the MessageChunk.
-                     * The Stack shall close the channel and report an error to the application if the SenderCertificate is too large for the buffer size supported by the transport layer.
-                     * This field shall be null if the Message is not signed.
-                     * If the Certificate is signed by a CA, the DER encoded CA Certificate may be
-                     * appended after the Certificate in the byte array. If the CA Certificate is also
-                     * signed by another CA this process is repeated until the entire Certificate chain
-                     *  is in the buffer or if MaxSenderCertificateSize limit is reached (the process
-                     * stops after the last whole Certificate that can be added without exceeding
-                     * the MaxSenderCertificateSize limit).
-                     * Receivers can extract the Certificates from the byte array by using the Certificate
-                     *  size contained in DER header (see X.509 v3).
-                     */
-                    senderCertificate: this.getCertificateChain() // certificate of the private key used to sign the message
-                });
-            }
-        }
-        return securityHeader;
-    }
-
-    protected checkCertificateCallback(
-        certificate: Certificate | null,
-        callback: (err: Error | null, statusCode?: StatusCode) => void
-    ): void {
-        /** */
     }
 
     protected async checkCertificate(certificate: Certificate | null): Promise<StatusCode> {
@@ -1266,48 +682,539 @@ export class ServerSecureChannelLayer extends EventEmitter {
         return statusCode;
     }
 
-    private _handle_OpenSecureChannelRequest(serviceResult: StatusCode, message: Message, callback: ErrorCallback) {
-        const request = message.request as OpenSecureChannelRequest;
-        const requestId: number = message.requestId;
-        if (!(requestId !== 0 && requestId > 0)) {
-            warningLog("OpenSecureChannelRequest: requestId");
-            return this._sendFatalErrorAndAbort(StatusCodes2.BadTcpInternalError, "invalid request", message, callback);
+    #_build_message_builder() {
+        // use to receive client requests
+        this.#messageBuilder = new MessageBuilder(this.#tokenStack.clientKeyProvider(), {
+            name: "server",
+            objectFactory: this.#objectFactory,
+            privateKey: this.getPrivateKey(),
+            maxChunkSize: this.#transport.receiveBufferSize,
+            maxChunkCount: this.#transport.maxChunkCount,
+            maxMessageSize: this.#transport.maxMessageSize
+        });
+        debugLog(" this.transport.maxChunkCount", this.#transport.maxChunkCount);
+        debugLog(" this.transport.maxMessageSize", this.#transport.maxMessageSize);
+
+        this.#messageBuilder.on("error", (err, statusCode) => {
+            warningLog("ServerSecureChannel:MessageBuilder: ", err.message, statusCode.toString());
+            // istanbul ignore next
+            if (doDebug) {
+                debugLog(chalk.red("Error "), err.message, err.stack);
+                debugLog(chalk.red("Server is now closing socket, without further notice"));
+            }
+
+            this.#transport.sendErrorMessage(statusCode, err.message);
+            // close socket immediately
+            this.close(() => {
+                /* */
+            });
+        });
+    }
+
+    #_sendFatalErrorAndAbort(statusCode: StatusCode, description: string, message: Message, callback: ErrorCallback): void {
+        this.#transport.sendErrorMessage(statusCode, description);
+        if (!this.#transport) {
+            return callback(new Error("Transport has been closed"));
+        }
+        this.#status = "closing";
+        this.#transport.disconnect(() => {
+            this.close(() => {
+                this.#status = "closed";
+                callback(new Error(description + " statusCode = " + statusCode.toString()));
+            });
+        });
+    }
+
+    #_has_endpoint_for_security_mode_and_policy(securityMode: MessageSecurityMode, securityPolicy: SecurityPolicy): boolean {
+        if (!this.#parent) {
+            return true;
+        }
+        const endpoint_desc = this.getEndpointDescription(securityMode, securityPolicy, null);
+        return endpoint_desc !== null;
+    }
+
+    #_rememberClientAddressAndPort(): void {
+        if (this.#transport && this.#transport._socket) {
+            this.#_remoteAddress = this.#transport._socket.remoteAddress || "";
+            this.#_remotePort = this.#transport._socket.remotePort || 0;
+        }
+    }
+
+    #_stop_security_token_watch_dog() {
+        if (this.#securityTokenTimeout) {
+            clearTimeout(this.#securityTokenTimeout);
+            this.#securityTokenTimeout = null;
+        }
+    }
+
+    #_start_security_token_watch_dog(securityToken: ChannelSecurityToken) {
+        // install securityToken timeout watchdog
+        this.#securityTokenTimeout = setTimeout(
+            () => {
+                warningLog(
+                    " Security token has really expired and shall be discarded !!!! (lifetime is = ",
+                    securityToken.revisedLifetime,
+                    ")"
+                );
+                warningLog(" Server will now refuse message with token ", securityToken.tokenId);
+                this.#securityTokenTimeout = null;
+            },
+            (securityToken.revisedLifetime * 125) / 100
+        );
+    }
+
+    #_prepare_security_token(
+        openSecureChannelRequest: OpenSecureChannelRequest,
+        derivedKeys: DerivedKeys1 | null
+    ): ChannelSecurityToken {
+        const adjustLifetime = (requestedLifetime: number) => {
+            let revisedLifetime = requestedLifetime;
+            if (revisedLifetime === 0) {
+                revisedLifetime = this.#defaultSecureTokenLifetime;
+            } else {
+                revisedLifetime = Math.min(this.#defaultSecureTokenLifetime, revisedLifetime);
+                revisedLifetime = Math.max(ServerSecureChannelLayer.g_MinimumSecureTokenLifetime, revisedLifetime);
+            }
+            return revisedLifetime;
+        };
+
+        if (openSecureChannelRequest.requestType === SecurityTokenRequestType.Renew) {
+            this.#_stop_security_token_watch_dog();
         }
 
-        // let prepare self.securityHeader;
-        this.securityHeader = this._prepare_security_header(request, message);
+        const requestedLifetime = openSecureChannelRequest.requestedLifetime;
+        const revisedLifetime = adjustLifetime(requestedLifetime);
+
+        doDebug && debugLog("revisedLifeTime = ", revisedLifetime, "requestedLifeTime = ", requestedLifetime);
+
+        this.#lastTokenId += 1;
+        const securityToken = new ChannelSecurityToken({
+            channelId: this.channelId,
+            createdAt: new Date(), // now
+            revisedLifetime,
+            tokenId: this.#lastTokenId // todo ?
+        });
+
+        if (hasTokenExpired(securityToken)) {
+            warningLog("Token has already expired", securityToken);
+        }
+        this.#_start_security_token_watch_dog(securityToken);
+        this.#tokenStack.pushNewToken(securityToken, derivedKeys);
+        return securityToken;
+    }
+
+    #_stop_open_channel_watch_dog() {
+        if (this.#timeoutId) {
+            clearTimeout(this.#timeoutId);
+            this.#timeoutId = null;
+        }
+        if (this.#open_secure_channel_onceClose) {
+            this.#transport.removeListener("close", this.#open_secure_channel_onceClose!);
+            this.#open_secure_channel_onceClose = null;
+        }
+    }
+
+    #_cleanup_pending_timers() {
+        // there is no need for the security token expiration event to trigger anymore
+        this.#_stop_security_token_watch_dog();
+        this.#_stop_open_channel_watch_dog();
+    }
+
+    #_cancel_wait_for_open_secure_channel_request_timeout() {
+        this.#_stop_open_channel_watch_dog();
+    }
+
+    #_install_wait_for_open_secure_channel_request_timeout(timeout: number) {
+
+        this.#open_secure_channel_onceClose = (err?: Error) => {
+            this.#open_secure_channel_onceClose = null;
+            this.#_stop_open_channel_watch_dog();
+            this.close(() => {
+                const err = new Error("Timeout waiting for OpenChannelRequest (A) (timeout was " + timeout + " ms)");
+                this.emit("abort", err);
+            });
+        };
+        this.#transport.prependOnceListener("close", this.#open_secure_channel_onceClose);
+        this.#timeoutId = setTimeout(() => {
+            this.#timeoutId = null;
+            this.#_stop_open_channel_watch_dog();
+            const err = new Error("Timeout waiting for OpenChannelRequest (B) (timeout was " + timeout + " ms)");
+            debugLog(err.message);
+            this.close(() => {
+              // 
+            });
+        }, timeout);
+    }
+
+    #_on_initial_open_secure_channel_request(
+        request: Request,
+        requestId: number,
+        channelId: number
+    ) {
+        this.#status = "connecting";
 
         /* istanbul ignore next */
-        if (!this.securityHeader) {
-            warningLog("Cannot find SecurityHeader !!!!!!!! ");
-            return this._sendFatalErrorAndAbort(StatusCodes2.BadSecurityChecksFailed, "invalid request", message, callback);
+        if (doTraceServerMessage) {
+            traceRequestMessage(request as Request, channelId, this.#counter);
         }
 
-        this.clientNonce = request.clientNonce;
-
-        if (nonceAlreadyBeenUsed(this.clientNonce)) {
-            warningLog(chalk.red("SERVER with secure connection: Nonce has already been used"), this.clientNonce.toString("hex"));
-            serviceResult = StatusCodes.BadNonceInvalid;
+        /* istanbul ignore next */
+        if (!(this.#messageBuilder && this.#messageBuilder.sequenceHeader && this.#messageBuilder.securityHeader)) {
+            const securityHeader = new AsymmetricAlgorithmSecurityHeader({ securityPolicyUri: SecurityPolicy.None });
+            return this.#_on_OpenSecureChannelRequestError(
+                StatusCodes.BadCommunicationError,
+                "internal error",
+                { request, requestId, securityHeader }
+            );
         }
 
-        this._set_lifetime(request.requestedLifetime);
+        const message = {
+            request,
+            requestId,
+            securityHeader: this.#messageBuilder.securityHeader
+        };
 
-        this._prepare_security_token(request);
+        //xx  requestId = this.messageBuilder.sequenceHeader.requestId;
+        /* istanbul ignore next */
+        if (requestId < 0) {
+            return this.#_on_OpenSecureChannelRequestError(
+                StatusCodes.BadCommunicationError,
+                "Invalid requestId",
+                message
+            );
+        }
 
-        const cryptoFactory = this.messageBuilder!.cryptoFactory;
-        if (cryptoFactory) {
-            // serverNonce: A random number that shall not be used in any other request. A new
-            //    serverNonce shall be generated for each time a SecureChannel is renewed.
-            //    This parameter shall have a length equal to key size used for the symmetric
-            //    encryption algorithm that is identified by the securityPolicyUri.
-            this.serverNonce = randomBytes(cryptoFactory.symmetricKeyLength);
+        let description: string = "";
 
-            if (this.clientNonce.length !== this.serverNonce.length) {
+        // expecting a OpenChannelRequest as first communication message
+        /* istanbul ignore next */
+        if (!(request instanceof OpenSecureChannelRequest)) {
+            description = "Expecting OpenSecureChannelRequest";
+            return this.#_on_OpenSecureChannelRequestError(StatusCodes.BadCommunicationError, description, message);
+        }
+
+        // check that the request is a OpenSecureChannelRequest
+
+        /* istanbul ignore next */
+        if (doDebug) {
+            debugLog(this.#messageBuilder.sequenceHeader.toString());
+            debugLog(this.#messageBuilder.securityHeader.toString());
+            debugLog(request.toString());
+        }
+
+        const asymmetricSecurityHeader = this.#messageBuilder.securityHeader as AsymmetricAlgorithmSecurityHeader;
+
+        const securityMode = request.securityMode;
+        this.securityMode = securityMode;
+        this.#messageBuilder.securityMode = securityMode;
+
+        const securityPolicy = message.securityHeader
+            ? fromURI(asymmetricSecurityHeader.securityPolicyUri)
+            : SecurityPolicy.Invalid;
+
+        // check security header
+        const securityPolicyStatus: StatusCode = isValidSecurityPolicy(securityPolicy);
+        if (securityPolicyStatus !== StatusCodes.Good) {
+            description = " Unsupported securityPolicyUri " + asymmetricSecurityHeader.securityPolicyUri;
+            return this.#_on_OpenSecureChannelRequestError(securityPolicyStatus, description, message);
+        }
+
+        const hasEndpoint = this.#_has_endpoint_for_security_mode_and_policy(securityMode, securityPolicy);
+        if (!hasEndpoint) {
+            // there is no
+            description = " This server doesn't not support  " + securityPolicy.toString() + " " + securityMode.toString();
+            return this.#_on_OpenSecureChannelRequestError(StatusCodes.BadSecurityPolicyRejected, description, message);
+        }
+
+        this.#messageBuilder
+            .on("message", (request, msgType, securityHeader, requestId, channelId) => {
+                this.#_on_common_message(request as Request, msgType, securityHeader, requestId, channelId);
+            })
+            .on("error", (err: Error, statusCode: StatusCode, requestId: number | null) => {
+                /** */
+                this.#transport.sendErrorMessage(statusCode, err.message);
+                this.close(() => {
+                    /** */
+                });
+            })
+            .on("startChunk", () => {
+                /* istanbul ignore next */
+                if (doPerfMonitoring) {
+                    // record tick 0: when the first chunk is received
+                    this.#startReceiveTick = get_clock_tick();
+                }
+            });
+
+        // handle initial OpenSecureChannelRequest
+        this.#_process_certificates(message, (err: Error | null, statusCode?: StatusCode) => {
+            // istanbul ignore next
+            if (err || !statusCode) {
+                description = "Internal Error " + err?.message;
+                return this.#_on_OpenSecureChannelRequestError(statusCode || StatusCodes.BadInternalError, description, message);
+            }
+
+            if (statusCode.isNotGood()) {
+                warningLog("Sender Certificate thumbprint ", getThumbprint(asymmetricSecurityHeader.senderCertificate));
+                // OPCUA specification v1.02 part 6 page 42 $6.7.4
+                // If an error occurs after the  Server  has verified  Message  security  it  shall  return a  ServiceFault  instead
+                // of a OpenSecureChannel  response. The  ServiceFault  Message  is described in  Part  4,   7.28.
+                if (
+                    statusCode.isNot(StatusCodes.BadCertificateIssuerRevocationUnknown) &&
+                    statusCode.isNot(StatusCodes.BadCertificateRevocationUnknown) &&
+                    statusCode.isNot(StatusCodes.BadCertificateTimeInvalid) &&
+                    statusCode.isNot(StatusCodes.BadCertificateUseNotAllowed)
+                ) {
+                    statusCode = StatusCodes.BadSecurityChecksFailed;
+                }
+                // Those are not considered as error but as a warning
+                //    BadCertificateIssuerRevocationUnknown,
+                //    BadCertificateRevocationUnknown,
+                //    BadCertificateTimeInvalid,
+                //    BadCertificateUseNotAllowed
+                //
+                // the client will decided what to do next
+                return this.#_on_OpenSecureChannelRequestError(statusCode!, "certificate invalid", message);
+            }
+            this.#_handle_OpenSecureChannelRequest(message);
+        });
+    }
+
+    #_wait_for_open_secure_channel_request(timeout: number) {
+        this.#_install_wait_for_open_secure_channel_request_timeout(timeout);
+
+        const errorHandler = (err: Error) => {
+            this.#_cancel_wait_for_open_secure_channel_request_timeout();
+
+            if (this.#messageBuilder) {
+                this.#messageBuilder.removeListener("message", messageHandler);
+                const err = new Error("/Expecting OpenSecureChannelRequest to be valid ");
+                this.emit("abort", err);
+            }
+        };
+
+        const messageHandler = (
+            request: BaseUAObject,
+            msgType: string,
+            securityHeader: SecurityHeader,
+            requestId: number,
+            channelId: number
+        ) => {
+            this.#_cancel_wait_for_open_secure_channel_request_timeout();
+            this.#messageBuilder!.removeListener("error", errorHandler);
+            this.#_on_initial_open_secure_channel_request(request as Request, requestId, channelId);
+        };
+        this.#messageBuilder!.prependOnceListener("error", errorHandler);
+        this.#messageBuilder!.once("message", messageHandler);
+    }
+
+    write(messageChunk: Buffer) {
+        this.#transport.write(messageChunk);
+    }
+    #_send_chunk(messageChunk: Buffer) {
+        this.write(messageChunk);
+    }
+
+    #_get_security_options_for_OPN(): SecureMessageData | null {
+        // The OpenSecureChannel Messages are signed and encrypted if the SecurityMode is
+        // not None(even  if the SecurityMode is Sign).
+        if (this.securityMode === MessageSecurityMode.None) {
+            return null;
+        }
+
+        const senderPrivateKey = this.getPrivateKey();
+        /* istanbul ignore next */
+        if (!senderPrivateKey) {
+            throw new Error("invalid or missing senderPrivateKey : necessary to sign");
+        }
+        const cryptoFactory = getCryptoFactory(this.#messageBuilder!.securityPolicy!);
+        /* istanbul ignore next */
+        if (!cryptoFactory) {
+            throw new Error("Internal Error: ServerSecureChannelLayer must have a crypto strategy");
+        }
+
+        assert(this.#clientPublicKeyLength >= 0);
+
+        const receiverPublicKey = this.#clientPublicKey;
+        if (!receiverPublicKey) {
+            // this could happen if certificate was wrong
+            // throw new Error("Invalid receiverPublicKey");
+            return null;
+        }
+        const keyLength = rsaLengthPublicKey(receiverPublicKey);
+        const signatureLength = rsaLengthPrivateKey(senderPrivateKey);
+        const options: SecureMessageData = {
+            // for signing
+            signatureLength,
+            signBufferFunc: (chunk) => cryptoFactory.asymmetricSign(chunk, senderPrivateKey),
+            // for encrypting
+            cipherBlockSize: keyLength,
+            plainBlockSize: keyLength - cryptoFactory.blockPaddingSize,
+            encryptBufferFunc: (chunk) => cryptoFactory.asymmetricEncrypt(chunk, receiverPublicKey)
+        };
+        return options;
+    }
+
+    #_get_security_options_for_MSG(tokenId: number): SecureMessageData | null {
+        if (this.securityMode === MessageSecurityMode.None) {
+            return null;
+        }
+        const derivedKeys = this.#tokenStack.getTokenDerivedKeys(tokenId);
+        // istanbul ignore next
+        if (!derivedKeys || !derivedKeys.derivedServerKeys) {
+            errorLog("derivedKeys not set but security mode = ", MessageSecurityMode[this.securityMode]);
+            return null;
+        }
+        const options = getOptionsForSymmetricSignAndEncrypt(this.securityMode, derivedKeys.derivedServerKeys);
+        return options;
+    }
+
+    /**
+     * _process_certificates extracts client public keys from client certificate
+     *  and store them in self.receiverPublicKey and self.receiverCertificate
+     *  it also caches self.receiverPublicKeyLength.
+     *
+     *  so they can be used by security channel.
+     */
+
+    #_process_certificates(message: Message, callback: Callback2<StatusCode>): void {
+        const asymmSecurityHeader = message.securityHeader as AsymmetricAlgorithmSecurityHeader;
+
+        // verify certificate
+        let clientCertificate = asymmSecurityHeader ? asymmSecurityHeader.senderCertificate : null;
+        this.checkCertificate(clientCertificate)
+            .then((statusCode: StatusCode) => {
+
+                if (statusCode.isNotGood()) {
+                    const description = "Sender Certificate Error " + statusCode.toString();
+                    warningLog(chalk.cyan(description), chalk.bgCyan.yellow(statusCode!.toString()));
+                    const chain = split_der(clientCertificate!);
+                    warningLog(
+                        "Sender Certificate = ",
+                        chain.map((c) => getThumbprint(clientCertificate)?.toString("hex")).join("\n")
+                    );
+                }
+
+                this.#clientCertificate = null;
+                this.#clientPublicKey = null;
+                this.#clientPublicKeyLength = 0;
+
+                // ignore receiverCertificate that have a zero length
+                /* istanbul ignore next */
+                if (clientCertificate && clientCertificate.length === 0) {
+                    clientCertificate = null;
+                }
+
+                if (clientCertificate) {
+                    // extract public key
+                    extractPublicKeyFromCertificate(clientCertificate, (err, keyPem) => {
+                        if (!err) {
+                            if (keyPem) {
+                                this.#clientCertificate = clientCertificate;
+                                this.#clientPublicKey = createPublicKey(keyPem);
+                                this.#clientPublicKeyLength = rsaLengthPublicKey(keyPem);
+                            }
+                            callback(null, statusCode);
+                        } else {
+                            callback(err);
+                        }
+                    });
+                } else {
+                    this.#clientPublicKey = null;
+                    callback(null, statusCode);
+                }
+            }).catch((err) => callback(err));
+    }
+
+    #_prepare_response_security_header(request: OpenSecureChannelRequest, message: Message): AsymmetricAlgorithmSecurityHeader {
+        let securityHeader: AsymmetricAlgorithmSecurityHeader;
+        // senderCertificate:
+        //    The X509v3 certificate assigned to the sending application instance.
+        //    This is a DER encoded blob.
+        //    This indicates what private key was used to sign the MessageChunk.
+        //    This field shall be null if the message is not signed.
+        // receiverCertificateThumbprint:
+        //    The thumbprint of the X509v3 certificate assigned to the receiving application
+        //    The thumbprint is the SHA1 digest of the DER encoded form of the certificate.
+        //    This indicates what public key was used to encrypt the MessageChunk
+        //   This field shall be null if the message is not encrypted.
+        const evaluateReceiverThumbprint = () => {
+            if (this.securityMode === MessageSecurityMode.None) {
+                return null;
+            }
+            const part1 = split_der(this.#clientCertificate!)[0];
+            const receiverCertificateThumbprint = getThumbprint(part1);
+            return receiverCertificateThumbprint;
+        };
+
+        switch (request.securityMode) {
+            case MessageSecurityMode.None:
+                this.securityPolicy = SecurityPolicy.None;
+                securityHeader = new AsymmetricAlgorithmSecurityHeader({
+                    receiverCertificateThumbprint: null, // message not encrypted
+                    securityPolicyUri: SecurityPolicy.None,
+                    senderCertificate: null // message not signed
+                });
+                break;
+            case MessageSecurityMode.Sign:
+            case MessageSecurityMode.SignAndEncrypt:
+            default: {
+                const receiverCertificateThumbprint = evaluateReceiverThumbprint();
+                const asymmClientSecurityHeader = message.securityHeader as AsymmetricAlgorithmSecurityHeader;
+                this.securityPolicy = coerceSecurityPolicy(asymmClientSecurityHeader.securityPolicyUri || SecurityPolicy.Invalid);
+                const maxSenderCertificateSize = undefined;
+                const partialCertificateChain = getPartialCertificateChain(this.getCertificateChain(), maxSenderCertificateSize);
+
+                if (this.securityPolicy === SecurityPolicy.Invalid) {
+                    warningLog("Invalid Security Policy", this.securityPolicy);
+                }
+
+                // istanbul ignore next
+                securityHeader = new AsymmetricAlgorithmSecurityHeader({
+                    securityPolicyUri: asymmClientSecurityHeader.securityPolicyUri,
+                    /**
+                     * The thumbprint of the X.509 v3 Certificate assigned to the receiving application Instance.
+                     * The thumbprint is the CertificateDigest of the DER encoded form of the Certificate.
+                     * This indicates what public key was used to encrypt the MessageChunk.
+                     * This field shall be null if the Message is not encrypted.
+                     */
+                    receiverCertificateThumbprint,
+                    /**
+                     * The X.509 v3 Certificate assigned to the sending application Instance.
+                     *  This is a DER encoded blob.
+                     * The structure of an X.509 v3 Certificate is defined in X.509 v3.
+                     * The DER format for a Certificate is defined in X690
+                     * This indicates what Private Key was used to sign the MessageChunk.
+                     * The Stack shall close the channel and report an error to the application
+                     * if the SenderCertificate is too large for the buffer size supported by the transport layer.
+                     * This field shall be null if the Message is not signed.
+                     * If the Certificate is signed by a CA, the DER encoded CA Certificate may be
+                     * appended after the Certificate in the byte array. If the CA Certificate is also
+                     * signed by another CA this process is repeated until the entire Certificate chain
+                     * is in the buffer or if MaxSenderCertificateSize limit is reached (the process
+                     * stops after the last whole Certificate that can be added without exceeding
+                     * the MaxSenderCertificateSize limit).
+                     * Receivers can extract the Certificates from the byte array by using the Certificate
+                     * size contained in DER header (see X.509 v3).
+                     */
+                    senderCertificate: partialCertificateChain // certificate of the private key used to sign the message
+                });
+            }
+        }
+        return securityHeader;
+    }
+
+    #_check_client_nonce(clientNonce: Buffer): StatusCode {
+        if (this.securityMode !== MessageSecurityMode.None) {
+            const cryptoFactory = getCryptoFactory(this.#messageBuilder!.securityPolicy);
+            if (!cryptoFactory) {
+                return StatusCodes.BadSecurityModeRejected;
+            }
+            if (clientNonce.length !== cryptoFactory.symmetricKeyLength) {
                 warningLog(
                     chalk.red("warning client Nonce length doesn't match server nonce length"),
-                    this.clientNonce.length,
+                    clientNonce.length,
                     " !== ",
-                    this.serverNonce.length
+                    cryptoFactory.symmetricKeyLength
                 );
                 // what can we do
                 // - just ignore it ?
@@ -1317,72 +1224,116 @@ export class ServerSecureChannelLayer extends EventEmitter {
                 // xx self.clientNonce = self.clientNonce.subarray(0,self.serverNonce.length);
                 //
                 // - or abort connection ? << LET BE SAFE AND CHOOSE THIS ONE !
-                serviceResult = StatusCodes.BadSecurityModeRejected; // ToDo check code
+                return StatusCodes.BadSecurityModeRejected; // ToDo check code
             }
-            // expose derivedKey to use for symmetric sign&encrypt
-            // to help us decrypting and verifying messages received from client
-            this.derivedKeys = computeDerivedKeys(cryptoFactory, this.serverNonce, this.clientNonce);
-        }
 
-        const derivedClientKeys = this.derivedKeys ? this.derivedKeys.derivedClientKeys : null;
-        this.messageBuilder!.pushNewToken(this.securityToken, derivedClientKeys);
-
-        const derivedServerKeys = this.derivedKeys ? this.derivedKeys.derivedServerKeys : undefined;
-
-        this.messageChunker.update({
-            // for OPN
-            securityHeader: this.securityHeader,
-
-            // derived keys for symmetric encryption of standard MSG
-            // to sign and encrypt MSG sent to client
-            derivedKeys: derivedServerKeys
-        });
-
-        let description;
-
-        // If the SecurityMode is not None then the Server shall verify that a SenderCertificate and a
-        // ReceiverCertificateThumbprint were specified in the SecurityHeader.
-        if (this.securityMode !== MessageSecurityMode.None) {
             /* istanbul ignore next */
-            if (!this.clientSecurityHeader) {
+            if (nonceAlreadyBeenUsed(clientNonce)) {
+                warningLog(
+                    chalk.red("OPCUAServer with secure connection: this client nonce has already been used"),
+                    clientNonce.toString("hex")
+                );
+                return StatusCodes.BadNonceInvalid;
+            }
+        }
+        return StatusCodes.Good;
+    }
+    #_make_serverNonce(): Buffer | null {
+        if (this.securityMode !== MessageSecurityMode.None) {
+            const cryptoFactory = getCryptoFactory(this.#messageBuilder!.securityPolicy)!;
+            // serverNonce: A random number that shall not be used in any other request. A new
+            //    serverNonce shall be generated for each time a SecureChannel is renewed.
+            //    This parameter shall have a length equal to key size used for the symmetric
+            //    encryption algorithm that is identified by the securityPolicyUri.
+            return randomBytes(cryptoFactory.symmetricKeyLength);
+        }
+        return null;
+    }
+    #_make_derivedKeys(serverNonce: Buffer | null, clientNonce: Buffer | null): DerivedKeys1 | null {
+        if (this.securityMode !== MessageSecurityMode.None) {
+            if (!serverNonce || !clientNonce) {
                 throw new Error("Internal Error");
             }
-            if (!this._check_receiverCertificateThumbprint(this.clientSecurityHeader)) {
+            const cryptoFactory = getCryptoFactory(this.#messageBuilder!.securityPolicy)!;
+            return computeDerivedKeys(cryptoFactory, serverNonce, clientNonce);
+        }
+        return null;
+    }
+    #_handle_OpenSecureChannelRequest(messageRequest: Message) {
+        this.beforeHandleOpenSecureChannelRequest().then(() => {
+            let description;
+            // If the SecurityMode is not None then the Server shall verify that a SenderCertificate and a
+            // ReceiverCertificateThumbprint were specified in the SecurityHeader.
+            /* istanbul ignore next */
+            if (!messageRequest.securityHeader) {
+                throw new Error("Internal Error");
+            }
+
+            const request = messageRequest.request as OpenSecureChannelRequest;
+            const requestId = messageRequest.requestId;
+
+            // let prepare self.securityHeader;
+            const securityHeader = this.#_prepare_response_security_header(request, messageRequest);
+
+            /* istanbul ignore next */
+            if (!(requestId !== 0 && requestId > 0)) {
+                warningLog("OpenSecureChannelRequest: requestId");
+                return this.#_on_OpenSecureChannelRequestError(
+                    StatusCodes2.BadTcpInternalError,
+                    "invalid request",
+                    messageRequest
+                );
+            }
+
+            const statusCodeClientNonce = this.#_check_client_nonce(request.clientNonce);
+            if (statusCodeClientNonce.isNotGood()) {
+                return this.#_on_OpenSecureChannelRequestError(statusCodeClientNonce, "invalid nonce", messageRequest);
+            }
+
+            if (!this.#_check_receiverCertificateThumbprint(messageRequest.securityHeader)) {
                 description =
                     "Server#OpenSecureChannelRequest : Invalid receiver certificate thumbprint : the thumbprint doesn't match server certificate !";
-                warningLog(chalk.cyan(description));
-                serviceResult = StatusCodes.BadCertificateInvalid;
+                return this.#_on_OpenSecureChannelRequestError(
+                    StatusCodes.BadCertificateInvalid,
+                    description,
+                    messageRequest
+                );
             }
-        }
 
-        const response: Response = serviceResult.isGood()
-            ? new OpenSecureChannelResponse({
-                  responseHeader: { serviceResult },
-
-                  securityToken: this.securityToken,
-                  serverNonce: this.serverNonce || undefined,
-                  serverProtocolVersion: this.protocolVersion
-              })
-            : new ServiceFault({ responseHeader: { serviceResult } });
-
-        if (doTraceServerMessage) {
-            console.log("Transport maxMessageSize = ", this.transport.maxMessageSize);
-            console.log("Transport maxChunkCount = ", this.transport.maxChunkCount);
-        }
-        this.send_response("OPN", response, message, (/*err*/) => {
-            const responseHeader = response.responseHeader;
-            if (responseHeader.serviceResult !== StatusCodes.Good) {
-                warningLog("OpenSecureChannelRequest Closing communication ", responseHeader.serviceResult.toString());
-                this.#status = "closing";
-                this.close(callback);
-            } else {
-                this.#status = "open";
-                callback();
+            const serverNonce = this.#_make_serverNonce();
+            const derivedKeys = this.#_make_derivedKeys(serverNonce, request.clientNonce);
+            const securityToken: ChannelSecurityToken = this.#_prepare_security_token(request, derivedKeys);
+            const response: Response = new OpenSecureChannelResponse({
+                responseHeader: { serviceResult: StatusCodes.Good },
+                securityToken: securityToken,
+                serverNonce: serverNonce || undefined,
+                serverProtocolVersion: this.#protocolVersion
+            });
+            /* istanbul ignore next */
+            if (doTraceServerMessage) {
+                console.log("Transport maxMessageSize = ", this.#transport.maxMessageSize);
+                console.log("Transport maxChunkCount  = ", this.#transport.maxChunkCount);
             }
+
+            const messageResponse = {
+                ...messageRequest,
+                securityHeader: securityHeader
+            };
+
+            this.send_response("OPN", response, messageResponse, (err) => {
+                const responseHeader = response.responseHeader;
+                if (responseHeader.serviceResult !== StatusCodes.Good) {
+                    warningLog("OpenSecureChannelRequest Closing communication ", responseHeader.serviceResult.toString());
+                    this.#status = "closing";
+                    this.close();
+                } else {
+                    this.#status = "open";
+                }
+            });
         });
     }
 
-    private _abort() {
+    #_abort() {
         this.#status = "closed";
 
         debugLog("ServerSecureChannelLayer#_abort");
@@ -1396,7 +1347,7 @@ export class ServerSecureChannelLayer extends EventEmitter {
 
         this.#abort_has_been_called = true;
 
-        this._cleanup_pending_timers();
+        this.#_cleanup_pending_timers();
         /**
          * notify the observers that the SecureChannel has aborted.
          * the reason could be :
@@ -1410,82 +1361,85 @@ export class ServerSecureChannelLayer extends EventEmitter {
         debugLog("ServerSecureChannelLayer emitted abort event");
     }
 
-    private _record_transaction_statistics() {
-        this._bytesRead_before = this._bytesRead_before || 0;
-        this._bytesWritten_before = this._bytesWritten_before || 0;
+    #_record_transaction_statistics() {
+        this.#_bytesRead_before = this.#_bytesRead_before || 0;
+        this.#_bytesWritten_before = this.#_bytesWritten_before || 0;
 
-        this.last_transaction_stats = {
-            bytesRead: this.bytesRead - this._bytesRead_before,
-            bytesWritten: this.bytesWritten - this._bytesWritten_before,
+        this.#last_transaction_stats = {
+            bytesRead: this.bytesRead - this.#_bytesRead_before,
+            bytesWritten: this.bytesWritten - this.#_bytesWritten_before,
 
-            lap_reception: this._tick1 - this._tick0,
+            lap_reception: this.#endReceiveTick - this.#startReceiveTick,
 
-            lap_processing: this._tick2 - this._tick1,
+            lap_processing: this.#startSendResponseTick - this.#endReceiveTick,
 
-            lap_emission: this._tick3 - this._tick2
+            lap_emission: this.#endSendResponseTick - this.#startSendResponseTick
         };
 
         // final operation in statistics
-        this._bytesRead_before = this.bytesRead;
-        this._bytesWritten_before = this.bytesWritten;
+        this.#_bytesRead_before = this.bytesRead;
+        this.#_bytesWritten_before = this.bytesWritten;
     }
-
-    private _on_common_message(request: Request, msgType: string, requestId: number, channelId: number) {
+    #_on_common_message(request: Request, msgType: string, securityHeader: SecurityHeader, requestId: number, channelId: number) {
         /* istanbul ignore next */
         if (doTraceServerMessage) {
             traceRequestMessage(request, channelId, this.#counter);
         }
 
         /* istanbul ignore next */
-        if (this.messageBuilder!.sequenceHeader === null) {
+        if (this.#messageBuilder!.sequenceHeader === null) {
             throw new Error("Internal Error");
         }
 
-        requestId = this.messageBuilder!.sequenceHeader.requestId;
+        requestId = this.#messageBuilder!.sequenceHeader.requestId;
 
         const message: Message = {
             channel: this,
             request,
+            securityHeader,
             requestId
         };
-        const dummyCallback = (/*err?: Error*/) => {};
         if (msgType === "CLO" /* && request.schema.name === "CloseSecureChannelRequest" */) {
-            this.close(dummyCallback);
+            this.close();
         } else if (msgType === "OPN" && request.schema.name === "OpenSecureChannelRequest") {
             // intercept client request to renew security Token
-            this._handle_OpenSecureChannelRequest(StatusCodes.Good, message, (/* err?: Error*/) => {
-                /** */
-            });
+            this.#_handle_OpenSecureChannelRequest(message);
         } else {
             if (request.schema.name === "CloseSecureChannelRequest") {
                 warningLog("WARNING : RECEIVED a CloseSecureChannelRequest with msgType=", msgType);
-                this.close(dummyCallback);
+                this.close();
             } else {
+                /* istanbul ignore next */
                 if (doPerfMonitoring) {
                     // record tick 1 : after message has been received, before message processing
-                    this._tick1 = get_clock_tick();
+                    this.#endReceiveTick = get_clock_tick();
                 }
 
-                if (this.securityToken && channelId !== this.securityToken.channelId) {
+                const getTokenId = (securityHeader: SecurityHeader): number => {
+                    if (securityHeader instanceof SymmetricAlgorithmSecurityHeader) {
+                        return securityHeader.tokenId;
+                    }
+                    return 0;
+                };
+                const tokenId = getTokenId(securityHeader);
+
+                const securityToken = this.#tokenStack.getToken(tokenId);
+                if (!securityToken) {
+                    const _tokenStack = this.#tokenStack;
+                    const description = `cannot find security token ${tokenId}  ${msgType}`;
+                    return this.#_sendFatalErrorAndAbort(StatusCodes.BadCommunicationError, description, message, () => { });
+                }
+                if (securityToken && channelId !== securityToken.channelId) {
                     // response = new ServiceFault({responseHeader: {serviceResult: certificate_status}});
-                    debugLog("Invalid channelId detected =", channelId, " <> ", this.securityToken.channelId);
-                    return this._sendFatalErrorAndAbort(
-                        StatusCodes.BadCommunicationError,
-                        "Invalid Channel Id specified " + this.securityToken.channelId,
-                        message,
-                        () => {
-                            /** */
-                        }
-                    );
+                    const description = `Invalid channelId specified = ${channelId}  <> ${securityToken.channelId}`;
+                    return this.#_sendFatalErrorAndAbort(StatusCodes.BadCommunicationError, description, message, () => {
+                        /** */
+                    });
                 }
-
                 /**
                  * notify the observer that a OPCUA message has been received.
                  * It is up to one observer to call send_response or _send_ServiceFault_and_abort to complete
                  * the transaction.
-                 *
-                 * @event message
-                 * @param message
                  */
                 this.emit("message", message);
             }
@@ -1493,14 +1447,10 @@ export class ServerSecureChannelLayer extends EventEmitter {
     }
 
     /**
-     * @method _check_receiverCertificateThumbprint
      * verify that the receiverCertificateThumbprint send by the client
      * matching the CertificateThumbPrint of the server
-     * @param clientSecurityHeader
-     * @return true if the receiver certificate thumbprint matches the server certificate
-     * @private
      */
-    private _check_receiverCertificateThumbprint(clientSecurityHeader: SecurityHeader): boolean {
+    #_check_receiverCertificateThumbprint(clientSecurityHeader: SecurityHeader): boolean {
         if (clientSecurityHeader instanceof SymmetricAlgorithmSecurityHeader) {
             return true; // nothing we can do here
         }
@@ -1509,14 +1459,13 @@ export class ServerSecureChannelLayer extends EventEmitter {
             // check if the receiverCertificateThumbprint is my certificate thumbprint
             const serverCertificate = this.getCertificate();
             const myCertificateThumbPrint = makeSHA1Thumbprint(serverCertificate);
-            const thisIsMyCertificate =
-                myCertificateThumbPrint.toString("hex") === clientSecurityHeader.receiverCertificateThumbprint.toString("hex");
+            const myCertificateThumbPrintHex = myCertificateThumbPrint.toString("hex");
+            const receiverCertificateThumbprintHex = clientSecurityHeader.receiverCertificateThumbprint.toString("hex");
+            const thisIsMyCertificate = myCertificateThumbPrintHex === receiverCertificateThumbprintHex;
             if (doDebug && !thisIsMyCertificate) {
                 debugLog(
                     "receiverCertificateThumbprint do not match server certificate",
-                    myCertificateThumbPrint.toString("hex") +
-                        " <> " +
-                        clientSecurityHeader.receiverCertificateThumbprint.toString("hex")
+                    receiverCertificateThumbprintHex + " <> " + myCertificateThumbPrintHex
                 );
             }
             return thisIsMyCertificate;
@@ -1544,15 +1493,11 @@ export class ServerSecureChannelLayer extends EventEmitter {
     // Bad_SecureChannelIdInvalid
     // Bad_NonceInvalid
 
-    private _on_OpenSecureChannelRequestError(
-        serviceResult: StatusCode,
-        description: string,
-        message: Message,
-        callback: ErrorCallback
-    ) {
-        debugLog("ServerSecureChannel sendError: ", serviceResult.toString(), description, message.request.constructor.name);
-
+    #_on_OpenSecureChannelRequestError(serviceResult: StatusCode, description: string, message: Message) {
+        warningLog("ServerSecureChannel sendError: ", serviceResult.toString(), { description }, message.request.constructor.name);
         this.securityMode = MessageSecurityMode.None;
+        this.#status = "closing";
+
         setTimeout(() => {
             this.send_response(
                 "ERR",
@@ -1565,13 +1510,11 @@ export class ServerSecureChannelLayer extends EventEmitter {
                 }),
                 message,
                 () => {
-                    callback(new Error(description + " statusCode = " + serviceResult.toString()));
+                    setTimeout(() => {
+                        this.close();
+                    }, 1000);
                 }
             );
         }, ServerSecureChannelLayer.throttleTime); // Throttling keep connection on hold for a while.
     }
 }
-
-(ServerSecureChannelLayer as any).prototype.checkCertificateCallback = callbackify(
-    (ServerSecureChannelLayer as any).prototype.checkCertificate
-);

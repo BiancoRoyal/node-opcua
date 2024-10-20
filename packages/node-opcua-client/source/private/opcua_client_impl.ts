@@ -3,7 +3,6 @@
  */
 import { callbackify } from "util";
 import { randomBytes, createPublicKey } from "crypto";
-import async from "async";
 import chalk from "chalk";
 
 import { assert } from "node-opcua-assert";
@@ -38,6 +37,7 @@ import { ErrorCallback, Callback } from "node-opcua-status-code";
 
 import { SignatureDataOptions, UserIdentityToken } from "node-opcua-types";
 import { isNullOrUndefined, matchUri } from "node-opcua-utils";
+import { readNamespaceArray } from "node-opcua-pseudo-session";
 
 import { ClientSession } from "../client_session";
 import { ClientSubscription, ClientSubscriptionOptions } from "../client_subscription";
@@ -54,7 +54,8 @@ import { AnonymousIdentity, UserIdentityInfo, UserIdentityInfoUserName, UserIden
 import { repair_client_sessions } from "./reconnection/reconnection";
 import { ClientBaseImpl } from "./client_base_impl";
 import { ClientSessionImpl } from "./client_session_impl";
-import { ClientSubscriptionImpl } from "./client_subscription_impl";
+import { IClientBase } from "./i_private_client";
+import { DataTypeExtractStrategy } from "node-opcua-client-dynamic-extension-object";
 
 interface TokenAndSignature {
     userIdentityToken: UserIdentityToken | null;
@@ -108,7 +109,7 @@ const ordered: string[] = [
     SecurityPolicy.Basic256Sha256,
 
 
-    
+
     SecurityPolicy.Aes128_Sha256_RsaOaep,
     SecurityPolicy.Aes256_Sha256_RsaPss
 ];
@@ -370,10 +371,6 @@ function _adjustRevisedSessionTimeout(revisedSessionTimeout: number, requestedTi
     return revisedSessionTimeout;
 }
 
-/***
- * @constructor
- * @internal
- */
 export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
     public static minimumRevisedSessionTimeout = 100.0;
     private _retryCreateSessionTimer?: NodeJS.Timeout;
@@ -390,9 +387,13 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
     private serverUri?: string;
     private clientNonce?: Nonce;
 
+    public dataTypeExtractStrategy: DataTypeExtractStrategy;
+
     constructor(options?: OPCUAClientOptions) {
         options = options || {};
         super(options);
+
+        this.dataTypeExtractStrategy = options.dataTypeExtractStrategy || DataTypeExtractStrategy.Auto;
 
         // @property endpointMustExist {Boolean}
         // if set to true , create Session will only accept connection from server which endpoint_url has been reported
@@ -417,8 +418,6 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 
     /**
      * create and activate a new session
-     * @async
-     * @method createSession
      *
      *
      * @example
@@ -477,9 +476,9 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
      * createSession2 create a session with persistance
      *
      * - if the server returns BadTooManySession, the method will make an other attempt
-     *   unitl create session succeed or connection is closed.
+     *   until create session succeed or connection is closed.
      *
-     * @experiemental
+     * @experimental
      * @param userIdentityInfo
      */
     public async createSession2(userIdentityInfo?: UserIdentityInfo): Promise<ClientSession>;
@@ -529,17 +528,13 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
     }
 
     /**
-     *
-     * @method closeSession
-     * @async
-     * @param session - the created client session
-     * @param deleteSubscriptions  - whether to delete subscriptions or not
+     * close a session
      */
     public closeSession(session: ClientSession, deleteSubscriptions: boolean): Promise<void>;
     public closeSession(session: ClientSession, deleteSubscriptions: boolean, callback: (err?: Error) => void): void;
+ 
     /**
-     * @internals
-     * @param args
+     * @internal
      */
     public closeSession(...args: any[]): any {
         if (this._retryCreateSessionTimer) {
@@ -603,151 +598,14 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         });
         return session;
     }
+
     /**
-     * @method withSession
+     * 
+     * @param connectionPoint 
+     * @param func 
+     * @returns 
      */
-    public withSession<T>(
-        endpointUrl: string | EndpointWithUserIdentity,
-        inner_func: (session: ClientSession) => Promise<T>
-    ): Promise<T>;
-
-    public withSession(
-        endpointUrl: string | EndpointWithUserIdentity,
-        inner_func: (session: ClientSession, done: (err?: Error) => void) => void,
-        callback: (err?: Error) => void
-    ): void;
-    /**
-     * @internal
-     * @param args
-     */
-    public withSession(
-        connectionPoint: string | EndpointWithUserIdentity,
-        inner_func: (session: ClientSession, done: (err?: Error) => void) => void,
-        ...args: any[]
-    ): any {
-        const endpointUrl: string = typeof connectionPoint === "string" ? connectionPoint : connectionPoint.endpointUrl;
-        const userIdentity: UserIdentityInfo =
-            typeof connectionPoint === "string" ? { type: UserTokenType.Anonymous } : connectionPoint.userIdentity;
-
-        const callback = args[0];
-
-        assert(typeof inner_func === "function", "expecting inner function");
-        assert(typeof callback === "function", "expecting callback function");
-
-        let theSession: ClientSession;
-        let the_error: Error | undefined;
-
-        let need_disconnect = false;
-        async.series(
-            [
-                // step 1 : connect to
-                (innerCallback: ErrorCallback) => {
-                    this.connect(endpointUrl, (err?: Error) => {
-                        need_disconnect = true;
-                        if (err) {
-                            warningLog(err.message);
-                            errorLog(" cannot connect to endpoint :", endpointUrl);
-                        }
-                        innerCallback(err);
-                    });
-                },
-
-                // step 2 : createSession
-                (innerCallback: ErrorCallback) => {
-                    this.createSession2(userIdentity, (err: Error | null, session?: ClientSession) => {
-                        if (err) {
-                            return innerCallback(err);
-                        }
-                        if (!session) {
-                            return innerCallback(new Error("internal error"));
-                        }
-                        theSession = session;
-                        innerCallback();
-                    });
-                },
-
-                (innerCallback: ErrorCallback) => {
-                    try {
-                        inner_func(theSession, (err?: Error) => {
-                            the_error = err;
-                            innerCallback();
-                        });
-                    } catch (err) {
-                        errorLog("Exception catch in inner function,  check your code ", err);
-                        errorLog("OPCUAClientImpl#withClientSession", (<Error>err).message);
-                        the_error = err as Error;
-                        innerCallback();
-                    }
-                },
-
-                // close session
-                (innerCallback: ErrorCallback) => {
-                    theSession.close(/*deleteSubscriptions=*/ true, (err?: Error) => {
-                        if (err) {
-                            debugLog("OPCUAClientImpl#withClientSession: session closed failed ?");
-                        }
-                        innerCallback();
-                    });
-                },
-
-                (innerCallback: ErrorCallback) => {
-                    this.disconnect((err?: Error) => {
-                        need_disconnect = false;
-                        if (err) {
-                            errorLog("OPCUAClientImpl#withClientSession: client disconnect failed ?");
-                        }
-                        innerCallback();
-                    });
-                }
-            ],
-            (err1) => {
-                if (err1) {
-                    errorLog("err", err1.message);
-                }
-                if (need_disconnect) {
-                    errorLog("Disconnecting client after failure");
-                    this.disconnect((err2) => {
-                        return callback(the_error || err1 || err2);
-                    });
-                } else {
-                    return callback(the_error || err1);
-                }
-            }
-        );
-    }
-
-    public withSubscription(
-        endpointUrl: string | EndpointWithUserIdentity,
-        subscriptionParameters: ClientSubscriptionOptions,
-        innerFunc: (session: ClientSession, subscription: ClientSubscription, done: (err?: Error) => void) => void,
-        callback: (err?: Error) => void
-    ): void {
-        assert(typeof innerFunc === "function");
-        assert(typeof callback === "function");
-
-        this.withSession(
-            endpointUrl,
-            (session: ClientSession, done: (err?: Error) => void) => {
-                assert(typeof done === "function");
-
-                const subscription = new ClientSubscriptionImpl(session as ClientSessionImpl, subscriptionParameters);
-
-                try {
-                    innerFunc(session, subscription, (err?: Error) => {
-                        subscription.terminate((err1?: Error) => {
-                            done(err1);
-                        });
-                    });
-                } catch (err) {
-                    debugLog(err);
-                    done(err as Error);
-                }
-            },
-            callback
-        );
-    }
-
-    public async withSessionAsync(connectionPoint: string | EndpointWithUserIdentity, func: WithSessionFuncP<any>): Promise<any> {
+    public async withSessionAsync<T>(connectionPoint: string | EndpointWithUserIdentity, func: WithSessionFuncP<T>): Promise<T> {
         assert(typeof func === "function");
         assert(func.length === 1, "expecting a single argument in func");
 
@@ -764,6 +622,10 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         try {
             const session = await this.createSession2(userIdentity);
             let result;
+
+            // always need this 
+            await readNamespaceArray(session);
+
             try {
                 result = await func(session);
                 return result;
@@ -781,13 +643,19 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         }
     }
 
-    public async withSubscriptionAsync(
+    public async withSubscriptionAsync<T>(
         connectionPoint: string | EndpointWithUserIdentity,
         parameters: ClientSubscriptionOptions,
-        func: WithSubscriptionFuncP<any>
-    ): Promise<any> {
-        await this.withSessionAsync(connectionPoint, async (session: ClientSession) => {
+        func: WithSubscriptionFuncP<T>
+    ): Promise<T> {
+        return await this.withSessionAsync(connectionPoint, async (session: ClientSession) => {
             assert(session, " session must exist");
+
+            const client1 = this as IClientBase;
+            if (client1.beforeSubscriptionRecreate) {
+                await client1.beforeSubscriptionRecreate(session);
+            }
+
             const subscription = await session.createSubscription2(parameters);
             try {
                 const result = await func(session, subscription);
@@ -803,7 +671,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 
     /**
      * transfer session to this client
-     * @method reactivateSession
+
      * @param session
      * @param callback
      * @return {*}
@@ -822,11 +690,11 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
             return callback!(
                 new Error(
                     " End point must exist " +
-                        this._secureChannel!.endpointUrl +
-                        "  securityMode = " +
-                        MessageSecurityMode[this.securityMode] +
-                        "  securityPolicy = " +
-                        this.securityPolicy
+                    this._secureChannel!.endpointUrl +
+                    "  securityMode = " +
+                    MessageSecurityMode[this.securityMode] +
+                    "  securityPolicy = " +
+                    this.securityPolicy
                 )
             );
         }
@@ -884,7 +752,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
      * @internal
      * @private
      */
-    public __createSession_step3(
+    #createSession_step3(
         session: ClientSessionImpl,
         callback: (err: Error | null, session?: ClientSessionImpl) => void
     ): void {
@@ -1002,7 +870,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
         callback: (err: Error | null, session?: ClientSessionImpl) => void
     ): void {
         callbackify(extractFullyQualifiedDomainName)(() => {
-            this.__createSession_step3(session, callback);
+            this.#createSession_step3(session, callback);
         });
     }
     /**
@@ -1242,11 +1110,11 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
             return callback(
                 new Error(
                     " End point must exist " +
-                        this._secureChannel!.endpointUrl +
-                        "  securityMode = " +
-                        MessageSecurityMode[this.securityMode] +
-                        "  securityPolicy = " +
-                        this.securityPolicy
+                    this._secureChannel!.endpointUrl +
+                    "  securityMode = " +
+                    MessageSecurityMode[this.securityMode] +
+                    "  securityPolicy = " +
+                    this.securityPolicy
                 )
             );
         }
@@ -1348,8 +1216,7 @@ export class OPCUAClientImpl extends ClientBaseImpl implements OPCUAClient {
 // tslint:disable:max-line-length
 const thenify = require("thenify");
 /**
- * @method createSession
- * @async
+
  *
  * @example
  *     // create a anonymous session
@@ -1368,13 +1235,9 @@ const thenify = require("thenify");
 OPCUAClientImpl.prototype.createSession = thenify.withCallback(OPCUAClientImpl.prototype.createSession);
 OPCUAClientImpl.prototype.createSession2 = thenify.withCallback(OPCUAClientImpl.prototype.createSession2);
 /**
- * @method changeSessionIdentity
- * @async
  */
 OPCUAClientImpl.prototype.changeSessionIdentity = thenify.withCallback(OPCUAClientImpl.prototype.changeSessionIdentity);
 /**
- * @method closeSession
- * @async
  * @example
  *    const session  = await client.createSession();
  *    await client.closeSession(session);

@@ -24,8 +24,7 @@ import {
     ConnectionStrategyOptions,
     Request as Request1,
     Response as Response1,
-    SecurityPolicy,
-    SecurityToken
+    SecurityPolicy
 } from "node-opcua-secure-channel";
 import {
     FindServersOnNetworkRequest,
@@ -199,10 +198,10 @@ function __findEndpoint(this: ClientBaseImpl, endpointUrl: string, params: FindE
             return callback(
                 new Error(
                     "Cannot find an Endpoint matching " +
-                        " security mode: " +
-                        securityMode.toString() +
-                        " policy: " +
-                        securityPolicy.toString()
+                    " security mode: " +
+                    securityMode.toString() +
+                    " policy: " +
+                    securityPolicy.toString()
                 )
             );
         }
@@ -367,6 +366,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
     public discoveryUrl: string;
     public readonly applicationName: string;
     private _applicationUri: string;
+    public defaultTransactionTimeout?: number;
 
     /**
      * true if session shall periodically probe the server to keep the session alive and prevent timeout
@@ -468,6 +468,9 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         this._serverEndpoints = [];
 
         this.defaultSecureTokenLifetime = options.defaultSecureTokenLifetime || 600000;
+
+        this.defaultTransactionTimeout = options.defaultTransactionTimeout;
+
         this.tokenRenewalInterval = options.tokenRenewalInterval || 0;
         assert(isFinite(this.tokenRenewalInterval) && this.tokenRenewalInterval >= 0);
         this.securityMode = coerceMessageSecurityMode(options.securityMode);
@@ -634,8 +637,8 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                             const newServerCertificate = this.serverCertificate!;
                             warningLog("new server certificate ", makeSHA1Thumbprint(newServerCertificate).toString("hex"));
 
-                            const sha1Old = makeSHA1Thumbprint(oldServerCertificate!);
-                            const sha1New = makeSHA1Thumbprint(newServerCertificate);
+                            const sha1Old = oldServerCertificate ? makeSHA1Thumbprint(oldServerCertificate!) : null;
+                            const sha1New = newServerCertificate ? makeSHA1Thumbprint(newServerCertificate) : null;
                             if (sha1Old === sha1New) {
                                 warningLog("server certificate has not changed, but was expected to have changed");
                                 return _failAndRetry(
@@ -686,7 +689,8 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             serverCertificate: this.serverCertificate,
             tokenRenewalInterval: this.tokenRenewalInterval,
             transportSettings: this._transportSettings,
-            transportTimeout: this._transportTimeout
+            transportTimeout: this._transportTimeout,
+            defaultTransactionTimeout: this.defaultTransactionTimeout
         });
         secureChannel.on("backoff", (count: number, delay: number) => {
             this.emit("backoff", count, delay);
@@ -699,6 +703,8 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
         secureChannel.protocolVersion = this.protocolVersion;
 
         this._secureChannel = secureChannel;
+
+        this.emit("secure_channel_created", secureChannel);
 
         async.series(
             [
@@ -824,8 +830,8 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             // disconnect
             errorLog(
                 "[NODE-OPCUA-E08] initializeCM: clientCertificateManager is null\n" +
-                    "                 This happen when you disconnected the client, to free resources.\n" +
-                    "                 Please create a new OPCUAClient instance if you want to reconnect"
+                "                 This happen when you disconnected the client, to free resources.\n" +
+                "                 Please create a new OPCUAClient instance if you want to reconnect"
             );
             return;
         }
@@ -865,7 +871,6 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
 
     /**
      * connect the OPC-UA client to a server end point.
-     * @async
      */
     public connect(endpointUrl: string): Promise<void>;
     public connect(endpointUrl: string, callback: ErrorCallback): void;
@@ -961,12 +966,12 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                     debugLog(chalk.yellow("- The client cannot to :" + endpointUrl + ". Server is not reachable."));
                     err = new Error(
                         "The connection cannot be established with server " +
-                            endpointUrl +
-                            " .\n" +
-                            "Please check that the server is up and running or your network configuration.\n" +
-                            "Err = (" +
-                            err.message +
-                            ")"
+                        endpointUrl +
+                        " .\n" +
+                        "Please check that the server is up and running or your network configuration.\n" +
+                        "Err = (" +
+                        err.message +
+                        ")"
                     );
                     this._handleUnrecoverableConnectionFailure(err, callback);
                 } else if (err.message.match(/disconnecting/)) {
@@ -978,10 +983,6 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                 }
             }
         });
-    }
-
-    public getClientNonce(): Nonce | null {
-        return this._secureChannel ? this._secureChannel.getClientNonce() : null;
     }
 
     public performMessageTransaction(request: Request, callback: ResponseCallback<Response>): void {
@@ -1001,9 +1002,9 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             return callback(
                 new Error(
                     "performMessageTransaction: Invalid client state = " +
-                        this._internalState +
-                        " while performing a transaction " +
-                        request.schema.name
+                    this._internalState +
+                    " while performing a transaction " +
+                    request.schema.name
                 )
             );
         }
@@ -1017,7 +1018,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
     /**
      *
      * return the endpoint information matching  security mode and security policy.
-     * @method findEndpoint
+
      */
     public findEndpointForSecurity(
         securityMode: MessageSecurityMode,
@@ -1034,7 +1035,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
     /**
      *
      * return the endpoint information matching the specified url , security mode and security policy.
-     * @method findEndpoint
+
      */
     public findEndpoint(
         endpointUrl: string,
@@ -1102,7 +1103,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
     }
 
     /**
-     * @method findServers
+
      */
     public findServers(options?: FindServersRequestLike): Promise<ApplicationDescription[]>;
     public findServers(options: FindServersRequestLike, callback: ResponseCallback<ApplicationDescription[]>): void;
@@ -1427,9 +1428,9 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                 // no matching end point can be found ...
                 const err1 = new Error(
                     "cannot find endpoint for securityMode=" +
-                        MessageSecurityMode[this.securityMode] +
-                        " policy = " +
-                        this.securityPolicy
+                    MessageSecurityMode[this.securityMode] +
+                    " policy = " +
+                    this.securityPolicy
                 );
                 return callback(err1);
             }
@@ -1453,7 +1454,7 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
                     if (chain.length > 1) {
                         warningLog(
                             "                 verify also that the issuer certificate is trusted and the issuer's certificate is present in the issuer.cert folder\n" +
-                                "                 of the client certificate manager located in ",
+                            "                 of the client certificate manager located in ",
                             this.clientCertificateManager.rootDir
                         );
                     } else {
@@ -1595,9 +1596,9 @@ export class ClientBaseImpl extends OPCUASecureObject implements OPCUAClientBase
             this.emit("lifetime_75", token, secureChannel);
         });
 
-        secureChannel.on("security_token_renewed", () => {
+        secureChannel.on("security_token_renewed", (token: ChannelSecurityToken) => {
             // forward message to upper level
-            this.emit("security_token_renewed", secureChannel);
+            this.emit("security_token_renewed", secureChannel, token);
         });
 
         secureChannel.on("close", (err?: Error | null) => {

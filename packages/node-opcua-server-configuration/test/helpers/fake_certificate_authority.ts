@@ -1,8 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { promisify } from "util";
-import rimraf from "rimraf";
+import { rimraf } from "rimraf";
 import {
     Certificate,
     CertificateRevocationList,
@@ -22,9 +21,10 @@ export async function initializeHelpers(prefix: string, n: number): Promise<stri
     const _tempFolder = path.join(os.tmpdir(), "node-opcua2");
     const subfolder = path.join(_tempFolder, prefix);
     try {
-        await promisify(rimraf)(path.join(subfolder, "*"));
+        await rimraf.rimraf(subfolder);
     } catch (err) {
         /** */
+        console.log("err", err);    
     }
     try {
         await fs.promises.mkdir(path.dirname(subfolder));
@@ -34,6 +34,7 @@ export async function initializeHelpers(prefix: string, n: number): Promise<stri
     try {
         await fs.promises.mkdir(subfolder);
     } catch (err) {
+        console.log("err", err);
         /** */
     }
     return subfolder;

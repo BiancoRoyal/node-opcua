@@ -20,7 +20,7 @@ export declare type MethodFunctorC = (
 export declare type MethodFunctorA = (
     this: UAMethod,
     inputArguments: Variant[],
-    context: ISessionContext,
+    context: ISessionContext
 ) => Promise<CallMethodResultOptions>;
 
 export type MethodFunctor = MethodFunctorC | MethodFunctorA;
@@ -51,10 +51,6 @@ export declare class UAMethod extends BaseNode {
     public getOutputArguments(): Argument[];
 
     /**
-     * @async
-     * @param inputArguments
-     * @param context
-     * @param callback
      */
     public execute(
         object: UAObject | UAObjectType | null,

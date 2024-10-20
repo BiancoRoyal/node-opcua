@@ -158,11 +158,6 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     private _node_index: Record<FullBrowsePath, UAVariable> = {};
 
     /**
-     * @class ConditionSnapshot
-     * @extends EventEmitter
-     * @param condition
-     * @param branchId
-     * @constructor
      */
     constructor(condition: BaseNode, branchId: NodeId) {
         super();
@@ -222,6 +217,9 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     //     return variant;
     // }
 
+    /**
+     * @internal
+     */
     public _get_var(varName: string): any {
         const c = this.condition as UAConditionImpl;
         if (!c.getEnabledState() && !Object.prototype.hasOwnProperty.call(_varTable, varName)) {
@@ -237,6 +235,9 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
         return variant.value;
     }
 
+    /**
+     * @internal
+     */
     public _set_var(varName: string, dataType: DataType, value: unknown, options?: IConditionVariableTypeSetterOptions): void {
         const key = normalizeName(varName);
         // istanbul ignore next
@@ -281,24 +282,21 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     * @method getBrandId
-     * @return {NodeId}
+     *
      */
     public getBranchId(): NodeId {
         return this._get_var("BranchId") as NodeId;
     }
 
     /**
-     * @method getEventId
-     * @return {ByteString}
+     *
      */
     public getEventId(): Buffer {
         return this._get_var("EventId") as Buffer;
     }
 
     /**
-     * @method getRetain
-     * @return {Boolean}
+     *
      */
     public getRetain(): boolean {
         return this._get_var("Retain") as boolean;
@@ -306,8 +304,6 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
 
     /**
      *
-     * @method setRetain
-     * @param retainFlag {Boolean}
      */
     public setRetain(retainFlag: boolean): void {
         retainFlag = !!retainFlag;
@@ -315,7 +311,6 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     * @method renewEventId
      *
      */
     public renewEventId(): void {
@@ -328,33 +323,28 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     * @method getEnabledState
-     * @return {Boolean}
+     *
      */
     public getEnabledState(): boolean {
         return this._get_twoStateVariable("EnabledState");
     }
 
     /**
-     * @method setEnabledState
-     * @param value {Boolean}
-     * @return void
+     *
      */
     public setEnabledState(value: boolean, options?: ISetStateOptions): void {
         return this._set_twoStateVariable("EnabledState", value, options);
     }
 
     /**
-     * @method getEnabledStateAsString
-     * @return {String}
+     *
      */
     public getEnabledStateAsString(): string {
         return this._get_var("EnabledState").text;
     }
 
     /**
-     * @method getComment
-     * @return {LocalizedText}
+     *
      */
     public getComment(): LocalizedText {
         return this._get_var("Comment");
@@ -369,8 +359,6 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
      * a Method provides as an option the ability to set a Comment, then the value of this Variable is
      * reset to null if an optional comment is not provided.
      *
-     * @method setComment
-     * @param txtMessage {LocalizedText}
      */
     public setComment(txtMessage: LocalizedTextLike, options?: IConditionVariableTypeSetterOptions): void {
         const txtMessage1 = coerceLocalizedText(txtMessage);
@@ -378,9 +366,7 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     *
-     * @method setMessage
-     * @param txtMessage {LocalizedText}
+     * set the condition message (localized text)
      */
     public setMessage(txtMessage: LocalizedTextLike | LocalizedText): void {
         const txtMessage1 = coerceLocalizedText(txtMessage);
@@ -388,8 +374,7 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     * @method setClientUserId
-     * @param userIdentity {String}
+     *
      */
     public setClientUserId(userIdentity: string): void {
         return this._set_var("ClientUserId", DataType.String, userIdentity.toString());
@@ -397,79 +382,103 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
 
     /*
      *
-     *
-     * as per spec 1.0.3 - Part 9
-     *
-     * Quality reveals the status of process values or other resources that this Condition instance is
-     * based upon. If, for example, a process value is “Uncertain”, the associated “LevelAlarm”
-     * Condition is also questionable. Values for the Quality can be any of the OPC StatusCodes
-     * defined in Part 8 as well as Good, Uncertain and Bad as defined in Part 4. These
-     * StatusCodes are similar to but slightly more generic than the description of data quality in the
-     * various field bus specifications. It is the responsibility of the Server to map internal status
-     * information to these codes. A Server which supports no quality information shall return Good.
-     * This quality can also reflect the communication status associated with the system that this
-     * value or resource is based on and from which this Alarm was received. For communication
-     * errors to the underlying system, especially those that result in some unavailable Event fields,
-     * the quality shall be BadNoCommunication error.
-     *
-     * Quality refers to the quality of the data value(s) upon which this Condition is based. Since a
-     * Condition is usually based on one or more Variables, the Condition inherits the quality of
-     * these Variables. E.g., if the process value is “Uncertain”, the “LevelAlarm” Condition is also
-     * questionable. If more than one variable is represented by a given condition or if the condition
-     * is from an underlining system and no direct mapping to a variable is available, it is up to the
-     * application to determine what quality is displayed as part of the condition.
      */
 
     /**
      * set the condition quality
-     * @method setQuality
-     * @param quality {StatusCode}
+     *
+     *
+     * as per spec 1.0.3 - Part 9
+     *
+     * Quality reveals the status of process values or other resources that this Condition
+     * instance is based upon.
+     *
+     * If, for example, a process value is “Uncertain”, the associated “LevelAlarm”
+     * Condition is also questionable.
+     *
+     * Values for the Quality can be any of the OPC StatusCodes defined in Part 8
+     * as well as Good, Uncertain and Bad as defined in Part 4.
+     *
+     * These  StatusCodes are similar to but slightly more generic than the description
+     * of data quality in the various field bus specifications.
+     *
+     * It is the responsibility of the Server to map internal status information to these codes.
+     *
+     * A Server which supports no quality information shall return Good.
+     *
+     * This quality can also reflect the communication status associated with the system that this
+     * value or resource is based on and from which this Alarm was received. For communication
+     * errors to the underlying system, especially those that result in some unavailable
+     * Event fields, the quality shall be BadNoCommunication error.
+     *
+     * Quality refers to the quality of the data value(s) upon which this Condition is based.
+     *
+     * Since a Condition is usually based on one or more Variables, the Condition inherits
+     *  the quality of these Variables. E.g., if the process value is “Uncertain”,
+     *  the “LevelAlarm” Condition is also questionable.
+     *
+     * If more than one variable is represented by a given condition or if the condition
+     * is from an underlining system and no direct mapping to a variable is available,
+     * it is up to the application to determine what quality is displayed as part of the condition.
      */
     public setQuality(quality: StatusCode, options?: IConditionVariableTypeSetterOptions): void {
         this._set_var("Quality", DataType.StatusCode, quality, options);
     }
 
     /**
-     * @method getQuality
-     * @return {StatusCode}
+     *
      */
     public getQuality(): StatusCode {
         return this._get_var("Quality") as StatusCode;
     }
 
-    /*
-     * as per spec 1.0.3 - Part 9
+    /**
+     * **as per spec 1.0.3 - Part 9**
+     *
      * The Severity of a Condition is inherited from the base Event model defined in Part 5. It
      * indicates the urgency of the Condition and is also commonly called ‘priority’, especially in
      * relation to Alarms in the ProcessConditionClass.
      *
-     * as per spec 1.0.3 - PArt 5
-     * Severity is an indication of the urgency of the Event. This is also commonly called “priority”.
-     * Values will range from 1 to 1 000, with 1 being the lowest severity and 1 000 being the highest.
-     * Typically, a severity of 1 would indicate an Event which is informational in nature, while a value
-     * of 1 000 would indicate an Event of catastrophic nature, which could potentially result in severe
-     * financial loss or loss of life.
-     * It is expected that very few Server implementations will support 1 000 distinct severity levels.
-     * Therefore, Server developers are responsible for distributing their severity levels across the
-     * 1 to 1 000 range in such a manner that clients can assume a linear distribution. For example, a
-     * client wishing to present five severity levels to a user should be able to do the following
-     * mapping:
+     * **as per spec 1.0.3 - Part 5**
+     *
+     * Severity is an indication of the urgency of the Event. This is also commonly
+     * called “priority”.
+     *
+     * Values will range from 1 to 1 000, with 1 being the lowest severity and 1 000
+     * being the highest.
+     *
+     * Typically, a severity of 1 would indicate an Event which is informational in nature,
+     * while a value of 1 000 would indicate an Event of catastrophic nature, which could
+     * potentially result in severe financial loss or loss of life.
+     *
+     * It is expected that very few Server implementations will support 1 000 distinct
+     * severity levels.
+     *
+     * Therefore, Server developers are responsible for distributing their severity levels
+     * across the  1 to 1 000 range in such a manner that clients can assume a linear
+     * distribution.
+     *
+     *
+     * For example, a  client wishing to present five severity levels to a user should be
+     * able to do the following mapping:
+     *
+     *
      *            Client Severity OPC Severity
      *                HIGH        801 – 1 000
      *                MEDIUM HIGH 601 – 800
      *                MEDIUM      401 – 600
      *                MEDIUM LOW  201 – 400
      *                LOW           1 – 200
-     * In many cases a strict linear mapping of underlying source severities to the OPC Severity range
-     * is not appropriate. The Server developer will instead intelligently map the underlying source
-     * severities to the 1 to 1 000 OPC Severity range in some other fashion. In particular, it is
-     * recommended that Server developers map Events of high urgency into the OPC severity range
-     * of 667 to 1 000, Events of medium urgency into the OPC severity range of 334 to 666 and
-     * Events of low urgency into OPC severities of 1 to 333.
-     */
-    /**
-     * @method setSeverity
-     * @param severity {UInt16}
+     *
+     * In many cases a strict linear mapping of underlying source severities to the OPC
+     * Severity range is not appropriate. The Server developer will instead intelligently
+     * map the underlying source severities to the 1 to 1 000 OPC Severity range in some
+     * other fashion.
+     *
+     * In particular, it it recommended that Server developers map Events of high urgency
+     * into the OPC severity range of 667 to 1 000, Events of medium urgency into the
+     * OPC severity range of 334 to 666 and Events of low urgency into OPC severities
+     * of 1 to 333.
      */
     public setSeverity(severity: UInt16, options?: IConditionVariableTypeSetterOptions): void {
         assert(isFinite(severity), "expecting a UInt16");
@@ -483,8 +492,6 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     * @method getSeverity
-     * @return {UInt16}
      */
     public getSeverity(): UInt16 {
         const c = this.condition as UAConditionImpl;
@@ -497,16 +504,16 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
         return c.severity.readValue().sourceTimestamp || new Date();
     }
 
-    /*
-     * as per spec 1.0.3 - part 9:
-     *  LastSeverity provides the previous severity of the ConditionBranch. Initially this Variable
-     *  contains a zero value; it will return a value only after a severity change. The new severity is
+    /**
+     *  LastSeverity provides the previous severity of the ConditionBranch.
+     *
+     * **as per spec 1.0.3 - part 9**
+     *
+     *
+     *  Initially this Variable  contains a zero value;
+     *  it will return a value only after a severity change. The new severity is
      *  supplied via the Severity Property which is inherited from the BaseEventType.
      *
-     */
-    /**
-     * @method setLastSeverity
-     * @param severity {UInt16}
      */
     public setLastSeverity(severity: UInt16, options?: IConditionVariableTypeSetterOptions): void {
         severity = +severity;
@@ -514,8 +521,7 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     * @method getLastSeverity
-     * @return {UInt16}
+     *
      */
     public getLastSeverity(): UInt16 {
         const value = this._get_var("LastSeverity");
@@ -525,7 +531,7 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     /**
      * setReceiveTime
      *
-     * (as per OPCUA 1.0.3 part 5)
+     * **as per OPCUA 1.0.3 part 5**:
      *
      * ReceiveTime provides the time the OPC UA Server received the Event from the underlying
      * device of another Server.
@@ -538,36 +544,39 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
      * The ReceiveTime shall always be returned as value and the Server is not allowed to return a
      * StatusCode for the ReceiveTime indicating an error.
      *
-     * @method setReceiveTime
-     * @param time {Date} : UTCTime
      */
     public setReceiveTime(time: UtcTime): void {
-        if (!(time instanceof Date)) { throw new Error("setReceiveTime expecting a Date")};
-        return this._set_var("ReceiveTime", DataType.DateTime, time, { sourceTimestamp: time });
+        return this._set_var("ReceiveTime", DataType.DateTime, time, { sourceTimestamp: time || undefined });
     }
 
     /**
-     * (as per OPCUA 1.0.3 part 5)
-     * Time provides the time the Event occurred. This value is set as close to the event generator as
-     * possible. It often comes from the underlying system or device. Once set, intermediate OPC UA
-     * Servers shall not alter the value.
+     * Time provides the time the Event occurred.
      *
-     * @method setTime
-     * @param time {Date}
+     * **as per OPCUA 1.0.3 part 5**:
+     *
+     * This value is set as close to the event generator as
+     * possible. It often comes from the underlying system or device.
+     *
+     * Once set, intermediate OPC UA Servers shall not alter the value.
+     *
      */
     public setTime(time: Date): void {
         return this._set_var("Time", DataType.DateTime, time, { sourceTimestamp: time });
     }
 
     /**
-     * LocalTime is a structure containing the Offset and the DaylightSavingInOffset flag. The Offset
-     * specifies the time difference (in minutes) between the Time Property and the time at the location
-     * in which the event was issued. If DaylightSavingInOffset is TRUE, then Standard/Daylight
-     * savings time (DST) at the originating location is in effect and Offset includes the DST c orrection.
-     * If FALSE then the Offset does not include DST correction and DST may or may not have been
+     * LocalTime is a structure containing the Offset and the DaylightSavingInOffset flag.
+     *
+     * The Offset specifies the time difference (in minutes) between the Time Property
+     * and the time at the location in which the event was issued.
+     *
+     *
+     * If DaylightSavingInOffset is TRUE, then Standard/Daylight savings time (DST) at
+     * the originating location is in effect and Offset includes the DST correction.
+     *
+     * If `false` then the Offset does not include DST correction and DST may or may not have been
      * in effect.
-     * @method setLocalTime
-     * @param localTime {TimeZone}
+     *
      */
     public setLocalTime(localTime: TimeZoneDataType): void {
         assert(localTime instanceof TimeZoneDataType);
@@ -580,16 +589,14 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     /**
-     * @method getSourceNode
-     * return {NodeId}
+     *
      */
     public getSourceNode(): NodeId {
         return this._get_var("SourceNode");
     }
 
     /**
-     * @method getEventType
-     * return {NodeId}
+     *
      */
     public getEventType(): NodeId {
         return this._get_var("EventType");
@@ -649,21 +656,10 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
     }
 
     // ---- Shelving
-    /**
-     * @class ConditionSnapshot
-     */
-    /**
-     * @method getSuppressedState
-     * @return {Boolean}
-     */
     public getSuppressedState(): boolean {
         return this._get_twoStateVariable("SuppressedState");
     }
 
-    /**
-     * @method setSuppressedState
-     * @param suppressed {Boolean}
-     */
     public setSuppressedState(suppressed: boolean, options?: ISetStateOptions): void {
         suppressed = !!suppressed;
         this._set_twoStateVariable("SuppressedState", suppressed, options);
@@ -735,10 +731,7 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
         );
     }
     /**
-     * @class ConditionSnapshot
-     * @param varName
-     * @param value
-     * @private
+     * @internal
      */
     public _set_twoStateVariable(varName: string, value: boolean, options?: ISetStateOptions): void {
         value = !!value;
@@ -775,6 +768,9 @@ export class ConditionSnapshotImpl extends EventEmitter implements ConditionSnap
         this.emit("valueChanged", node, variant, { sourceTimestamp });
     }
 
+    /**
+     * @internal
+     */
     protected _get_twoStateVariable(varName: string): any {
         const key = ConditionSnapshotImpl.normalizeName(varName) + ".Id";
         const variant = this._map[key];
