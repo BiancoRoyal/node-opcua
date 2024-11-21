@@ -21,7 +21,14 @@ const { createCameraType } = require("./fixture_camera_type");
 
 function dumpXml(node: BaseNode): string {
     const xw = new XMLWriter(true);
-    xw.translationTable = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+    xw.translationTable = new Map([
+        [0, 0],
+        [1, 1],
+        [2, 2],
+        [3, 3],
+        [4, 4],
+        [5, 5]
+    ]);
     xw.priorityTable = [0, 1, 2, 3, 4, 5, 6];
     xw.startDocument({ encoding: "utf-8" });
     (node as any).dumpXML(xw);
@@ -912,5 +919,94 @@ describe("nodeset2.xml with more than one referenced namespace", function (this:
         r_xml2.split("\n").should.eql(xml2.split("\n"));
         xml2.should.match(/<ListOfExtensionObject/gm);
         xml2.should.match(/<\/ListOfExtensionObject/gm);
+    });
+
+    it("NSXML10 -Variable containing a LocalizedTest", async () => {
+        const v = namespace.addVariable({
+            browseName: "TestVariableLT",
+            dataType: DataTypeIds.LocalizedText,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.LocalizedText,
+                value: coerceLocalizedText("Hello")
+            }
+        });
+
+        const xml = namespace.toNodeset2XML();
+        const xml2 = xml.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
+        const tmpFilename = getTempFilename("__generated_node_set_version_x.xml");
+        fs.writeFileSync(tmpFilename, xml);
+
+        const r_xml2 = await reloadedNodeSet(tmpFilename);
+        r_xml2.split("\n").should.eql(xml2.split("\n"));
+        doDebug && console.log(xml);
+        xml2.should.match(/<uax:LocalizedText>/gm);
+        xml2.should.match(/ <uax:Text>/gm);
+    });
+    it("NSXML11 -Variable containing a QualifiedName", async () => {
+        const value = coerceQualifiedName({ name: "Hello", namespaceIndex: 1 });
+        value.name!.should.eql("Hello");
+        value.namespaceIndex.should.eql(1);
+
+        const v = namespace.addVariable({
+            browseName: "TestVariableQN",
+            dataType: DataTypeIds.QualifiedName,
+            organizedBy: addressSpace.rootFolder.objects,
+            value: {
+                dataType: DataType.QualifiedName,
+                value
+            }
+        });
+
+        v.readValue().value.value.name!.should.eql(value.name);
+        v.readValue().value.value.namespaceIndex!.should.eql(value.namespaceIndex);
+
+        const xml = namespace.toNodeset2XML();
+        const xml2 = xml.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
+        const tmpFilename = getTempFilename("__generated_node_set_version_x.xml");
+        fs.writeFileSync(tmpFilename, xml);
+
+        const r_xml2 = await reloadedNodeSet(tmpFilename);
+        r_xml2.split("\n").should.eql(xml2.split("\n"));
+        doDebug && console.log(xml);
+        doDebug && console.log(r_xml2);
+        xml2.should.match(/<uax:QualifiedName>/gm);
+        xml2.should.match(/ <uax:Name>/gm);
+        xml2.should.match(/ <uax:NamespaceIndex>/gm);
+    });
+
+    it("NSXML12 - instance of methods", async () => {
+        var objectType = namespace.addObjectType({
+            browseName: "MyObjectType"
+        });
+        var method = namespace.addMethod(objectType, {
+            browseName: "MyMethod",
+            componentOf: objectType,
+            modellingRule: "Mandatory",
+            inputArguments: [{ name: "ShutterLag", dataType: DataType.UInt32 }],
+            outputArguments: [{ name: "Image", dataType: DataType.ExtensionObject }]
+        });
+
+        var instance = objectType.instantiate({
+            browseName: "Instance",
+            organizedBy: addressSpace.rootFolder.objects
+        });
+
+        const xml = namespace.toNodeset2XML();
+        const xml2 = xml.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
+        const tmpFilename = getTempFilename("__generated_node_set_version_x.xml");
+        fs.writeFileSync(tmpFilename, xml);
+        doDebug && console.log(xml);
+        const r_xml2 = await reloadedNodeSet(tmpFilename);
+
+        const xml22 = r_xml2.replace(/LastModified="([^"]*)"/g, 'LastModified="YYYY-MM-DD"');
+        doDebug && console.log(xml22);
+
+        r_xml2.split("\n").should.eql(xml2.split("\n"));
+
+        const match = r_xml2.match(/\<ArrayDimensions\/\>/gm);
+        doDebug && console.log(match);
+        should(match).not.eql(null);
+        match?.length.should.eql(4); // 2 of input and output argument in Type and 2 for instance
     });
 });

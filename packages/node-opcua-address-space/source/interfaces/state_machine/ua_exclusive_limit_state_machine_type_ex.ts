@@ -8,9 +8,11 @@ import { UAStateMachineEx, UAStateMachineHelper, UAStateMachineType } from "./ua
 
 export interface UAExclusiveLimitStateMachineEx
     extends UAObject,
-        UAExclusiveLimitStateMachine_Base,
+        Omit<UAExclusiveLimitStateMachine_Base, "currentState" | "lastTransition">,
         UAStateMachineHelper,
-        UAStateMachineEx {}
+        UAStateMachineEx {
+    /** empty interface */
+}
 
 export interface UAExclusiveLimitStateMachineType extends UAStateMachineType {
     isAbstract: false;

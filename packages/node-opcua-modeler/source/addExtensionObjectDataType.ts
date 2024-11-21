@@ -31,9 +31,6 @@ export interface ExtensionObjectDefinition {
 
     structureDefinition: StructureDefinitionOptions;
     binaryEncoding?: NodeId;
-    xmlEncoding?: NodeId;
-    jsonEncoding?: NodeId;
-
     subtypeOf?: UADataType;
 }
 
@@ -59,7 +56,7 @@ export async function addExtensionObjectDataType(namespace: INamespace, options:
     }
     const structureDefinition = options.structureDefinition;
     structureDefinition.baseDataType = resolveNodeId(structureDefinition.baseDataType || "Structure");
-
+    
     const isAbstract = options.isAbstract || false;
 
     const dataType = namespace.createDataType({
@@ -75,6 +72,14 @@ export async function addExtensionObjectDataType(namespace: INamespace, options:
         // nodeId: defaultBinaryEncodingNode,
     })!;
     assert(defaultBinary.browseName.toString() === "Default Binary");
+
+    const defaultXml = dataTypeEncodingType.instantiate({
+        browseName: coerceQualifiedName("0:Default XML"),
+        encodingOf: dataType
+        // nodeId: defaultXmlEncodingNode,
+    })!;
+    assert(defaultXml.browseName.toString() === "Default XML");
+
 
     (dataType as any).$fullDefinition = new StructureDefinition(structureDefinition);
 
