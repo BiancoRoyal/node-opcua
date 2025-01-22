@@ -129,7 +129,7 @@ async function _output_index_ts_file(info: Info): Promise<void> {
 }
 async function _output_package_json(info: Info, options: Options): Promise<void> {
     const packagejson = path.join(info.folder, "package.json");
-    const version = getPackageInfo("node-opcua-address-space-base", options).version;
+    const version = getPackageInfo("node-opcua", options).version;
 
     const content2: string[] = [];
     content2.push(`{`);
@@ -139,6 +139,7 @@ async function _output_package_json(info: Info, options: Options): Promise<void>
     content2.push(`    "main": "dist/index.js",`);
     content2.push(`    "types": "dist/index.d.ts",`);
     content2.push(`    "scripts": {`);
+    content2.push(`        "clean": "npx rimraf -g  dist *.tsbuildinfo",`);
     content2.push(`        "build": "tsc -b"`);
     content2.push(`    },`);
     content2.push(`    "author": "Etienne Rossignon <etienne.rossignon@sterfive.com>",`);

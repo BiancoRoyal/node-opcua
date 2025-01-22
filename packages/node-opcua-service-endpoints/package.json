@@ -1,16 +1,16 @@
 {
     "name": "node-opcua-service-endpoints",
-    "version": "2.137.0",
+    "version": "2.139.0",
     "description": "pure nodejs OPCUA SDK - module service-endpoints",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
         "test": "mocha",
-        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
+        "clean": "npx rimraf -g node_modules dist *.tsbuildinfo",
         "build": "tsc -b"
     },
     "dependencies": {
-        "node-opcua-types": "2.137.0"
+        "node-opcua-types": "2.139.0"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",
