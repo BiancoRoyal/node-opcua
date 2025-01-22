@@ -1,13 +1,13 @@
 {
     "name": "node-opcua-assert",
-    "version": "2.120.0",
+    "version": "2.139.0",
     "description": "pure nodejs OPCUA SDK - module assert",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
         "build": "tsc -b",
         "test": "echo nothing to do",
-        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
+        "clean": "npx rimraf -g node_modules dist *.tsbuildinfo",
         "lint": "eslint source/**/*.ts"
     },
     "dependencies": {

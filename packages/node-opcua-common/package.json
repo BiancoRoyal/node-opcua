@@ -1,19 +1,19 @@
 {
     "name": "node-opcua-common",
-    "version": "2.137.0",
+    "version": "2.139.0",
     "description": "pure nodejs OPCUA SDK - module common",
     "scripts": {
         "test": "mocha",
-        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
+        "clean": "npx rimraf -g node_modules dist *.tsbuildinfo",
         "build": "tsc -b",
         "lint": "eslint source/**/*.ts"
     },
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "dependencies": {
-        "node-opcua-assert": "2.120.0",
-        "node-opcua-crypto": "4.12.0",
-        "node-opcua-types": "2.137.0"
+        "node-opcua-assert": "2.139.0",
+        "node-opcua-crypto": "4.15.0",
+        "node-opcua-types": "2.139.0"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",

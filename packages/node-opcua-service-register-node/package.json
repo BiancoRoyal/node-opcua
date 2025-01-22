@@ -1,17 +1,17 @@
 {
     "name": "node-opcua-service-register-node",
-    "version": "2.137.0",
+    "version": "2.139.0",
     "description": "pure nodejs OPCUA SDK - module service-register-node",
     "scripts": {
         "build": "tsc -b",
         "test": "mocha",
-        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
+        "clean": "npx rimraf -g node_modules dist *.tsbuildinfo",
         "__generate": "node ./generate"
     },
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "dependencies": {
-        "node-opcua-types": "2.137.0"
+        "node-opcua-types": "2.139.0"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",

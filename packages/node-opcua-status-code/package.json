@@ -1,6 +1,6 @@
 {
     "name": "node-opcua-status-code",
-    "version": "2.133.0",
+    "version": "2.139.0",
     "description": "pure nodejs OPCUA SDK - module status-code",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -8,12 +8,12 @@
         "build": "tsc -b",
         "lint": "eslint source test",
         "format": "prettier --write source test",
-        "clean": "npx rimraf node_modules dist *.tsbuildinfo",
+        "clean": "npx rimraf -g node_modules dist *.tsbuildinfo",
         "test": "mocha"
     },
     "dependencies": {
-        "node-opcua-assert": "2.120.0",
-        "node-opcua-binary-stream": "2.133.0"
+        "node-opcua-assert": "2.139.0",
+        "node-opcua-binary-stream": "2.139.0"
     },
     "author": "Etienne Rossignon",
     "license": "MIT",
