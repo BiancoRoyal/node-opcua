@@ -170,9 +170,9 @@ importers:
       sterfive-bonjour-service:
         specifier: 1.1.4
         version: 1.1.4
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
       treeify:
         specifier: ^1.1.0
         version: 1.1.0
@@ -262,13 +262,13 @@ importers:
         specifier: 4.1.2
         version: 4.1.2
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-for-conformance-testing:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-for-conformance-testing
       node-opcua-aggregates:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-aggregates
       node-opcua-assert:
         specifier: 2.139.0
@@ -280,16 +280,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-binary-stream
       node-opcua-certificate-manager:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-certificate-manager
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-client-proxy:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-proxy
       node-opcua-common:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-common
       node-opcua-constants:
         specifier: 2.139.0
@@ -298,7 +298,7 @@ importers:
         specifier: 4.15.0
         version: 4.15.0
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -331,58 +331,58 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-packet-analyzer
       node-opcua-secure-channel:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-secure-channel
       node-opcua-server:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server
       node-opcua-server-discovery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server-discovery
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-call:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-call
       node-opcua-service-discovery:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-discovery
       node-opcua-service-endpoints:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-endpoints
       node-opcua-service-filter:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-filter
       node-opcua-service-history:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-history
       node-opcua-service-node-management:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-node-management
       node-opcua-service-query:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-query
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-register-node:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-register-node
       node-opcua-service-secure-channel:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-secure-channel
       node-opcua-service-session:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-session
       node-opcua-service-subscription:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-subscription
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-service-write:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-write
       node-opcua-status-code:
         specifier: 2.139.0
@@ -391,7 +391,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-transport
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -400,7 +400,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-variant
       node-opcua-vendor-diagnostic:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-vendor-diagnostic
       semver:
         specifier: ^7.6.3
@@ -414,9 +414,6 @@ importers:
       '@types/semver':
         specifier: ^7.5.8
         version: 7.5.8
-      async:
-        specifier: ^3.2.6
-        version: 3.2.6
       chalk:
         specifier: 4.1.2
         version: 4.1.2
@@ -427,7 +424,7 @@ importers:
         specifier: 4.17.21
         version: 4.17.21
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-assert:
         specifier: 2.139.0
@@ -439,7 +436,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-binary-stream
       node-opcua-client-dynamic-extension-object:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-dynamic-extension-object
       node-opcua-constants:
         specifier: 2.139.0
@@ -448,7 +445,7 @@ importers:
         specifier: 4.15.0
         version: 4.15.0
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -475,8 +472,8 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.139.0
-        version: 2.139.0
+        specifier: 2.141.0
+        version: link:../node-opcua-nodeset-ua
       node-opcua-numeric-range:
         specifier: 2.139.0
         version: link:../node-opcua-numeric-range
@@ -484,28 +481,28 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-object-registry
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-call:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-call
       node-opcua-service-history:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-history
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-service-write:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-write
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -514,7 +511,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-variant
       node-opcua-xml2json:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-xml2json
       semver:
         specifier: ^7.6.3
@@ -522,9 +519,9 @@ importers:
       set-prototype-of:
         specifier: ^1.0.0
         version: 1.0.0
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
       xml-writer:
         specifier: ^1.7.0
         version: 1.7.0
@@ -542,10 +539,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-packet-analyzer
       node-opcua-service-filter:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-filter
       node-opcua-test-fixtures:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-test-fixtures
       source-map-support:
         specifier: ^0.5.21
@@ -587,13 +584,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-numeric-range
       node-opcua-schemas:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-schemas
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-variant:
         specifier: 2.139.0
@@ -602,7 +599,7 @@ importers:
   packages/node-opcua-address-space-for-conformance-testing:
     dependencies:
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-assert:
         specifier: 2.139.0
@@ -611,7 +608,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -638,7 +635,7 @@ importers:
   packages/node-opcua-aggregates:
     dependencies:
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-assert:
         specifier: 2.139.0
@@ -659,16 +656,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-numeric-range
       node-opcua-server:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server
       node-opcua-service-history:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-history
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -705,28 +702,28 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-filter:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-filter
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-subscription:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-subscription
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -734,9 +731,9 @@ importers:
       node-opcua-variant:
         specifier: 2.139.0
         version: link:../node-opcua-variant
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
 
   packages/node-opcua-assert:
     dependencies:
@@ -829,9 +826,9 @@ importers:
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
     devDependencies:
       node-opcua-leak-detector:
         specifier: 2.139.0
@@ -877,7 +874,7 @@ importers:
         specifier: 4.1.2
         version: 4.1.2
       node-opcua-alarm-condition:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-alarm-condition
       node-opcua-assert:
         specifier: 2.139.0
@@ -889,13 +886,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-buffer-utils
       node-opcua-certificate-manager:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-certificate-manager
       node-opcua-client-dynamic-extension-object:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-dynamic-extension-object
       node-opcua-common:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-common
       node-opcua-constants:
         specifier: 2.139.0
@@ -931,61 +928,61 @@ importers:
         specifier: 4.18.0
         version: 4.18.0
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-schemas:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-schemas
       node-opcua-secure-channel:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-secure-channel
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-call:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-call
       node-opcua-service-discovery:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-discovery
       node-opcua-service-endpoints:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-endpoints
       node-opcua-service-filter:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-filter
       node-opcua-service-history:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-history
       node-opcua-service-query:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-query
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-register-node:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-register-node
       node-opcua-service-secure-channel:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-secure-channel
       node-opcua-service-session:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-session
       node-opcua-service-subscription:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-subscription
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-service-write:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-write
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -993,9 +990,9 @@ importers:
       node-opcua-variant:
         specifier: 2.139.0
         version: link:../node-opcua-variant
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
     devDependencies:
       '@types/underscore':
         specifier: ^1.13.0
@@ -1004,7 +1001,7 @@ importers:
         specifier: ^1.0.5
         version: 1.0.5
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-binary-stream:
         specifier: 2.139.0
@@ -1030,21 +1027,21 @@ importers:
       chalk:
         specifier: 4.1.2
         version: 4.1.2
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
     devDependencies:
       node-opcua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-assert:
         specifier: 2.139.0
         version: link:../node-opcua-assert
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-constants:
         specifier: 2.139.0
@@ -1092,22 +1089,22 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-schemas:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-schemas
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-variant:
         specifier: 2.139.0
@@ -1115,9 +1112,6 @@ importers:
 
   packages/node-opcua-client-proxy:
     dependencies:
-      async:
-        specifier: ^3.2.6
-        version: 3.2.6
       node-opcua-assert:
         specifier: 2.139.0
         version: link:../node-opcua-assert
@@ -1137,22 +1131,22 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-call:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-call
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-subscription:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-subscription
       node-opcua-service-write:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-write
       node-opcua-status-code:
         specifier: 2.139.0
@@ -1163,9 +1157,6 @@ importers:
       node-opcua-variant:
         specifier: 2.139.0
         version: link:../node-opcua-variant
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
 
   packages/node-opcua-common:
     dependencies:
@@ -1176,7 +1167,7 @@ importers:
         specifier: 4.15.0
         version: 4.15.0
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
 
   packages/node-opcua-constants: {}
@@ -1193,10 +1184,10 @@ importers:
         specifier: 4.1.2
         version: 4.1.2
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-assert:
         specifier: 2.139.0
@@ -1220,13 +1211,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodesets
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -1245,7 +1236,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-packet-analyzer
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
 
   packages/node-opcua-data-access:
@@ -1254,7 +1245,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-data-model
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       node-opcua-assert:
@@ -1403,16 +1394,16 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0
       node-opcua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-for-conformance-testing:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-for-conformance-testing
       node-opcua-aggregates:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-aggregates
       node-opcua-assert:
         specifier: 2.139.0
@@ -1427,13 +1418,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-buffer-utils
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-client-crawler:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-crawler
       node-opcua-client-proxy:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-proxy
       node-opcua-constants:
         specifier: 2.139.0
@@ -1460,13 +1451,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ijt-base:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ijt-base
       node-opcua-nodeset-ijt-tightening:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ijt-tightening
       node-opcua-nodeset-machinery-result:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery-result
       node-opcua-packet-analyzer:
         specifier: 2.139.0
@@ -1475,29 +1466,29 @@ importers:
         specifier: 4.18.0
         version: 4.18.0
       node-opcua-server:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server
       node-opcua-server-discovery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server-discovery
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-filter:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-filter
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-secure-channel:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-secure-channel
       node-opcua-variant:
         specifier: 2.139.0
         version: link:../node-opcua-variant
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
       underscore:
         specifier: ^1.13.7
         version: 1.13.7
@@ -1574,10 +1565,10 @@ importers:
   packages/node-opcua-file-transfer:
     dependencies:
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-assert:
         specifier: 2.139.0
@@ -1601,16 +1592,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-service-call:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-call
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-status-code:
         specifier: 2.139.0
@@ -1623,10 +1614,10 @@ importers:
         specifier: ^4.15.3
         version: 4.15.3
       node-opcua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-leak-detector:
         specifier: 2.139.0
@@ -1656,7 +1647,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-schemas:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-schemas
       node-opcua-utils:
         specifier: 2.139.0
@@ -1709,7 +1700,7 @@ importers:
         specifier: 2.2.1
         version: 2.2.1
       node-opcua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua
       node-opcua-debug:
         specifier: 2.139.0
@@ -1724,19 +1715,19 @@ importers:
   packages/node-opcua-model:
     dependencies:
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-client-dynamic-extension-object:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-dynamic-extension-object
       node-opcua-nodesets:
         specifier: 2.139.0
         version: link:../node-opcua-nodesets
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       yargs:
         specifier: 15.4.1
@@ -1758,10 +1749,10 @@ importers:
         specifier: 5.6.0
         version: 5.6.0
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-assert:
         specifier: 2.139.0
@@ -1770,7 +1761,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-client-dynamic-extension-object:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-dynamic-extension-object
       node-opcua-constants:
         specifier: 2.139.0
@@ -1794,16 +1785,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-numeric-range
       node-opcua-schemas:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-schemas
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-variant:
         specifier: 2.139.0
@@ -1841,13 +1832,13 @@ importers:
   packages/node-opcua-nodeset-adi:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -1856,10 +1847,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -1868,7 +1859,7 @@ importers:
   packages/node-opcua-nodeset-amb:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
@@ -1883,7 +1874,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -1892,13 +1883,13 @@ importers:
   packages/node-opcua-nodeset-auto-id:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -1910,10 +1901,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -1922,13 +1913,13 @@ importers:
   packages/node-opcua-nodeset-cnc:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -1940,7 +1931,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -1952,22 +1943,22 @@ importers:
   packages/node-opcua-nodeset-commercial-kitchen-equipment:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
         version: link:../node-opcua-data-model
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -1976,13 +1967,13 @@ importers:
   packages/node-opcua-nodeset-di:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -1994,7 +1985,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2006,7 +1997,7 @@ importers:
   packages/node-opcua-nodeset-gds:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
@@ -2021,7 +2012,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2033,13 +2024,13 @@ importers:
   packages/node-opcua-nodeset-glass-flat:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2051,13 +2042,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-machinery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2066,22 +2057,22 @@ importers:
   packages/node-opcua-nodeset-ia:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
         version: link:../node-opcua-data-model
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2090,13 +2081,13 @@ importers:
   packages/node-opcua-nodeset-ijt:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2108,11 +2099,11 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-machinery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery
       node-opcua-nodeset-ua:
-        specifier: 2.139.0
-        version: 2.139.0
+        specifier: 2.141.0
+        version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
         version: link:../node-opcua-variant
@@ -2120,13 +2111,13 @@ importers:
   packages/node-opcua-nodeset-ijt-base:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2138,16 +2129,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-machinery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery
       node-opcua-nodeset-machinery-result:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery-result
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2162,16 +2153,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
         version: link:../node-opcua-data-model
       node-opcua-nodeset-ijt-base:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ijt-base
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2180,7 +2171,7 @@ importers:
   packages/node-opcua-nodeset-io-link:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
@@ -2192,10 +2183,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2207,13 +2198,13 @@ importers:
   packages/node-opcua-nodeset-isa-95-jobcontrol-v-2:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2225,7 +2216,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2234,13 +2225,13 @@ importers:
   packages/node-opcua-nodeset-machine-tool:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2249,19 +2240,19 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ia:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ia
       node-opcua-nodeset-isa-95-jobcontrol-v-2:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-isa-95-jobcontrol-v-2
       node-opcua-nodeset-machinery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery
       node-opcua-nodeset-machinery-jobs:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery-jobs
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2273,7 +2264,7 @@ importers:
   packages/node-opcua-nodeset-machine-vision:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
@@ -2288,7 +2279,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2300,13 +2291,13 @@ importers:
   packages/node-opcua-nodeset-machinery:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2315,10 +2306,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2327,13 +2318,13 @@ importers:
   packages/node-opcua-nodeset-machinery-jobs:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2345,10 +2336,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-isa-95-jobcontrol-v-2:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-isa-95-jobcontrol-v-2
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2357,13 +2348,13 @@ importers:
   packages/node-opcua-nodeset-machinery-process-values:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2372,10 +2363,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-padim:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-padim
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2387,7 +2378,7 @@ importers:
   packages/node-opcua-nodeset-machinery-result:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
@@ -2402,7 +2393,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2411,13 +2402,13 @@ importers:
   packages/node-opcua-nodeset-metal-forming:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2429,16 +2420,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-machine-tool:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machine-tool
       node-opcua-nodeset-machinery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery
       node-opcua-nodeset-machinery-process-values:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery-process-values
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2450,13 +2441,13 @@ importers:
   packages/node-opcua-nodeset-pack-ml:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2468,7 +2459,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2477,13 +2468,13 @@ importers:
   packages/node-opcua-nodeset-padim:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2495,10 +2486,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2507,13 +2498,13 @@ importers:
   packages/node-opcua-nodeset-robotics:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2522,10 +2513,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2534,13 +2525,13 @@ importers:
   packages/node-opcua-nodeset-ua:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2564,13 +2555,13 @@ importers:
   packages/node-opcua-nodeset-woodworking:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-basic-types:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-data-model:
         specifier: 2.139.0
@@ -2582,13 +2573,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-nodeset-di:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-di
       node-opcua-nodeset-machinery:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-machinery
       node-opcua-nodeset-ua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-nodeset-ua
       node-opcua-variant:
         specifier: 2.139.0
@@ -2694,31 +2685,31 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-call:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-call
       node-opcua-service-filter:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-filter
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-subscription:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-subscription
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-service-write:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-write
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -2726,9 +2717,9 @@ importers:
       node-opcua-variant:
         specifier: 2.139.0
         version: link:../node-opcua-variant
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
 
   packages/node-opcua-samples:
     dependencies:
@@ -2757,19 +2748,19 @@ importers:
         specifier: ^0.1.2
         version: 0.1.2
       node-opcua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-for-conformance-testing:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-for-conformance-testing
       node-opcua-assert:
         specifier: 2.139.0
         version: link:../node-opcua-assert
       node-opcua-client-proxy:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-proxy
       node-opcua-crypto:
         specifier: 4.15.0
@@ -2781,13 +2772,13 @@ importers:
         specifier: 4.18.0
         version: 4.18.0
       node-opcua-server-configuration:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server-configuration
       node-opcua-utils:
         specifier: 2.139.0
         version: link:../node-opcua-utils
       node-opcua-vendor-diagnostic:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-vendor-diagnostic
       sprintf-js:
         specifier: ^1.1.3
@@ -2829,7 +2820,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-variant
       node-opcua-xml2json:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-xml2json
     devDependencies:
       node-opcua-data-model:
@@ -2860,13 +2851,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-binary-stream
       node-opcua-certificate-manager:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-certificate-manager
       node-opcua-chunkmanager:
         specifier: 2.139.0
         version: link:../node-opcua-chunkmanager
       node-opcua-common:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-common
       node-opcua-crypto:
         specifier: 4.15.0
@@ -2887,10 +2878,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-packet-analyzer
       node-opcua-service-endpoints:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-endpoints
       node-opcua-service-secure-channel:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-secure-channel
       node-opcua-status-code:
         specifier: 2.139.0
@@ -2899,7 +2890,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-transport
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -2912,16 +2903,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-leak-detector
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-session:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-session
       node-opcua-test-fixtures:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-test-fixtures
       node-opcua-test-helpers:
         specifier: 2.139.0
@@ -2945,10 +2936,10 @@ importers:
         specifier: 4.17.21
         version: 4.17.21
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-assert:
         specifier: 2.139.0
@@ -2960,16 +2951,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-binary-stream
       node-opcua-certificate-manager:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-certificate-manager
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-client-dynamic-extension-object:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client-dynamic-extension-object
       node-opcua-common:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-common
       node-opcua-constants:
         specifier: 2.139.0
@@ -3011,52 +3002,52 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-object-registry
       node-opcua-secure-channel:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-secure-channel
       node-opcua-service-browse:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-browse
       node-opcua-service-call:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-call
       node-opcua-service-discovery:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-discovery
       node-opcua-service-endpoints:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-endpoints
       node-opcua-service-filter:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-filter
       node-opcua-service-history:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-history
       node-opcua-service-node-management:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-node-management
       node-opcua-service-query:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-query
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-service-register-node:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-register-node
       node-opcua-service-secure-channel:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-secure-channel
       node-opcua-service-session:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-session
       node-opcua-service-subscription:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-subscription
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-service-write:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-write
       node-opcua-status-code:
         specifier: 2.139.0
@@ -3065,7 +3056,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-transport
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-utils:
         specifier: 2.139.0
@@ -3073,12 +3064,12 @@ importers:
       node-opcua-variant:
         specifier: 2.139.0
         version: link:../node-opcua-variant
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
     devDependencies:
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-leak-detector:
         specifier: 2.139.0
@@ -3105,10 +3096,10 @@ importers:
         specifier: ^4.15.3
         version: 4.15.3
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-assert:
         specifier: 2.139.0
@@ -3120,13 +3111,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-binary-stream
       node-opcua-certificate-manager:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-certificate-manager
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-common:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-common
       node-opcua-constants:
         specifier: 2.139.0
@@ -3141,7 +3132,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-debug
       node-opcua-file-transfer:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-file-transfer
       node-opcua-hostname:
         specifier: 2.139.0
@@ -3153,22 +3144,22 @@ importers:
         specifier: 4.18.0
         version: 4.18.0
       node-opcua-pseudo-session:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-pseudo-session
       node-opcua-secure-channel:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-secure-channel
       node-opcua-server:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-variant:
         specifier: 2.139.0
@@ -3202,10 +3193,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-basic-types
       node-opcua-certificate-manager:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-certificate-manager
       node-opcua-common:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-common
       node-opcua-debug:
         specifier: 2.139.0
@@ -3217,16 +3208,16 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-object-registry
       node-opcua-secure-channel:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-secure-channel
       node-opcua-server:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server
       node-opcua-service-discovery:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-discovery
       node-opcua-service-endpoints:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-endpoints
       node-opcua-status-code:
         specifier: 2.139.0
@@ -3234,9 +3225,9 @@ importers:
       sterfive-bonjour-service:
         specifier: 1.1.4
         version: 1.1.4
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
 
   packages/node-opcua-service-browse:
     dependencies:
@@ -3244,7 +3235,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-data-model
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       node-opcua-date-time:
@@ -3272,7 +3263,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-variant:
         specifier: 2.139.0
@@ -3300,7 +3291,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-object-registry
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       sterfive-bonjour-service:
         specifier: 1.1.4
@@ -3309,13 +3300,13 @@ importers:
   packages/node-opcua-service-endpoints:
     dependencies:
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
 
   packages/node-opcua-service-filter:
     dependencies:
       node-opcua-address-space-base:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space-base
       node-opcua-assert:
         specifier: 2.139.0
@@ -3342,13 +3333,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-service-translate-browse-path:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-translate-browse-path
       node-opcua-status-code:
         specifier: 2.139.0
         version: link:../node-opcua-status-code
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-variant:
         specifier: 2.139.0
@@ -3370,26 +3361,26 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-data-value
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       node-opcua-packet-analyzer:
         specifier: 2.139.0
         version: link:../node-opcua-packet-analyzer
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
 
   packages/node-opcua-service-node-management:
     dependencies:
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
 
   packages/node-opcua-service-query:
     dependencies:
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
 
   packages/node-opcua-service-read:
@@ -3404,10 +3395,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-data-value
       node-opcua-service-secure-channel:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-secure-channel
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       node-opcua-nodeid:
@@ -3420,7 +3411,7 @@ importers:
   packages/node-opcua-service-register-node:
     dependencies:
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
 
   packages/node-opcua-service-secure-channel:
@@ -3438,7 +3429,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-factory
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       node-opcua-buffer-utils:
@@ -3460,11 +3451,11 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-factory
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       node-opcua-service-endpoints:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-endpoints
 
   packages/node-opcua-service-subscription:
@@ -3473,7 +3464,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-assert
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
       node-opcua-variant:
         specifier: 2.139.0
@@ -3492,10 +3483,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-packet-analyzer
       node-opcua-secure-channel:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-secure-channel
       node-opcua-service-read:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-read
       node-opcua-status-code:
         specifier: 2.139.0
@@ -3516,13 +3507,13 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-nodeid
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
 
   packages/node-opcua-service-write:
     dependencies:
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       node-opcua-data-model:
@@ -3556,10 +3547,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-debug
       node-opcua-service-secure-channel:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-service-secure-channel
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
 
   packages/node-opcua-test-helpers: {}
@@ -3634,7 +3625,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-factory
       node-opcua-generator:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-generator
       node-opcua-nodeid:
         specifier: 2.139.0
@@ -3658,10 +3649,10 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-assert
       node-opcua-data-access:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-data-access
       node-opcua-types:
-        specifier: 2.139.0
+        specifier: 2.141.0
         version: link:../node-opcua-types
     devDependencies:
       xlsx-ugnis:
@@ -3738,7 +3729,7 @@ importers:
         specifier: 0.0.9
         version: 0.0.9
       node-opcua-address-space:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-address-space
       node-opcua-assert:
         specifier: 2.139.0
@@ -3750,7 +3741,7 @@ importers:
         specifier: 2.139.0
         version: link:../node-opcua-debug
       node-opcua-server:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-server
       node-opcua-status-code:
         specifier: 2.139.0
@@ -3770,9 +3761,9 @@ importers:
       node-opcua-utils:
         specifier: 2.139.0
         version: link:../node-opcua-utils
-      thenify:
-        specifier: ^3.3.1
-        version: 3.3.1
+      thenify-ex:
+        specifier: 4.2.0
+        version: 4.2.0
       xml-writer:
         specifier: ^1.7.0
         version: 1.7.0
@@ -3796,16 +3787,16 @@ importers:
         specifier: 4.1.2
         version: 4.1.2
       node-opcua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua
       node-opcua-client:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-client
       node-opcua-debug:
         specifier: 2.139.0
         version: link:../node-opcua-debug
       node-opcua-modeler:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../node-opcua-modeler
       readline:
         specifier: '*'
@@ -3817,7 +3808,7 @@ importers:
   packages_extra/node-opcua-example:
     dependencies:
       node-opcua:
-        specifier: 2.140.0
+        specifier: 2.141.0
         version: link:../../packages/node-opcua
 
 packages:
@@ -4228,6 +4219,9 @@ packages:
 
   '@types/asn1@0.2.1':
     resolution: {integrity: sha512-MgrOWeBGvb9CU43AOMvrr7laqiATS4dApdqnmXl4MLxH6rSXcjSoh12y/9YGv/7Cn63cob5xQjcxVvjnOLmrmw==}
+
+  '@types/assert@1.5.11':
+    resolution: {integrity: sha512-FjS1mxq2dlGr9N4z72/DO+XmyRS3ZZIoVn998MEopAN/OmyN28F4yumRL5pOw2z+hbFLuWGYuF2rrw5p11xM5A==}
 
   '@types/async@3.2.24':
     resolution: {integrity: sha512-8iHVLHsCCOBKjCF2KwFe0p9Z3rfM9mL+sSP8btyR5vTjJRAqpBYD28/ZLgXPf0pjG1VxOvtCV/BgXkQbpSe8Hw==}
@@ -5257,88 +5251,12 @@ packages:
   nise@6.1.1:
     resolution: {integrity: sha512-aMSAzLVY7LyeM60gvBS423nBmIPP+Wy7St7hsb+8/fc1HmeoHJfLO8CKse4u3BtOZvQLJghYPI2i/1WZrEj5/g==}
 
-  node-opcua-address-space-base@2.139.0:
-    resolution: {integrity: sha512-we0MiUFp5t8044MuNu3v8btmc1q0XKFjgebf4ZmvHNIGTgW3juZLlfO9f9wvVvJ/UjKs7wx9/2s28e3uw07oXg==}
-    engines: {node: '>=6.10'}
-
-  node-opcua-assert@2.139.0:
-    resolution: {integrity: sha512-JdIE+FD+orAVxmUjP/naBNsU62ianW1zIg6Ebs/vgzu6ZezfTOdaky/ph02ydPG4nTafFOEvZ8eGeerWqaRY7g==}
-
-  node-opcua-basic-types@2.139.0:
-    resolution: {integrity: sha512-o2/QaQIK+itIAQKONto95ZqSWJCOOH/bt+e/F58neHuFJUfT3FtB1U0RIuNkArMCOuSy/g8XLXV2tXJlC3IZfg==}
-
-  node-opcua-binary-stream@2.139.0:
-    resolution: {integrity: sha512-Ccq0na5QygrX44G1IvsZkQ6JUcxD1ue8KWRJikV69seuhCrxrSVUYdpOJjUp9TVIsYuxIL7+A0kzPiXJ27osJA==}
-
-  node-opcua-buffer-utils@2.139.0:
-    resolution: {integrity: sha512-Ed9bEUcycFc4k0Dcu/yH0BmhwFZloyOyM/wCQP/KnDb7I2LVTdj7JibsWJuqZK/dITA/s3nSB7xShf6eYLDb3w==}
-
-  node-opcua-constants@2.139.0:
-    resolution: {integrity: sha512-C0L+LA2LTHixRFROpIRZ6FHu0Ha752R01xIhi8hUib5GVLGjL+6mdq2KQqlnFy3XPOAXH8z37p1j6EwwJm2HLw==}
-
   node-opcua-crypto@4.15.0:
     resolution: {integrity: sha512-mlxhPud42YP863R9nrWX0W2VW2fC5RQy1tuUNLpuZNayCS3ZEqs3b0sJOYtrAvsI8pccsqwGs1jAwXpOSIiubg==}
-
-  node-opcua-data-access@2.139.0:
-    resolution: {integrity: sha512-8VF+AMRGh/3SOmnkeTt+FunQfpqZ0kLYnN0cH6f1Mv9mA8SqePMttqrKXEarqFIAmtj8vbC8d/lajbxlQq8UzA==}
-
-  node-opcua-data-model@2.139.0:
-    resolution: {integrity: sha512-TK/sWPRtaF+IgrTRRB7awyCn/seHxqgbQg04IIdxjNBYVlFK5J3yVR3QZHcH6eBd0z2tO7gHYGYFOhHZAUF9dw==}
-
-  node-opcua-data-value@2.139.0:
-    resolution: {integrity: sha512-X4x+E+rSTjksGW+7i2/fDyuJ6crWWXpF0TqbzlWr9UE0u0JCyAkHA4nHEyLR91/6U/6zcc0gLhw3Oy7AUTGtew==}
-
-  node-opcua-date-time@2.139.0:
-    resolution: {integrity: sha512-pww+xlQve3szcdxNBe3mxjkMoFSGGG9ze3TlBjR8rxmO0lFRKt5aQqtWOdETd+yMRokGX5KxRhYrRcrw/CH4qw==}
-
-  node-opcua-debug@2.139.0:
-    resolution: {integrity: sha512-9yV2UYn56x2fhTYn4X1dQrKKak6mVbSzG6heGJqtS4ohGHeXvDwaPOSH7p9EoI19MjfAjpo6t4h0HsqV4IoSwQ==}
-
-  node-opcua-enum@2.139.0:
-    resolution: {integrity: sha512-4/+XKDSgB9ksu7WcF//mvqWKqfRfKgzjhHxsoxbPO6+flrQAYCJcZdXsHbqb0uZQepT8OFQPykzsGh63YwWyeQ==}
-
-  node-opcua-extension-object@2.139.0:
-    resolution: {integrity: sha512-j9fARaRdCNsVW7xNX2oBtXqBeM5wvJSPr3MAgpW0w2WMMad4ZKOW/JgmzWa1o3PHMGrmFSWm2noMV7pdZN9riQ==}
-
-  node-opcua-factory@2.139.0:
-    resolution: {integrity: sha512-t0qxjwiic3iNdjfsLrywaeIZNgyZpkurq4PyIQ6EGYrp5uwROmaan7iGV+pg2SiFxd4cxJ004eSN/q06fqpIjQ==}
-
-  node-opcua-generator@2.139.0:
-    resolution: {integrity: sha512-wvDPWtz5biNJfmzIn/SJxlu+DuJRFr+U7y20WhDx5h6GBLF61YqX8u+PwhdJfhWOpzLxqrUGEojfAgwGVxgBSw==}
-
-  node-opcua-guid@2.139.0:
-    resolution: {integrity: sha512-YQyU1SWeNYKMg5dw85OW9nG3umUVcVX3VSGO2wxl6oWuWVFgbwLbtz3+y9HVl4gc3LRVb9NPCVOWYmpXVxmPsA==}
-
-  node-opcua-nodeid@2.139.0:
-    resolution: {integrity: sha512-FALUgBfcYvyRHBUNxXlAvUgA3mPjvX0i1pVPZEhw/DjRZuZYwFzBOfVo0XuzoFAYgmyeWPZh6nDF8ASIPXvf8A==}
-
-  node-opcua-nodeset-ua@2.139.0:
-    resolution: {integrity: sha512-5tNF89YhNVsdHPklz5cXoSei8izWTakrBtXAWlKiUqju3rghmsR10XTh1hSUP9MsI+HF9fzhLH+CmPCypOVpWg==}
-
-  node-opcua-numeric-range@2.139.0:
-    resolution: {integrity: sha512-tuPmqcAJWSomEeESAfqgMFZxxAhmqIsIBQRRe6fLSUeOtt4Nac/4ZZhJdDSI/ltHrObmBAEEr6NiTrNV/gjuaA==}
 
   node-opcua-pki@4.18.0:
     resolution: {integrity: sha512-lbNT0aN6KrXSz1zR++M38GJntS0SCunyGWC2efdKZwwf6PxIZbQv9TH5qLnpUKE7sJFAOzQ4EAdaCLxv/6/M+g==}
     hasBin: true
-
-  node-opcua-schemas@2.139.0:
-    resolution: {integrity: sha512-WCbuKIqf2rJyhLduHF8b67RMGgmP5S4CWHkgaTYFioDky3s2iZB2dY4vh+GPCe8KY0Iuhw9Qq4PiZy06GEM54A==}
-
-  node-opcua-status-code@2.139.0:
-    resolution: {integrity: sha512-+UxRWEpM042v75X9i/X0l4DviQgqaFzQvY7YB8KcLVaLBXR8zaLMl3SpA4lxPnISKSkIu241L2WeqqIstADTPw==}
-
-  node-opcua-types@2.139.0:
-    resolution: {integrity: sha512-pHLoSKq/JHButeqip8WfdQXFqTpPvz6MsjGVfJIV9Nd9lvplE4PTYIQvO1pEB+8YBOCy8XbmvFLIBOSa6GItpA==}
-
-  node-opcua-utils@2.139.0:
-    resolution: {integrity: sha512-wt6lTuqySvsxOGreKNI+zE7v2BmiTQgTBhD/aGG/iWv69VPhr9GRl/x+h8frfa9gVpe7wgl7KtwoIv8ItLGfjQ==}
-
-  node-opcua-variant@2.139.0:
-    resolution: {integrity: sha512-0y9L6MhzWVTIUXaiYv1SZ0d4r1vYqyfINi2C7jV5DFLSugMvb88qQeyFv5bnj1k2uvD+Vd3vIIV+Ha7qLT/qyg==}
-
-  node-opcua-xml2json@2.139.0:
-    resolution: {integrity: sha512-T8G92ItnN+Imb91Lx1cK32K2GsiaNDyTX5G/axOVyy8iuspaBm10G9e/D9/UbifO/sMOl0Y8jTlrnm9iWeHxFw==}
 
   node-xml@1.0.2:
     resolution: {integrity: sha512-gVuB6EgkzcLmz0P4xxU+Zas2L3Hs0uLwWWub2XKWiIllvyr82qKLzLApr/H/a+I/QLUvVoa52NDN127c/yfyZw==}
@@ -5690,6 +5608,9 @@ packages:
 
   text-hex@1.0.0:
     resolution: {integrity: sha512-uuVGNWzgJ4yhRaNSiubPY7OjISw4sw4E5Uv0wbjp+OzcbmVU/rsT8ujgcXJhn9ypzsgr5vlzpPqP+MBBKcGvbg==}
+
+  thenify-ex@4.2.0:
+    resolution: {integrity: sha512-etsBsTYflau+wm9Gt8UR8g8JDYFbg2k53UtSsqy8CGiktwO+4BhstVc/Dj7Xt1fDNbn0a6cj7a9I8yrwPvnhIg==}
 
   thenify@3.3.1:
     resolution: {integrity: sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw==}
@@ -6342,6 +6263,8 @@ snapshots:
   '@types/asn1@0.2.1':
     dependencies:
       '@types/node': 22.10.5
+
+  '@types/assert@1.5.11': {}
 
   '@types/async@3.2.24': {}
 
@@ -7382,47 +7305,6 @@ snapshots:
       just-extend: 6.2.0
       path-to-regexp: 8.1.0
 
-  node-opcua-address-space-base@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-constants: 2.139.0
-      node-opcua-crypto: 4.15.0
-      node-opcua-data-model: 2.139.0
-      node-opcua-data-value: 2.139.0
-      node-opcua-date-time: 2.139.0
-      node-opcua-debug: 2.139.0
-      node-opcua-extension-object: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-numeric-range: 2.139.0
-      node-opcua-schemas: 2.139.0
-      node-opcua-status-code: 2.139.0
-      node-opcua-types: 2.139.0
-      node-opcua-variant: 2.139.0
-
-  node-opcua-assert@2.139.0:
-    dependencies:
-      chalk: 4.1.2
-
-  node-opcua-basic-types@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-buffer-utils: 2.139.0
-      node-opcua-date-time: 2.139.0
-      node-opcua-guid: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-status-code: 2.139.0
-
-  node-opcua-binary-stream@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-buffer-utils: 2.139.0
-
-  node-opcua-buffer-utils@2.139.0: {}
-
-  node-opcua-constants@2.139.0: {}
-
   node-opcua-crypto@4.15.0:
     dependencies:
       '@peculiar/webcrypto': 1.5.0
@@ -7434,112 +7316,6 @@ snapshots:
       hexy: 0.3.5
       jsrsasign: 11.1.0
       sshpk: 1.18.0
-
-  node-opcua-data-access@2.139.0:
-    dependencies:
-      node-opcua-data-model: 2.139.0
-      node-opcua-types: 2.139.0
-
-  node-opcua-data-model@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-enum: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-status-code: 2.139.0
-
-  node-opcua-data-value@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-data-model: 2.139.0
-      node-opcua-date-time: 2.139.0
-      node-opcua-enum: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-status-code: 2.139.0
-      node-opcua-variant: 2.139.0
-
-  node-opcua-date-time@2.139.0:
-    dependencies:
-      '@types/long': 4.0.2
-      long: 4.0.0
-      node-opcua-assert: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-utils: 2.139.0
-
-  node-opcua-debug@2.139.0:
-    dependencies:
-      chalk: 4.1.2
-      hexy: 0.3.5
-      node-opcua-assert: 2.139.0
-      node-opcua-buffer-utils: 2.139.0
-
-  node-opcua-enum@2.139.0: {}
-
-  node-opcua-extension-object@2.139.0:
-    dependencies:
-      chalk: 4.1.2
-      node-opcua-basic-types: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-debug: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-nodeid: 2.139.0
-
-  node-opcua-factory@2.139.0:
-    dependencies:
-      chalk: 4.1.2
-      node-opcua-assert: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-constants: 2.139.0
-      node-opcua-debug: 2.139.0
-      node-opcua-enum: 2.139.0
-      node-opcua-guid: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-status-code: 2.139.0
-      node-opcua-utils: 2.139.0
-
-  node-opcua-generator@2.139.0:
-    dependencies:
-      chalk: 4.1.2
-      node-opcua-assert: 2.139.0
-      node-opcua-constants: 2.139.0
-      node-opcua-debug: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-schemas: 2.139.0
-      node-opcua-utils: 2.139.0
-
-  node-opcua-guid@2.139.0: {}
-
-  node-opcua-nodeid@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-constants: 2.139.0
-      node-opcua-guid: 2.139.0
-
-  node-opcua-nodeset-ua@2.139.0:
-    dependencies:
-      node-opcua-address-space-base: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-data-access: 2.139.0
-      node-opcua-data-model: 2.139.0
-      node-opcua-data-value: 2.139.0
-      node-opcua-extension-object: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-status-code: 2.139.0
-      node-opcua-variant: 2.139.0
-
-  node-opcua-numeric-range@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-status-code: 2.139.0
 
   node-opcua-pki@4.18.0:
     dependencies:
@@ -7556,63 +7332,6 @@ snapshots:
       wget-improved-2: 3.3.0
       yargs: 17.7.2
       yauzl: 3.2.0
-
-  node-opcua-schemas@2.139.0:
-    dependencies:
-      chalk: 4.1.2
-      node-opcua-assert: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-debug: 2.139.0
-      node-opcua-extension-object: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-variant: 2.139.0
-      node-opcua-xml2json: 2.139.0
-
-  node-opcua-status-code@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-
-  node-opcua-types@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-data-model: 2.139.0
-      node-opcua-data-value: 2.139.0
-      node-opcua-enum: 2.139.0
-      node-opcua-extension-object: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-generator: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-numeric-range: 2.139.0
-      node-opcua-status-code: 2.139.0
-      node-opcua-variant: 2.139.0
-
-  node-opcua-utils@2.139.0:
-    dependencies:
-      chalk: 4.1.2
-      node-opcua-assert: 2.139.0
-
-  node-opcua-variant@2.139.0:
-    dependencies:
-      node-opcua-assert: 2.139.0
-      node-opcua-basic-types: 2.139.0
-      node-opcua-binary-stream: 2.139.0
-      node-opcua-data-model: 2.139.0
-      node-opcua-enum: 2.139.0
-      node-opcua-factory: 2.139.0
-      node-opcua-nodeid: 2.139.0
-      node-opcua-utils: 2.139.0
-
-  node-opcua-xml2json@2.139.0:
-    dependencies:
-      ltx: 3.1.1
-      node-opcua-assert: 2.139.0
-      node-opcua-utils: 2.139.0
-      thenify: 3.3.1
-      xml-writer: 1.7.0
 
   node-xml@1.0.2: {}
 
@@ -7956,6 +7675,12 @@ snapshots:
       tslib: 2.8.1
 
   text-hex@1.0.0: {}
+
+  thenify-ex@4.2.0:
+    dependencies:
+      '@types/assert': 1.5.11
+      any-promise: 1.3.0
+      assert: 2.1.0
 
   thenify@3.3.1:
     dependencies:
